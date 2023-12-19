@@ -1,0 +1,9 @@
+*.pyc
+*.stderr
+*.stdout
+*.tar.gz
+**/__pycache__
+**/profiler_stats/*
+**/.ipynb_checkpoints/*
+**/.old/*
+**/csv/.~lock.*
