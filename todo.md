@@ -1,2 +1,2 @@
-- [ ] **pycs** *(2024-02-29)* Install `pysparse` (problem when installing with `pip`)
+- [x] **pycs** *(2024-02-29)* Install `pysparse` (problem when installing with `pip`)
 - [ ] **pycs** *(2024-02-29)* Run `black` (https://github.com/psf/black) for code formatting before pushing to GitHub (create a new branch?)
