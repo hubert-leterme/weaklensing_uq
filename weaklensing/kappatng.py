@@ -15,8 +15,17 @@ WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 WIDTH = 360 # size of the target convergence maps (nb pixels)
 SIZE_ORI = 5. # opening angle of the simulated convergence maps (deg)
 SIZE = SIZE_ORI * WIDTH / WIDTH_ORI # opening angle of the target convergence maps (deg)
+RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
+
+def get_openingangle(width=WIDTH):
+    return width * RESOLUTION / 60.
+
+def get_npixels(size=SIZE):
+    width = int(size / RESOLUTION * 60.)
+    size = get_openingangle(width)
+    return width, size
 
 def _split_map(kappa, width_ori, width, n_samples_per_side):
 
@@ -36,7 +45,7 @@ def _split_map(kappa, width_ori, width, n_samples_per_side):
 
 
 def kappa_tng(
-        index_redshift, ninpimgs, width=WIDTH, nsamples_per_side=3, shuffle=True
+        index_redshift, ninpimgs, start_idx=0, width=WIDTH, nsamples_per_side=3, shuffle=True
 ):
     """
     Parameters
@@ -44,6 +53,8 @@ def kappa_tng(
     index_redshift (int)
     ninpimgs (int)
         Number of input images to load, before cropping and data augmentation.
+    start_idx (int, default=0)
+        Index of the first image to load.
     width (int, default=360)
         Size of the target convergence maps (nb pixels)
     nsamples_per_side (int, default=3)
@@ -53,7 +64,7 @@ def kappa_tng(
     """
     bin_file = f"{FILENAMES[index_redshift]}.dat"
 
-    list_of_idx_dataset = np.arange(ninpimgs) + 1
+    list_of_idx_dataset = np.arange(start_idx, start_idx+ninpimgs) + 1
     list_of_idx_dataset = vectorized_zfill(list_of_idx_dataset)
 
     list_of_kappa = []

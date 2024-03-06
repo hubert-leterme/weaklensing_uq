@@ -54,7 +54,7 @@ COSMOS_VERTICES = [(149.508, 2.880),
 
 RA, DEC = np.array(COSMOS_VERTICES).T
 
-def cosmos_catalog():
+def cosmos_catalog(include_faint=True):
 
     # Load data
     cat_bright = ap.table.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
@@ -64,20 +64,25 @@ def cosmos_catalog():
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
 
     # Merge catalog
-    cat_full = ap.table.Table()
-    cat_full['Ra'] = np.concatenate([cat_bright['Ra'], cat_faint['Ra']])
-    cat_full['Dec'] = np.concatenate([cat_bright['Dec'], cat_faint['Dec']])
-    cat_full['e1iso_rot4_gr_snCal'] = np.concatenate(
-        [cat_bright['e1iso_rot4_gr_snCal'], cat_faint['e1iso_rot4_gr_snCal']]
-    )
-    cat_full['e2iso_rot4_gr_snCal'] = np.concatenate(
-        [cat_bright['e2iso_rot4_gr_snCal'], cat_faint['e2iso_rot4_gr_snCal']]
-    )
-    cat_full['nhweight_int'] = np.concatenate(
-        [cat_bright['nhweight_int'], cat_faint['nhweight_int']]
-    )
+    if include_faint:
+        cat_full = ap.table.Table()
+        cat_full['Ra'] = np.concatenate([cat_bright['Ra'], cat_faint['Ra']])
+        cat_full['Dec'] = np.concatenate([cat_bright['Dec'], cat_faint['Dec']])
+        cat_full['e1iso_rot4_gr_snCal'] = np.concatenate(
+            [cat_bright['e1iso_rot4_gr_snCal'], cat_faint['e1iso_rot4_gr_snCal']]
+        )
+        cat_full['e2iso_rot4_gr_snCal'] = np.concatenate(
+            [cat_bright['e2iso_rot4_gr_snCal'], cat_faint['e2iso_rot4_gr_snCal']]
+        )
+        cat_full['nhweight_int'] = np.concatenate(
+            [cat_bright['nhweight_int'], cat_faint['nhweight_int']]
+        )
+        out = cat_full
 
-    return cat_full
+    else:
+        out = cat_bright
+
+    return out
 
 
 def get_data_from_cosmos(cat_cosmos, size):
@@ -90,8 +95,6 @@ def get_data_from_cosmos(cat_cosmos, size):
 
     """
     out = {}
-    ra = cat_cosmos['Ra'] # right ascension (longitude)
-    dec = cat_cosmos['Dec'] # declination (latitude)
     ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
     dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
     extent = [
@@ -103,7 +106,6 @@ def get_data_from_cosmos(cat_cosmos, size):
     shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
 
     out.update(
-        ra=ra, dec=dec,
         ra_cosmos_median=ra_cosmos_median, dec_cosmos_median=dec_cosmos_median,
         extent=extent, shapedisp=(shapedisp1, shapedisp2)
     )
