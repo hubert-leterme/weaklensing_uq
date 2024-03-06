@@ -175,15 +175,16 @@ def get_std_ks(
 
 
 def ksfilter(
-        gamma1_noisy, gamma2_noisy, std_noise, confidence,
+        gamma1_noisy, gamma2_noisy, get_bounds=True, std_noise=None, confidence=None,
         std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=True
 ):
     """
     Parameters
     ----------
     gamma1_noisy, gamma2_noisy (array-like)
-    std_noise (array-like)
-    confidence (float)
+    get_bounds (bool, default=True)
+    std_noise (array-like, default=None)
+    confidence (float, default=None)
         Level of confidence (n-sigma)
     std_gaussianfilter (float)
         Standard deviation of the smoothing filter
@@ -191,7 +192,10 @@ def ksfilter(
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
     
     """
-    _, width1, width2 = test_array_shape([gamma1_noisy, gamma2_noisy, std_noise])
+    arrs = [gamma1_noisy, gamma2_noisy]
+    if std_noise is not None:
+        arrs.append(std_noise)
+    _, width1, width2 = test_array_shape(arrs)
 
     if complexconjugate:
         gamma2_noisy = -gamma2_noisy
@@ -199,14 +203,18 @@ def ksfilter(
     kappa_ks = ndimage.gaussian_filter(
         kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
     ) # KS reconstruction
-    std_ks = get_std_ks(
-        std_noise, width1, width2, std_gaussianfilter=std_gaussianfilter
-    ) # standard deviation of the KS reconstruction
-    ppf_ks = confidence * std_ks
-    kappa_ks_lo = kappa_ks - ppf_ks
-    kappa_ks_hi = kappa_ks + ppf_ks
+    if get_bounds:
+        std_ks = get_std_ks(
+            std_noise, width1, width2, std_gaussianfilter=std_gaussianfilter
+        ) # standard deviation of the KS reconstruction
+        ppf_ks = confidence * std_ks
+        kappa_ks_lo = kappa_ks - ppf_ks
+        kappa_ks_hi = kappa_ks + ppf_ks
+        out = kappa_ks, kappa_ks_lo, kappa_ks_hi
+    else:
+        out = kappa_ks
 
-    return kappa_ks, kappa_ks_lo, kappa_ks_hi
+    return out
 
 
 def _split_test_calib(arr, nimgs_calib):
