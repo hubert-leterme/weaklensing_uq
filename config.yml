@@ -1,4 +1,5 @@
-cosmos_dir: ~/Documents/Data/cosmos_v1.0/v1.0
+cosmos_dir: ~/Documents/Data/COSMOS/v1.0
 trecs_dir: ~/Documents/Data/T-RECS
 trec_file: catalogue_SFGs_complete_medium.fits
 ktng_dir: ~/Documents/Data/kappaTNG_samples/kappaTNG
+pycs_dir: ~/Documents/Inputs/cosmostat
