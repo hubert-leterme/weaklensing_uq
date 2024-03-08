@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import ndimage, signal, stats
+import matplotlib.pyplot as plt
 
 from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
@@ -71,13 +72,13 @@ def ngal_per_pixel(ra, dec, width, extent):
     return bin2d(ra, dec, npix=width, extent=extent)
 
 
-def get_shear_from_convergence(kappa, complexconjugate=True):
+def get_shear_from_convergence(kappa, complexconjugate=False):
     """
     Parameters
     ----------
     kappa (array-like, shape=(nimgs, width, width))
         The convergence maps.
-    complexconjugate (bool, default=True)   
+    complexconjugate (bool, default=False)   
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
     
     """
@@ -91,7 +92,7 @@ def get_shear_from_convergence(kappa, complexconjugate=True):
 
 def get_masked_and_noisy_shear(
         gamma1, gamma2, ngal, shapedisp, stdnoise_mask=None, multfact_stdnoise=30.,
-        only_mask=False
+        inpainting=False
 ):
     """
     Parameters
@@ -109,9 +110,15 @@ def get_masked_and_noisy_shear(
         Only used if `stdnoise_mask` is not provided. Then, the standard deviation for
         masked data is set to `multfact_stdnoise` times the squared norm of the shear
         map, divided by the number of pixels.
-    only_mask (bool, default=False)
-        If True, only apply noise to the masked regions. This is useful when noise is
-        already applied elsewhere, for instance when using real data.
+    inpainting (bool, default=False)
+        If True, apply noise to the masked regions.
+
+    Returns
+    -------
+    gamma1_noisy, gamma2_noisy (array-like)
+        Noisy shear maps, affected by argument `inpainting`.
+    std (array-like)
+        Noise standard deviation, unaffected by argument `inpainting`.
     
     """
     nimgs, width1, width2 = test_array_shape([gamma1, gamma2, ngal])
@@ -134,9 +141,9 @@ def get_masked_and_noisy_shear(
     noise1 = std * np.random.randn(nimgs, width1, width2)
     noise2 = std * np.random.randn(nimgs, width1, width2)
 
-    if only_mask:
-        noise1[:, ~mask] = 0.
-        noise2[:, ~mask] = 0.
+    if not inpainting:
+        noise1[:, mask] = 0.
+        noise2[:, mask] = 0.
     gamma1_noisy = gamma1_masked + noise1
     gamma2_noisy = gamma2_masked + noise2
 
@@ -176,7 +183,7 @@ def get_std_ks(
 
 def ksfilter(
         gamma1_noisy, gamma2_noisy, get_bounds=True, std_noise=None, confidence=None,
-        std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=True
+        std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=False
 ):
     """
     Parameters
@@ -296,3 +303,19 @@ def get_bounds_proba_cqr(alpha, nimgs_calib):
     lower_bound_proba = alpha - 1 / (nimgs_calib + 1)
     upper_bound_proba = alpha
     return lower_bound_proba, upper_bound_proba
+
+
+def skyshow(img, boundaries=None, c='w', cbarshrink=None, title=None, **kwargs):
+
+    out = plt.imshow(img, origin='lower', **kwargs)
+    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
+    kwargs_cbar = {}
+    if cbarshrink is not None:
+        kwargs_cbar.update(shrink=cbarshrink)
+    plt.colorbar(**kwargs_cbar)
+    if boundaries is not None:
+        plt.plot(*boundaries,  c=c, lw=1)
+    if title is not None:
+        plt.title(title)
+
+    return out
