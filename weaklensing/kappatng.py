@@ -22,8 +22,12 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 def get_openingangle(width=WIDTH):
     return width * RESOLUTION / 60.
 
-def get_npixels(size=SIZE):
-    width = int(size / RESOLUTION * 60.)
+def get_npixels(size=SIZE, make_even=True):
+    if not make_even:
+        mult = 1
+    else:
+        mult = 2
+    width = mult * int(size / (mult * RESOLUTION) * 60.)
     size = get_openingangle(width)
     return width, size
 
