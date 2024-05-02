@@ -47,7 +47,7 @@ def _split_map(kappa, width_ori, width, n_samples_per_side):
 
 
 def kappa_tng(
-        index_redshift, ninpimgs, start_idx=0, width=WIDTH, nsamples_per_side=3, shuffle=True
+        index_redshift, ninpimgs, start_idx=0, width=WIDTH, nsamples_per_side=3, shuffle=False
 ):
     """
     Parameters
@@ -61,7 +61,7 @@ def kappa_tng(
         Size of the target convergence maps (nb pixels)
     nsamples_per_side (int, default=3)
         Used for cropping input images
-    shuffle (bool, default=True)
+    shuffle (bool, default=False)
     
     """
     bin_file = f"{FILENAMES[index_redshift]}.dat"
