@@ -1,10 +1,8 @@
 import os
-import yaml
 import random
 import numpy as np
 
-with open('../config.yml', 'r') as file:
-    CONFIG_DATA = yaml.safe_load(file)
+from . import CONFIG_DATA
 
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 

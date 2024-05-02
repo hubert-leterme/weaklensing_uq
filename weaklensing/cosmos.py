@@ -3,14 +3,12 @@ Data available at https://archive.stsci.edu/hlsp/candels/cosmos-catalogs
 
 """
 import os
-import yaml
 import numpy as np
 import matplotlib.path as mpath
 
 import astropy as ap
 
-with open('../config.yml', 'r') as file:
-    CONFIG_DATA = yaml.safe_load(file)
+from . import CONFIG_DATA
 
 COSMOS_DIR = os.path.expanduser(CONFIG_DATA['cosmos_dir'])
 
