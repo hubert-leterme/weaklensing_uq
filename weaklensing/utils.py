@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
@@ -183,7 +185,7 @@ def get_std_ks(
 
 def ksfilter(
         gamma1_noisy, gamma2_noisy, get_bounds=True, std_noise=None, confidence=None,
-        std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=False
+        smooth=True, std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=False
 ):
     """
     Parameters
@@ -207,9 +209,10 @@ def ksfilter(
     if complexconjugate:
         gamma2_noisy = -gamma2_noisy
     kappa_ks, _ = vectorized_ks93(gamma1_noisy, gamma2_noisy)
-    kappa_ks = ndimage.gaussian_filter(
-        kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
-    ) # KS reconstruction
+    if smooth:
+        kappa_ks = ndimage.gaussian_filter(
+            kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
+        ) # KS reconstruction
     if get_bounds:
         std_ks = get_std_ks(
             std_noise, width1, width2, std_gaussianfilter=std_gaussianfilter
@@ -217,24 +220,28 @@ def ksfilter(
         ppf_ks = confidence * std_ks
         kappa_ks_lo = kappa_ks - ppf_ks
         kappa_ks_hi = kappa_ks + ppf_ks
-        out = kappa_ks, kappa_ks_lo, kappa_ks_hi
+        out = kappa_ks, kappa_ks_lo, kappa_ks_hi, std_ks
     else:
         out = kappa_ks
 
     return out
 
 
-def _split_test_calib(arr, nimgs_calib):
-    arr_calib = arr[:nimgs_calib]
-    arr_test = arr[nimgs_calib:]
+def _split_test_calib(arr, nimgs_calib, calib_first=True):
+    if calib_first:
+        arr_calib = arr[:nimgs_calib]
+        arr_test = arr[nimgs_calib:]
+    else:
+        arr_calib = arr[-nimgs_calib:]
+        arr_test = arr[:-nimgs_calib]
     return arr_calib, arr_test
 
 
-def split_test_calib(list_of_arr, nimgs_calib):
+def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
 
     list_of_arr_calib, list_of_arr_test = [], []
     for arr in list_of_arr:
-        arr_calib, arr_test = _split_test_calib(arr, nimgs_calib)
+        arr_calib, arr_test = _split_test_calib(arr, nimgs_calib, **kwargs)
         list_of_arr_calib.append(arr_calib)
         list_of_arr_test.append(arr_test)
 
@@ -260,6 +267,34 @@ def loss(kappa_lo, kappa_hi, kappa, mask=None):
     return np.sum(ill_predicted, axis=(-2, -1)) / npixels
 
 
+def _adjusted_quantiles(alpha, conformity_scores):
+    """
+    Get quantiles of a given array of conformity scores over a calibration
+    set, with finite-sample correction.
+
+    Parameters
+    ----------
+    alpha (float)
+        Target error level
+    conformity_scores (array-like)
+        Array of shape (nimgs_calib, nx, ny), where nimgs_calib denotes
+        the number of images in the calibration set
+    
+    Returns
+    -------
+    quantile_vals (array-like)
+        Array of shape (nx, ny): the adjusted quantiles
+    adjusted_quantile (float)
+        Adjusted quantile index (between 0 and 1)
+    
+    """
+    nimgs_calib = conformity_scores.shape[0]
+    assert nimgs_calib >= get_min_nimgs_calib(alpha)
+    adjusted_quantile = (1 - alpha) * (1 + 1/nimgs_calib)
+    quantile_vals = np.percentile(conformity_scores, adjusted_quantile*100, axis=0)
+    return quantile_vals, adjusted_quantile
+
+
 def conformalize(
         kappa_lo_test, kappa_hi_test,
         kappa_lo_calib, kappa_hi_calib,
@@ -281,20 +316,151 @@ def conformalize(
         Target error level
     
     """
-    nimgs_calib, _, _ = test_array_shape([kappa_calib, kappa_lo_calib, kappa_hi_calib])
-    assert nimgs_calib >= get_min_nimgs_calib(alpha)
-
     conformity_scores = np.maximum(
         kappa_lo_calib - kappa_calib,
         kappa_calib - kappa_hi_calib
     )
-    # Adjusted quantile (finite sample correction)
-    adjusted_quantile = (1 - alpha) * (1 + 1/nimgs_calib)
-    quantile_vals = np.percentile(conformity_scores, adjusted_quantile*100, axis=0)
+    quantile_vals, adjusted_quantile = _adjusted_quantiles(alpha, conformity_scores)
 
     # Adjust the bounds on the test set
     kappa_lo_cqr_test = kappa_lo_test - quantile_vals
     kappa_hi_cqr_test = kappa_hi_test + quantile_vals
+
+    return kappa_lo_cqr_test, kappa_hi_cqr_test, quantile_vals, adjusted_quantile
+
+
+def conformalize_mult(
+        kappa_lo_test, kappa_hi_test,
+        kappa_lo_calib, kappa_hi_calib,
+        kappa_calib, alpha, eps=1e-9
+):
+    r"""
+    Perform conformal calibration in a multiplicative way:
+    $C(x) = [\hat{f}(x) - \lambda \hat{r}(x),\, \hat{f}(x) + \lambda \hat{r}(x)]$,
+    where $\hat{f}$ denotes a point estimator, $\hat{r}$ a residual expressing
+    uncertainty, and $\lambda$ the calibration parameter. This is inspired by
+    A. N. Angelopoulos et al., “Image-to-Image Regression with Distribution-Free
+    Uncertainty Quantification and Applications in Imaging,” in Proceedings of
+    the 39th International Conference on Machine Learning, PMLR, Jun. 2022, pp. 717–730.
+    However, the conformal calibration method in itself follows the theory developed
+    by Y. Romano, E. Patterson, and E. Candes, “Conformalized Quantile Regression,”
+    in NeurIPS, 2023.
+
+    Parameters
+    ----------
+    kappa_lo_test, kappa_hi_test (array-like)
+        Predicted lower and upper bounds on the test set
+    kappa_lo_calib, kappa_hi_calib (array-like)
+        Predicted lower and upper bounds on the calibration set
+    kappa_calib (array-like)
+        Ground-truth convergence maps (calibration set)
+    alpha (float)
+        Target error level
+    eps (float, default=1e-9)
+        Small value to avoid division by 0
+    
+    """
+    kappa_pred_test = (kappa_lo_test + kappa_hi_test) / 2
+    kappa_pred_calib = (kappa_lo_calib + kappa_hi_calib) / 2
+    res_test = (kappa_hi_test - kappa_lo_test) / 2
+    res_calib = (kappa_hi_calib - kappa_lo_calib) / 2
+
+    res_calib[res_calib <= eps] = eps
+    res_test[res_test <= eps] = eps
+
+    conformity_scores = np.abs(kappa_calib - kappa_pred_calib) / res_calib
+    quantile_vals, adjusted_quantile = _adjusted_quantiles(alpha, conformity_scores)
+
+    # Adjust the bounds on the test set
+    kappa_lo_cqr_test = kappa_pred_test - quantile_vals * res_test
+    kappa_hi_cqr_test = kappa_pred_test + quantile_vals * res_test
+
+    return kappa_lo_cqr_test, kappa_hi_cqr_test, quantile_vals, adjusted_quantile
+
+
+def conformalize_exp(
+        kappa_lo_test, kappa_hi_test,
+        kappa_lo_calib, kappa_hi_calib,
+        kappa_calib, alpha, eps=1e-9,
+        rho=None, scalefact=1., cosmos_mask=None
+):
+    r"""
+    Perform conformal calibration using the following calibration function:
+    $$
+        g_\lambda: r \mapsto \rho(r) (\mathrm e^\lambda - 1) + r,
+    $$
+    for some user-specified function $\rho$.
+    In this context, the conformity scores are equal to:
+    $$
+        \conformityScoreRV_i = \log\left(
+            1 + \frac{
+                \left|
+                    \hat f(\mathsf X_i) - \mathsf Y_i
+                \right| - \hat r(\mathsf X_i)
+            }{
+                \rho\left(
+                    \hat r(\mathsf X_i)
+                \right)
+            }
+        \right).
+    $$
+
+    Parameters
+    ----------
+    kappa_lo_test, kappa_hi_test (array-like)
+        Predicted lower and upper bounds on the test set
+    kappa_lo_calib, kappa_hi_calib (array-like)
+        Predicted lower and upper bounds on the calibration set
+    kappa_calib (array-like)
+        Ground-truth convergence maps (calibration set)
+    alpha (float)
+        Target error level
+    eps (float, default=1e-9)
+        Small value to avoid division by 0
+    rho (callable, default=None)
+        Function $\rho$ used in the calibration function. If none is given, then
+        the identity function is used.
+    scalefact(float, default=1.)
+        Scale factor > 0 used when applying the calibration function
+    cosmos_mask (array-like, default=None)
+        When proper calibration is impossible (due to the calibration function),
+        a warning is triggered. However, the warning will be ignored if this happens
+        outside the survey boundaries
+    
+    """
+    kappa_pred_test = (kappa_lo_test + kappa_hi_test) / 2
+    kappa_pred_calib = (kappa_lo_calib + kappa_hi_calib) / 2
+
+    res_test = (kappa_hi_test - kappa_lo_test) / 2
+    res_calib = (kappa_hi_calib - kappa_lo_calib) / 2
+
+    weights_test = scalefact * rho(res_test / scalefact)
+    weights_calib = scalefact * rho(res_calib / scalefact)
+    weights_test[weights_test <= eps] = eps
+    weights_calib[weights_calib <= eps] = eps
+
+    conformity_scores = np.log(
+        1 + (
+            np.abs(kappa_pred_calib - kappa_calib) - res_calib
+        ) / weights_calib
+    )
+    conformity_scores = np.nan_to_num(conformity_scores, nan=-np.inf)
+    quantile_vals, adjusted_quantile = _adjusted_quantiles(alpha, conformity_scores)
+    isnan = np.isnan(quantile_vals)
+    if cosmos_mask is not None:
+        isnan[cosmos_mask] = False
+    sum_isnan = np.sum(isnan)
+    if sum_isnan > 0:
+        warnings.warn(
+            f"Some pixels are impossible to calibrate ({sum_isnan / isnan.size:.0%}); the "
+            "predictions will be overconservative. Choose another calibration function."
+        )
+
+    # Adjust the bounds on the test set
+    res_cqr_test = res_test + weights_test * (np.exp(quantile_vals) - 1)
+
+    kappa_lo_cqr_test = kappa_pred_test - res_cqr_test
+    kappa_hi_cqr_test = kappa_pred_test + res_cqr_test
 
     return kappa_lo_cqr_test, kappa_hi_cqr_test, quantile_vals, adjusted_quantile
 
@@ -319,3 +485,49 @@ def skyshow(img, boundaries=None, c='w', cbarshrink=None, title=None, **kwargs):
         plt.title(title)
 
     return out
+
+
+def get_emp_variance(func, nreal_noise, *args, **kwargs):
+    """
+    Get the empirical variance of an estimator by propagating noise multiple times.
+
+    Parameters
+    ----------
+    func (callable)
+        Estimator from which variance is estimated. The function must have a boolean
+        parameter `PropagateNoise`.
+    nreal_noise (int)
+        Number of noise realizations. The variance of the empirical variance depends on
+        the true variance as well as the fourth central moment of the estimator, and decreases
+        in O(1/nreal_noise). For more information, see
+        https://math.stackexchange.com/questions/72975/variance-of-sample-variance
+    *args, **kwargs
+        Arguments to be passed to `func`.
+
+    """
+    est = []
+    for _ in range(nreal_noise):
+        est.append(func(*args, PropagateNoise=True, **kwargs))
+    est = np.stack(est)
+    return np.var(est, axis=0)
+
+
+def illpredicted_perpixel(kappa_ori, kappa_lo, kappa_hi):
+    illpredicted = (
+        kappa_ori < kappa_lo
+    ) | (
+        kappa_ori > kappa_hi
+    )
+    return np.mean(illpredicted, axis=0)
+
+
+def mean_predinterv(kappa_lo, kappa_hi, cosmos_mask=None):
+    predinterv = kappa_hi - kappa_lo
+    if cosmos_mask is not None:
+        predinterv = predinterv[:, cosmos_mask]
+    return np.mean(predinterv)
+
+
+def mean_predinterv_perpixel(kappa_lo, kappa_hi):
+    predinterv = kappa_hi - kappa_lo
+    return np.mean(predinterv, axis=0)
