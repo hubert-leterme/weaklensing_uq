@@ -471,14 +471,20 @@ def get_bounds_proba_cqr(alpha, nimgs_calib):
     return lower_bound_proba, upper_bound_proba
 
 
-def skyshow(img, boundaries=None, c='w', cbarshrink=None, title=None, **kwargs):
-
+def skyshow(
+        img, boundaries=None, c='w', cbarshrink=None, title=None,
+        printcolorbar=True, printxylabels=True, **kwargs
+):
     out = plt.imshow(img, origin='lower', **kwargs)
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
+    if printxylabels:
+        plt.xlabel("Right ascension")
+        plt.ylabel("Declination")
     kwargs_cbar = {}
     if cbarshrink is not None:
         kwargs_cbar.update(shrink=cbarshrink)
-    plt.colorbar(**kwargs_cbar)
+    if printcolorbar:
+        plt.colorbar(**kwargs_cbar)
     if boundaries is not None:
         plt.plot(*boundaries,  c=c, lw=1)
     if title is not None:
