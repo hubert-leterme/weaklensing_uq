@@ -251,7 +251,17 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
 # Use **kwargs for argument `axis`, for instance
 def loss(kappa_lo, kappa_hi, kappa, mask=None):
     """
-    Compute accuracy of the prediction intervals
+    Empirical miscoverage rate of the prediction intervals.
+
+    Parameters
+    ----------
+    kappa_lo, kappa_hi (array-like)
+        Arrays of shape (nimgs, nx, ny), lower- and upper-bounds of the
+        prediction intervals.
+    kappa (array-like)
+        Array of shape (nimgs, nx, ny), ground-truth convergence map.
+    mask (array-like, default=None)
+        Array of shape (nx, ny), boundaries of the shape catalog.
     
     """
     _, width1, width2 = test_array_shape([kappa, kappa_lo, kappa_hi])
