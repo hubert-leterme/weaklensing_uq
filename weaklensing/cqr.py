@@ -74,6 +74,12 @@ class BaseCQR:
         res_cqr_test = self._calibration_fun(quantile_vals, res_test)
 
         return res_cqr_test, quantile_vals, adjusted_quantile
+    
+
+    def get_bounds_proba(self, nimgs_calib):
+        lower_bound_proba = self.alpha - 1 / (nimgs_calib + 1)
+        upper_bound_proba = self.alpha
+        return lower_bound_proba, upper_bound_proba
 
 
 class AddCQR(BaseCQR):

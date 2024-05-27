@@ -277,12 +277,6 @@ def loss(kappa_lo, kappa_hi, kappa, mask=None):
     return np.sum(ill_predicted, axis=(-2, -1)) / npixels
 
 
-def get_bounds_proba_cqr(alpha, nimgs_calib):
-    lower_bound_proba = alpha - 1 / (nimgs_calib + 1)
-    upper_bound_proba = alpha
-    return lower_bound_proba, upper_bound_proba
-
-
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
@@ -350,6 +344,13 @@ def mean_predinterv(kappa_lo, kappa_hi, mask=None):
         mask = np.ones(predinterv.shape[1:]).astype(bool)
     predinterv = predinterv[:, mask]
     return np.mean(predinterv, axis=1)
+
+
+def mean_val(pred, mask=None):
+    if mask is None:
+        mask = np.ones(pred.shape[1:]).astype(bool)
+    pred = pred[:, mask]
+    return np.mean(pred, axis=1)
 
 
 def mean_predinterv_perpixel(kappa_lo, kappa_hi):
