@@ -18,12 +18,11 @@ import weaklensing.kappatng as wlktng
 import weaklensing.cosmos as wlcosmos
 
 pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
-sys.path.append(pycs_dir) # tested with commit nb b7b39124de0ad444a89e27123e1791400edfe748 (branch "hos-hl")
+sys.path.append(pycs_dir) # tested with commit nb XXX
 
 import pycs.astro.wl.mass_mapping as csmm
 
 SIZE = 1.5 # opening angle (deg)
-INDEX_REDSHIFT = 2
 NINPIMGS = 25 # number of images to load from the kappaTNG dataset
 NINPIMGS_PS = 20 # separate set of images to compute the power spectrum
 CONFIDENCE = 2 # number of sigmas
@@ -32,7 +31,7 @@ NIMGS_CALIB = 100 # size of the calibration set
 METHOD_LIST = ["mle", "wiener", "mcalens"]
 
 def main(
-        method, picklename, size=SIZE, index_redshift=INDEX_REDSHIFT,
+        method, picklename, size=SIZE,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
         nimgs=None, niter=None, Nsigma=None, batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, verbose=False, **kwargs
@@ -43,13 +42,6 @@ def main(
     # Get number of pixels and adjusted opening angle
     width, size = wlktng.get_npixels(size)
 
-    # Load convergence maps from the kappaTNG dataset
-    kappa = wlktng.kappa_tng(index_redshift, ninpimgs, width=width)
-    if nimgs is None:
-        nimgs = kappa.shape[0]
-    else:
-        assert nimgs <= kappa.shape[0]
-
     # Load data from the COSMOS catalog
     cat_cosmos = wlcosmos.cosmos_catalog(
         include_faint=False
@@ -57,12 +49,26 @@ def main(
     data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, size)
     extent = data_cosmos["extent"]
 
+    # Remove galaxies that are not in the redshift range of the kappaTNG dataset
+    cat_cosmos = cat_cosmos[cat_cosmos['zphot'] >= np.min(wlktng.LIST_OF_Z)]
+    cat_cosmos = cat_cosmos[cat_cosmos['zphot'] < np.max(wlktng.LIST_OF_Z)]
+
     # Get standard deviation of galaxy ellipticities
     shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
     shapedisp = (shapedisp1 + shapedisp2) / 2
 
     # Get map of number of galaxies per pixel
     ngal = wlutils.ngal_per_pixel(cat_cosmos["Ra"], cat_cosmos["Dec"], width, extent)
+
+    # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
+    weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
+
+    # Load convergence maps from the kappaTNG dataset
+    kappa = wlktng.kappa_tng(weights_redshift, ninpimgs, width=width)
+    if nimgs is None:
+        nimgs = kappa.shape[0]
+    else:
+        assert nimgs <= kappa.shape[0]
 
     # Create noisy shear maps
     gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa)
@@ -88,7 +94,7 @@ def main(
     # Compute the 1D power spectrum from simulated convergence maps
     if method in ("wiener", "mcalens"):
         kappa_ps = wlktng.kappa_tng(
-            index_redshift, ninpimgs_ps, start_idx=ninpimgs, width=width
+            weights_redshift, ninpimgs_ps, start_idx=ninpimgs, width=width
         )
         powerspectrum = np.mean(
             np.abs(np.fft.fft2(kappa_ps) / width)**2, axis=0
@@ -232,11 +238,6 @@ if __name__ == "__main__":
         "-s", "--size", type=float,
         default=argparse.SUPPRESS,
         help="Opening angle (deg)"
-    )
-    parser.add_argument(
-        "-z", "--index-redshift", type=int,
-        default=argparse.SUPPRESS,
-        help=f"Default = {INDEX_REDSHIFT}"
     )
     parser.add_argument(
         "--ninpimgs", type=int,
