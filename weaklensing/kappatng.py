@@ -8,6 +8,7 @@ from . import CONFIG_DATA
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
 LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
+FILENAMES = ['kappa13', 'kappa23', 'kappa30'] # When using the old sample dataset
 
 WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 WIDTH = 360 # size of the target convergence maps (nb pixels)
@@ -17,80 +18,163 @@ RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 
-def get_openingangle(width=WIDTH):
-    return width * RESOLUTION / 60.
+class BaseKappaTNG:
 
-def get_npixels(size=SIZE, make_even=True):
-    if not make_even:
-        mult = 1
-    else:
-        mult = 2
-    width = mult * int(size / (mult * RESOLUTION) * 60.)
-    size = get_openingangle(width)
-    return width, size
+    def __init__(
+            self, size=SIZE, make_even=True,
+            n_samples_per_side=3, shuffle=False, ktng_dir=KTNG_DIR
+    ):
+        # Get number of pixels
+        if not make_even:
+            mult = 1
+        else:
+            mult = 2
+        width = mult * int(size / (mult * RESOLUTION) * 60.)
 
-def _split_map(kappa, width_ori, width, n_samples_per_side):
+        # Adjust opening angle to match the (integer) number of pixels
+        size = width * RESOLUTION / 60.
 
-    step = (width_ori - width) // (n_samples_per_side - 1)
-    out = []
-    beg_i = 0
-    for i in range(n_samples_per_side):
-        beg_j = 0
-        for j in range(n_samples_per_side):
-            subkappa = kappa[beg_i:beg_i+width, beg_j:beg_j+width]
-            subkappa = subkappa - np.mean(subkappa) # Center-normalize the convergence map
-            out.append(subkappa)
-            beg_j += step
-        beg_i += step
-
-    return out
+        self.width = width
+        self.size = size
+        self.n_samples_per_side = n_samples_per_side
+        self.shuffle = shuffle
+        self.ktng_dir = ktng_dir
 
 
-def kappa_tng(
-        weights, ninpimgs, start_idx=0, width=WIDTH, nsamples_per_side=3, shuffle=False
-):
+    def get_kappa(self, ninpimgs, start_idx=0):
+        """
+        Parameters
+        ----------
+        ninpimgs (int)
+            Number of input images to load, before cropping and data augmentation
+        start_idx (int, default=0)
+            Index of the first image to load
+        
+        """
+        list_of_idx_dataset = np.arange(start_idx, start_idx + ninpimgs) + 1
+        list_of_idx_dataset = vectorized_zfill(list_of_idx_dataset)
+
+        list_of_kappa = []
+        for idx_dataset in list_of_idx_dataset:
+            kappa = self._get_kappa_from_file(idx_dataset)
+            list_of_kappa += self._split_map(kappa)
+
+        list_of_idx = list(range(len(list_of_kappa)))
+        if self.shuffle:
+            random.shuffle(list_of_idx)
+        list_of_kappa = [list_of_kappa[i] for i in list_of_idx]
+        kappa = np.stack(list_of_kappa)
+
+        return kappa
+
+
+    def _get_kappa_from_file(self, idx_dataset):
+        raise NotImplementedError
+
+
+    def _split_map(self, kappa):
+
+        step = (WIDTH_ORI - self.width) // (self.n_samples_per_side - 1)
+        out = []
+        beg_i = 0
+        for _ in range(self.n_samples_per_side):
+            beg_j = 0
+            for _ in range(self.n_samples_per_side):
+                subkappa = kappa[beg_i:beg_i + self.width, beg_j:beg_j + self.width]
+                subkappa = subkappa - np.mean(subkappa) # Center-normalize the convergence map
+                out.append(subkappa)
+                beg_j += step
+            beg_i += step
+
+        return out
+
+
+class KappaTNG(BaseKappaTNG):
     """
-    Parameters
+    Class for loading convergence maps from the kappaTNG dataset:
+    https://github.com/0satoken/kappaTNG
+
+    Attributes
     ----------
-    weights (list of float)
-    ninpimgs (int)
-        Number of input images to load, before cropping and data augmentation.
-    start_idx (int, default=0)
-        Index of the first image to load.
-    width (int, default=360)
-        Size of the target convergence maps (nb pixels)
-    nsamples_per_side (int, default=3)
+    weights (list of float, default=None)
+        Either one of `weights` and `idx_redshift` must be provided
+    idx_redshift (int, default=None)
+        Either one of `weights` and `idx_redshift` must be provided
+    size (float, default=SIZE)
+        Opening angle (deg)
+    make_even (bool, default=True)
+        Wether to force even-sized convergence maps
+    n_samples_per_side (int, default=3)
         Used for cropping input images
     shuffle (bool, default=False)
+    ktng_dir (str, default=KTNG_DIR)
+
+    """
+    def __init__(self, *args, weights=None, idx_redshift=None, **kwargs):
+        self.weights = weights
+        self.idx_redshift = idx_redshift
+        super().__init__(*args, **kwargs)
+
+
+    def _get_kappa_from_file(self, idx_dataset):
+
+        def _get_kappa_oneredshift(file, idx_redshift):
+            return file[f'{idx_redshift}/kappa'][:]
+
+        fname = os.path.join(self.ktng_dir, f"LP001_run{idx_dataset}_maps.hdf5")
+        with h5py.File(fname, 'r') as file:
+            list_of_idx_redshift = sorted(file.keys())[1:]
+            nredshifts = len(list_of_idx_redshift)
+            if self.weights is not None:
+                if len(self.weights) != nredshifts:
+                    raise AttributeError(
+                        f"Attribute `weights` must have {nredshifts} elements"
+                    )
+                kappa = np.zeros((WIDTH_ORI, WIDTH_ORI))
+                for idx_redshift, weight in zip(list_of_idx_redshift, self.weights):
+                    kappa += weight * _get_kappa_oneredshift(file, idx_redshift)
+            elif self.idx_redshift is not None:
+                kappa = _get_kappa_oneredshift(file, idx_redshift)
+            else:
+                raise AttributeError(
+                    "Either attributes `weights` or `idx_redshift` must be provided"
+                )
+
+        return kappa
+
+
+class KappaTNGFromSamples(BaseKappaTNG):
+    """
+    Uses the old sample dataset provided by the authors. Only one redshift at a time.
+
+    Attributes
+    ----------
+    idx_redshift (int)
+    size (float, default=SIZE)
+        Opening angle (deg)
+    make_even (bool, default=True)
+        Wether to force even-sized convergence maps
+    n_samples_per_side (int, default=3)
+        Used for cropping input images
+    shuffle (bool, default=False)    
+    ktng_dir (str, default=KTNG_DIR)
     
     """
-    list_of_idx_dataset = np.arange(start_idx, start_idx+ninpimgs) + 1
-    list_of_idx_dataset = vectorized_zfill(list_of_idx_dataset)
+    def __init__(self, idx_redshift, *args, **kwargs):
+        self.bin_file = f"{FILENAMES[idx_redshift]}.dat"
+        super().__init__(*args, **kwargs)
 
-    list_of_kappa = []
-    list_of_idx_redshift = None
-    for idx_dataset in list_of_idx_dataset:
-        fname = os.path.join(KTNG_DIR, f"LP001_run{idx_dataset}_maps.hdf5")
-        with h5py.File(fname, 'r') as file:
-            kappa = np.zeros((WIDTH_ORI, WIDTH_ORI))
-            if list_of_idx_redshift is None:
-                list_of_idx_redshift = sorted(file.keys())[1:]
-                nredshifts = len(list_of_idx_redshift)
-                if len(weights) != nredshifts:
-                    raise ValueError(
-                        f"Positional argument `weights` must have {nredshifts} elements"
-                    )
-            for idx_redshift, weight in zip(list_of_idx_redshift, weights):
-                kappa += weight * file[f'{idx_redshift}/kappa'][:]
-        list_of_kappa += _split_map(kappa, WIDTH_ORI, width, nsamples_per_side)
 
-    list_of_idx = list(range(len(list_of_kappa)))
-    if shuffle:
-        random.shuffle(list_of_idx)
-    list_of_kappa = [list_of_kappa[i] for i in list_of_idx]
-    kappa = np.stack(list_of_kappa)
+    def _get_kappa_from_file(self, idx_dataset):
 
-    return kappa
+        fname = os.path.join(KTNG_DIR, f"run{idx_dataset}", self.bin_file)
+        with open(fname, 'rb') as f:
+            _ = np.fromfile(f, dtype="int32", count=1)
+            kappa = np.fromfile(f, dtype="float", count=WIDTH_ORI*WIDTH_ORI)
+            _ = np.fromfile(f, dtype="int32", count=1)
+        kappa = kappa.reshape((WIDTH_ORI, WIDTH_ORI))
+
+        return kappa
 
 
 def get_weights(redshifts):

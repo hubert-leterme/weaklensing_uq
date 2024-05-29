@@ -39,9 +39,6 @@ def main(
     beg = time.time()
     assert method in METHOD_LIST
 
-    # Get number of pixels and adjusted opening angle
-    width, size = wlktng.get_npixels(size)
-
     # Load data from the COSMOS catalog
     cat_cosmos = wlcosmos.cosmos_catalog(
         include_faint=False
@@ -57,18 +54,23 @@ def main(
     shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
     shapedisp = (shapedisp1 + shapedisp2) / 2
 
-    # Get map of number of galaxies per pixel
-    ngal = wlutils.ngal_per_pixel(cat_cosmos["Ra"], cat_cosmos["Dec"], width, extent)
-
     # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
     weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
 
+    # Instantiate KappaTNG object
+    ktng = wlktng.KappaTNG(size=size, weights=weights_redshift)
+
     # Load convergence maps from the kappaTNG dataset
-    kappa = wlktng.kappa_tng(weights_redshift, ninpimgs, width=width)
+    kappa = ktng.get_kappa(ninpimgs)
     if nimgs is None:
         nimgs = kappa.shape[0]
     else:
         assert nimgs <= kappa.shape[0]
+
+    # Get map of number of galaxies per pixel
+    ngal = wlutils.ngal_per_pixel(
+        cat_cosmos["Ra"], cat_cosmos["Dec"], ktng.width, extent
+    )
 
     # Create noisy shear maps
     gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa)
@@ -83,7 +85,7 @@ def main(
 
     # Initialize `csmm.massmap2d` object
     massmap = csmm.massmap2d()
-    massmap.init_massmap(width, width)
+    massmap.init_massmap(ktng.width, ktng.width)
     if niter is not None:
         massmap.DEF_niter = niter
     if Nsigma is not None:
@@ -93,13 +95,12 @@ def main(
 
     # Compute the 1D power spectrum from simulated convergence maps
     if method in ("wiener", "mcalens"):
-        kappa_ps = wlktng.kappa_tng(
-            weights_redshift, ninpimgs_ps, start_idx=ninpimgs, width=width
-        )
+        kappa_ps = ktng.get_kappa(ninpimgs_ps, start_idx=ninpimgs)
         powerspectrum = np.mean(
-            np.abs(np.fft.fft2(kappa_ps) / width)**2, axis=0
+            np.abs(np.fft.fft2(kappa_ps) / ktng.width)**2, axis=0
         ) # expected value of the squared Fourier modulus
-        powerspectrum = powerspectrum[:width//2, :width//2] # only positive frequencies, by symmetry
+        # Only positive frequencies, by symmetry
+        powerspectrum = powerspectrum[:ktng.width//2, :ktng.width//2]
         powerspectrum_1d = (
             powerspectrum[0, :] + powerspectrum[:, 0]
         ) / 2 # assumed isotropic
