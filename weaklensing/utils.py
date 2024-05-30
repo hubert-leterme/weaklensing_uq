@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
