@@ -105,15 +105,17 @@ class KappaTNG(BaseKappaTNG):
     """
     def __init__(self, *args, weights=None, idx_redshift=None, **kwargs):
         self.weights = weights
-        self.idx_redshift = idx_redshift
+        if idx_redshift is not None:
+            self.idx_redshift = f'z{str(idx_redshift + 1).zfill(2)}'
+        else:
+            self.idx_redshift = None
         super().__init__(*args, **kwargs)
 
 
     def _get_kappa_from_file(self, idx_dataset):
 
         def _get_kappa_oneredshift(file, idx_redshift):
-            dirname = f'z{str(idx_redshift).zfill(2)}' # 'z01', 'z02', ..., 'z40'
-            return file[os.path.join(dirname, 'kappa')][:]
+            return file[os.path.join(idx_redshift, 'kappa')][:]
 
         fname = os.path.join(self.ktng_dir, f"LP001_run{idx_dataset}_maps.hdf5")
         with h5py.File(fname, 'r') as file:
