@@ -21,18 +21,10 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 class BaseKappaTNG:
 
     def __init__(
-            self, size=SIZE, make_even=True,
-            n_samples_per_side=3, shuffle=False, ktng_dir=KTNG_DIR
+            self, size=SIZE, n_samples_per_side=3,
+            shuffle=False, ktng_dir=KTNG_DIR, **kwargs
     ):
-        # Get number of pixels
-        if not make_even:
-            mult = 1
-        else:
-            mult = 2
-        width = mult * int(size / (mult * RESOLUTION) * 60.)
-
-        # Adjust opening angle to match the (integer) number of pixels
-        size = width * RESOLUTION / 60.
+        width, size = get_npixels_openingangle(size, **kwargs)
 
         self.width = width
         self.size = size
@@ -177,12 +169,26 @@ class KappaTNGFromSamples(BaseKappaTNG):
         return kappa
 
 
+def get_npixels_openingangle(size, make_even=True):
+
+    if not make_even:
+        mult = 1
+    else:
+        mult = 2
+    width = mult * int(size / (mult * RESOLUTION) * 60.)
+
+    # Adjust opening angle to match the (integer) number of pixels
+    size = width * RESOLUTION / 60.
+
+    return width, size
+
+
 def get_weights(redshifts):
     """
     Arguments
     ---------
     redshifts (np.array)
-        Shape = (ngals)
+        List of redshifts, for each measured galaxy. 1D array of shape (ngals,)
     
     """
     if np.min(redshifts) < LIST_OF_Z[0] or np.max(redshifts) >= LIST_OF_Z[-1]:

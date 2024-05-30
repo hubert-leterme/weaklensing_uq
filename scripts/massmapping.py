@@ -39,6 +39,10 @@ def main(
     beg = time.time()
     assert method in METHOD_LIST
 
+    # Instantiate KappaTNG object
+    ktng = wlktng.KappaTNG(size=size)
+    size = ktng.size # adjusted opening angle
+
     # Load data from the COSMOS catalog
     cat_cosmos = wlcosmos.cosmos_catalog(
         include_faint=False
@@ -56,9 +60,7 @@ def main(
 
     # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
     weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
-
-    # Instantiate KappaTNG object
-    ktng = wlktng.KappaTNG(size=size, weights=weights_redshift)
+    ktng.weights = weights_redshift
 
     # Load convergence maps from the kappaTNG dataset
     kappa = ktng.get_kappa(ninpimgs)
