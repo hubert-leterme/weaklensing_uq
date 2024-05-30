@@ -8,7 +8,8 @@ from . import CONFIG_DATA
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
 LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
-FILENAMES = ['kappa13', 'kappa23', 'kappa30'] # When using the old sample dataset
+FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
+LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 
 WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 WIDTH = 360 # size of the target convergence maps (nb pixels)
@@ -153,7 +154,7 @@ class KappaTNGFromSamples(BaseKappaTNG):
     
     """
     def __init__(self, idx_redshift, *args, **kwargs):
-        self.bin_file = f"{FILENAMES[idx_redshift]}.dat"
+        self.bin_file = f"{FILENAMES_OLD[idx_redshift]}.dat"
         super().__init__(*args, **kwargs)
 
 
