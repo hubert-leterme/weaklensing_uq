@@ -112,7 +112,8 @@ class KappaTNG(BaseKappaTNG):
     def _get_kappa_from_file(self, idx_dataset):
 
         def _get_kappa_oneredshift(file, idx_redshift):
-            return file[f'{idx_redshift}/kappa'][:]
+            dirname = f'z{str(idx_redshift).zfill(2)}' # 'z01', 'z02', ..., 'z40'
+            return file[os.path.join(dirname, 'kappa')][:]
 
         fname = os.path.join(self.ktng_dir, f"LP001_run{idx_dataset}_maps.hdf5")
         with h5py.File(fname, 'r') as file:
@@ -127,7 +128,7 @@ class KappaTNG(BaseKappaTNG):
                 for idx_redshift, weight in zip(list_of_idx_redshift, self.weights):
                     kappa += weight * _get_kappa_oneredshift(file, idx_redshift)
             elif self.idx_redshift is not None:
-                kappa = _get_kappa_oneredshift(file, idx_redshift)
+                kappa = _get_kappa_oneredshift(file, self.idx_redshift)
             else:
                 raise AttributeError(
                     "Either attributes `weights` or `idx_redshift` must be provided"
@@ -160,7 +161,7 @@ class KappaTNGFromSamples(BaseKappaTNG):
 
     def _get_kappa_from_file(self, idx_dataset):
 
-        fname = os.path.join(KTNG_DIR, f"run{idx_dataset}", self.bin_file)
+        fname = os.path.join(self.ktng_dir, f"run{idx_dataset}", self.bin_file)
         with open(fname, 'rb') as f:
             _ = np.fromfile(f, dtype="int32", count=1)
             kappa = np.fromfile(f, dtype="float", count=WIDTH_ORI*WIDTH_ORI)
