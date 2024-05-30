@@ -7,7 +7,9 @@ import warnings
 # If not in there, check in "~/.config/".
 CONFIG_DIRLIST = [
     os.getcwd(), # run a script from the directory where the config file is located
-    os.path.dirname(os.getcwd()), # run a notebook in the 'notebook/' directory
+    os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)
+    )), # look into the parent directory
     os.path.expanduser("~/.config") # or look into a generic directory
 ]
 
