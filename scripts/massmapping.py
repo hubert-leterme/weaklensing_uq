@@ -31,7 +31,7 @@ NIMGS_CALIB = 100 # size of the calibration set
 METHOD_LIST = ["mle", "wiener", "mcalens"]
 
 def main(
-        method, picklename, size=SIZE,
+        method, picklename, size=SIZE, idx_redshift=None,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
         nimgs=None, niter=None, Nsigma=None, batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, verbose=False, **kwargs
@@ -40,7 +40,7 @@ def main(
     assert method in METHOD_LIST
 
     # Instantiate KappaTNG object
-    ktng = wlktng.KappaTNG(size=size)
+    ktng = wlktng.KappaTNG(size=size, idx_redshift=idx_redshift)
     size = ktng.size # adjusted opening angle
 
     # Load data from the COSMOS catalog
@@ -59,8 +59,9 @@ def main(
     shapedisp = (shapedisp1 + shapedisp2) / 2
 
     # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
-    weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
-    ktng.weights = weights_redshift
+    if ktng.idx_redshift is None:
+        weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
+        ktng.weights = weights_redshift
 
     # Load convergence maps from the kappaTNG dataset
     kappa = ktng.get_kappa(ninpimgs)
@@ -112,15 +113,12 @@ def main(
     if method == "wiener":
         func = massmap.prox_wiener_filtering
         kwargs.update(PowSpecSignal=powerspectrum_1d)
-        idx_rec = (0,)
     elif method == "mle":
         func = massmap.prox_mse
         kwargs.update(sigma=wlutils.STD_KSGAUSSIANFILTER)
-        idx_rec = (0,)
     elif method == "mcalens":
         func = massmap.sparse_wiener_filtering
         kwargs.update(PowSpecSignal=powerspectrum_1d, Bmode=False)
-        idx_rec = (0, 2)
     else:
         raise ValueError("Unknown method.")
 
@@ -134,7 +132,7 @@ def main(
             batch_size_noise = nsamples
         kwargs.update(PropagateNoise=True)
 
-    recs = tuple([] for _ in idx_rec)
+    recs = []
     max_idx = 0
 
     # Loop over batches of images
@@ -150,7 +148,7 @@ def main(
         sheardata.g1 = gamma1_noisy[min_idx:max_idx]
         sheardata.g2 = gamma2_noisy[min_idx:max_idx]
 
-        recs_batch = tuple([] for _ in idx_rec)
+        recs_batch = []
         if uq:
             nremainingsamples = nsamples
 
@@ -164,29 +162,24 @@ def main(
                     print(f"Propagating {Nrea} noise realizations...")
             rec = func(
                 sheardata, Inpaint=False, **kwargs
-            )
-            for i, j in enumerate(idx_rec):
-                recs_batch[i].append(rec[j])
+            )[0]
+            if method == 'mcalens':
+                # Mean centering
+                rec -= np.mean(rec, axis=(-2, -1), keepdims=True)
+            recs_batch.append(rec)
             if (not uq) or (nremainingsamples == 0):
                 break
 
         if uq:
             # Concatenate over Nrea
-            rec = tuple(
-                np.concatenate(r, axis=-3) for r in recs_batch
-            ) # tuple of arrays, shape = ([nimgs], Nrea, nx, ny])
+            rec = np.concatenate(recs_batch, axis=-3) # shape = (nimgs, Nrea, nx, ny])
             # Compute output standard deviation, for each input image
-            rec = tuple(
-                np.std(r, axis=-3) for r in rec
-            ) # tuple of arrays, shape = ([nimgs], nx, ny)
+            rec = tuple(np.std(rec, axis=-3)) # shape = (nimgs, nx, ny)
         else:
-            # Each list in recs_batch contains only one array
-            rec = tuple(
-                r[0] for r in recs_batch
-            ) # tuple of arrays, shape = (nimgs, nx, ny)
+            # The list recs_batch contains only one array
+            rec = recs_batch[0] # shape = (nimgs, nx, ny)
 
-        for i, _ in enumerate(idx_rec):
-            recs[i].append(rec[i])
+        recs.append(rec)
 
         end_loop = time.time()
         if verbose:
@@ -203,22 +196,8 @@ def main(
             print(f"Elapsed time: {hours} h, {minutes} min, {seconds} sec")
 
 
-    # Concatenate over nimgs, except when `uq` is True and uncertainty does not depend on
-    # the input image. In this case, each list in `recs` contains only one array of shape (nx, ny).
-    # This happens when the chosen mass mapping method is the Wiener filtering or the MLE reconstruction.
-    # On the other hand, for MCALens, each input image comes with its own uncertainty array.
-    if len(recs[0][0].shape) == 2:
-        # Each list in recs should contain only one array
-        if len(recs[0]) > 1:
-            warnings.warn((
-                "The uncertainty matrix has been computed multiple times; all but "
-                "one will be discarded."
-            ), UserWarning)
-        rec = tuple(r[0] for r in recs) # shape = (nx, ny)
-    else:
-        rec = tuple(
-            np.concatenate(r, axis=0) for r in recs
-        ) # shape = (nimgs, nx, ny)
+    # Concatenate over nimgs
+    rec = np.concatenate(recs, axis=0) # shape = (nimgs, nx, ny)
 
     # Pickle data
     pickle_dir = os.path.expanduser(wl.CONFIG_DATA['pickle_dir'])
@@ -241,6 +220,11 @@ if __name__ == "__main__":
         "-s", "--size", type=float,
         default=argparse.SUPPRESS,
         help="Opening angle (deg)"
+    )
+    parser.add_argument(
+        "--idx-redshift", type=int,
+        default=argparse.SUPPRESS,
+        help="Default = None"
     )
     parser.add_argument(
         "--ninpimgs", type=int,
