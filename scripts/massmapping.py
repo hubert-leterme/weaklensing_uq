@@ -203,7 +203,7 @@ def main(
     pickle_dir = os.path.expanduser(wl.CONFIG_DATA['pickle_dir'])
     fn = os.path.join(pickle_dir, picklename)
     with open(fn, 'wb') as f:
-        pickle.dump((kappa, *rec), f)
+        pickle.dump((kappa, rec), f)
 
 
 if __name__ == "__main__":
