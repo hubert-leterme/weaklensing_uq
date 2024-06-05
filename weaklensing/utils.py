@@ -288,6 +288,12 @@ def mean_predinterv(kappa_lo, kappa_hi, mask=None):
     return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
 
 
+def normalized_mse(kappa_pred, kappa, mask=None):
+    def func(kappa_pred, kappa):
+        return (kappa_pred - kappa)**2
+    return _get_stats(func, kappa_pred, kappa, mask=mask)
+
+
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
