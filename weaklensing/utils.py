@@ -294,6 +294,11 @@ def normalized_mse(kappa_pred, kappa, mask=None):
     return _get_stats(func, kappa_pred, kappa, mask=mask)
 
 
+def mean_val(kappa_pred, mask=None):
+    func = lambda kappa_pred: kappa_pred # identity
+    return _get_stats(func, kappa_pred, mask=mask)
+
+
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
@@ -353,13 +358,6 @@ def illpredicted_perpixel(kappa_ori, kappa_lo, kappa_hi):
         kappa_ori > kappa_hi
     )
     return np.mean(illpredicted, axis=0)
-
-
-def mean_val(pred, mask=None):
-    if mask is None:
-        mask = np.ones(pred.shape[1:]).astype(bool)
-    pred = pred[:, mask]
-    return np.mean(pred, axis=1)
 
 
 def mean_predinterv_perpixel(kappa_lo, kappa_hi):
