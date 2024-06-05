@@ -13,16 +13,11 @@ STD_KSGAUSSIANFILTER = 2.
 
 def test_array_shape(list_of_arr):
 
-    nimgs, width1, width2 = list_of_arr[0].shape
+    shape = list_of_arr[0].shape
     for arr in list_of_arr[1:]:
-        if len(arr.shape) == 2:
-            assert arr.shape == (width1, width2)
-        elif len(arr.shape) == 3:
-            assert arr.shape == (nimgs, width1, width2)
-        else:
-            raise ValueError("Wrong number of dimensions")
+        assert arr.shape == shape[-len(arr.shape):]
 
-    return nimgs, width1, width2
+    return shape
 
 
 def get_alpha_from_confidence(confidence):
@@ -246,7 +241,22 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
     return list_of_arr_calib, list_of_arr_test
 
 
-# Use **kwargs for argument `axis`, for instance
+def _get_stats(func, *args, mask=None):
+
+    # TODO: replace by a decorator
+    width1, width2 = test_array_shape(args)[-2:]
+    if mask is not None:
+        assert mask.shape[-2:] == (width1, width2)
+    vals = func(*args) # shape = (nimgs, [npatches], nx, ny)
+    if mask is not None:
+        vals *= mask # shape = (nimgs, [npatches], nx, ny)
+        npixels = np.sum(mask, axis=(-2, -1)) # float or shape = (npatches,)
+    else:
+        npixels = width1 * width2
+
+    return np.sum(vals, axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
+
+
 def loss(kappa_lo, kappa_hi, kappa, mask=None):
     """
     Empirical miscoverage rate of the prediction intervals.
@@ -259,20 +269,23 @@ def loss(kappa_lo, kappa_hi, kappa, mask=None):
     kappa (array-like)
         Array of shape (nimgs, nx, ny), ground-truth convergence map.
     mask (array-like, default=None)
-        Array of shape (nx, ny), boundaries of the shape catalog.
+        Array of shape (nx, ny) or (nimgs, nx, ny), boundaries of the shape catalog.
+
+    Returns
+    -------
+    out (array-like)
+        Array of shape (nimgs,)
     
     """
-    _, width1, width2 = test_array_shape([kappa, kappa_lo, kappa_hi])
-    if mask is not None:
-        assert mask.shape == (width1, width2)
-    ill_predicted = (kappa < kappa_lo) | (kappa > kappa_hi)
-    if mask is not None:
-        ill_predicted *= mask
-        npixels = np.sum(mask)
-    else:
-        npixels = width1 * width2
+    def func(kappa_lo, kappa_hi, kappa):
+        return (kappa < kappa_lo) | (kappa > kappa_hi)
+    return _get_stats(func, kappa_lo, kappa_hi, kappa, mask=mask)
 
-    return np.sum(ill_predicted, axis=(-2, -1)) / npixels
+
+def mean_predinterv(kappa_lo, kappa_hi, mask=None):
+    def func(kappa_lo, kappa_hi):
+        return kappa_hi - kappa_lo
+    return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
 
 
 def skyshow(
@@ -334,14 +347,6 @@ def illpredicted_perpixel(kappa_ori, kappa_lo, kappa_hi):
         kappa_ori > kappa_hi
     )
     return np.mean(illpredicted, axis=0)
-
-
-def mean_predinterv(kappa_lo, kappa_hi, mask=None):
-    predinterv = kappa_hi - kappa_lo
-    if mask is None:
-        mask = np.ones(predinterv.shape[1:]).astype(bool)
-    predinterv = predinterv[:, mask]
-    return np.mean(predinterv, axis=1)
 
 
 def mean_val(pred, mask=None):
