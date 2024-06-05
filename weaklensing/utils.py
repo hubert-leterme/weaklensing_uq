@@ -359,3 +359,32 @@ def mean_val(pred, mask=None):
 def mean_predinterv_perpixel(kappa_lo, kappa_hi):
     predinterv = kappa_hi - kappa_lo
     return np.mean(predinterv, axis=0)
+
+
+def patchify(
+        inparray, patch_size, npatches_per_side, inpsize=None,
+        centermean=False, stack=False, **kwargs
+):
+    if inpsize is None:
+        nx, ny = inparray.shape[-2:]
+    else:
+        nx = inpsize
+        ny = inpsize
+    step_x = (nx - patch_size) // (npatches_per_side - 1)
+    step_y = (nx - patch_size) // (npatches_per_side - 1)
+    out = []
+    beg_i = 0
+    for _ in range(npatches_per_side):
+        beg_j = 0
+        for _ in range(npatches_per_side):
+            subarray = inparray[..., beg_i:beg_i + patch_size, beg_j:beg_j + patch_size]
+            if centermean:
+                subarray = subarray - np.mean(subarray, axis=(-2, -1))
+            out.append(subarray)
+            beg_j += step_y
+        beg_i += step_x
+
+    if stack:
+        out = np.stack(out, **kwargs)
+
+    return out

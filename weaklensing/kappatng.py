@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 
 from . import CONFIG_DATA
+from . import utils as wlutils
 
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
@@ -67,19 +68,10 @@ class BaseKappaTNG:
 
     def _split_map(self, kappa):
 
-        step = (WIDTH_ORI - self.width) // (self.n_samples_per_side - 1)
-        out = []
-        beg_i = 0
-        for _ in range(self.n_samples_per_side):
-            beg_j = 0
-            for _ in range(self.n_samples_per_side):
-                subkappa = kappa[beg_i:beg_i + self.width, beg_j:beg_j + self.width]
-                subkappa = subkappa - np.mean(subkappa) # Center-normalize the convergence map
-                out.append(subkappa)
-                beg_j += step
-            beg_i += step
-
-        return out
+        return wlutils.patchify(
+            kappa, self.width, self.n_samples_per_side, inpsize=WIDTH_ORI,
+            centermean=True
+        )
 
 
 class KappaTNG(BaseKappaTNG):
