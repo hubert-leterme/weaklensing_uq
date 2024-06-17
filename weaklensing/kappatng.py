@@ -33,6 +33,7 @@ class BaseKappaTNG:
         self.n_samples_per_side = n_samples_per_side
         self.shuffle = shuffle
         self.ktng_dir = ktng_dir
+        self.list_of_idx = None
 
 
     def get_kappa(self, ninpimgs, start_idx=0):
@@ -58,6 +59,7 @@ class BaseKappaTNG:
             random.shuffle(list_of_idx)
         list_of_kappa = [list_of_kappa[i] for i in list_of_idx]
         kappa = np.stack(list_of_kappa)
+        self.list_of_idx = list_of_idx
 
         return kappa
 
