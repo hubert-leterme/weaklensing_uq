@@ -1,16 +1,10 @@
 import os
 import sys
-import warnings
 import pickle
 import argparse
 import time
+import random
 import numpy as np
-
-current_dir = os.path.abspath(os.path.join(os.getcwd(), '.'))
-sys.path.append(current_dir)
-
-parent_dir = os.path.abspath(os.path.join(os.getcwd(), '..'))
-sys.path.append(parent_dir)
 
 import weaklensing as wl
 import weaklensing.utils as wlutils
@@ -18,7 +12,7 @@ import weaklensing.kappatng as wlktng
 import weaklensing.cosmos as wlcosmos
 
 pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
-sys.path.append(pycs_dir) # tested with commit nb XXX
+sys.path.append(pycs_dir) # tested with commit nb 3eff4935bc3cd2368844c67452e429e0f4e7a127
 
 import pycs.astro.wl.mass_mapping as csmm
 
@@ -34,8 +28,12 @@ def main(
         method, picklename, size=SIZE, idx_redshift=None,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
         nimgs=None, niter=None, Nsigma=None, batch_size=None, uq=False, nsamples=None,
-        batch_size_noise=None, verbose=False, **kwargs
+        batch_size_noise=None, seed=None, verbose=False, **kwargs
 ):
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+
     beg = time.time()
     assert method in METHOD_LIST
 
@@ -287,6 +285,13 @@ if __name__ == "__main__":
             "Number of noise realizations. Depending on the mass mapping method, each input image "
             "may or may not get its own set of noise realizations. Default = None (all noise realizations "
             "computed in a single batch)"
+        )
+    )
+    parser.add_argument(
+        "--seed", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Seed for the random number generators"
         )
     )
     parser.add_argument(
