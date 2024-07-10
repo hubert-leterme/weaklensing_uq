@@ -6,10 +6,10 @@ import time
 import random
 import numpy as np
 
-import weaklensing as wl
-import weaklensing.utils as wlutils
-import weaklensing.kappatng as wlktng
-import weaklensing.cosmos as wlcosmos
+import wlmmuq as wl
+import wlmmuq.utils as wlutils
+import wlmmuq.kappatng as wlktng
+import wlmmuq.cosmos as wlcosmos
 
 pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
 sys.path.append(pycs_dir) # tested with commit nb 3eff4935bc3cd2368844c67452e429e0f4e7a127
