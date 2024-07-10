@@ -127,7 +127,7 @@ class KappaTNG(BaseKappaTNG):
                 kappa = _get_kappa_oneredshift(file, self.idx_redshift)
             else:
                 raise AttributeError(
-                    "Either attributes `weights` or `idx_redshift` must be provided"
+                    "Either the attribute `weights` or `idx_redshift` must be provided"
                 )
 
         return kappa
