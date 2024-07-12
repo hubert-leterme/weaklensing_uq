@@ -1,5 +1,4 @@
-# <b>WLMMUQ</b>
-**Weak Lensing Mass Mapping with Uncertainty Quantification**
+# Weak lensing mass mapping with uncertainty quantification
 
 ## Requirements and settings
 
