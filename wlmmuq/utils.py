@@ -375,7 +375,7 @@ def patchify(
         nx = inpsize
         ny = inpsize
     step_x = (nx - patch_size) // (npatches_per_side - 1)
-    step_y = (nx - patch_size) // (npatches_per_side - 1)
+    step_y = (ny - patch_size) // (npatches_per_side - 1)
     out = []
     beg_i = 0
     for _ in range(npatches_per_side):
