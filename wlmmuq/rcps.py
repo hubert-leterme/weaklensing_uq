@@ -172,15 +172,6 @@ class BaseRCPS:
         return out
 
 
-    def _loss(self, pred, res, lamb, kappa, **kwargs):
-
-        res_calib = self._calibration_fun(lamb, res)
-        kappa_lo = pred - res_calib
-        kappa_hi = pred + res_calib
-
-        return utils.loss(kappa_lo, kappa_hi, kappa, **kwargs)
-
-
     def calibrate(self, res_test, pred_calib, res_calib, kappa_calib, **kwargs):
         """
         Perform RCPS-based calibration.
@@ -230,7 +221,7 @@ class BaseRCPS:
 
         def _diff_alpha(lamb):
             res_rcps_calib = self._calibration_fun(lamb, res_calib)
-            losses = utils.loss(
+            losses = utils.miscoverage_rate(
                 pred_calib - res_rcps_calib, pred_calib + res_rcps_calib,
                 kappa_calib, **kwargs
             ) # shape = (nimgs_calib,)

@@ -257,7 +257,7 @@ def _get_stats(func, *args, mask=None):
     return np.sum(vals, axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
 
 
-def loss(kappa_lo, kappa_hi, kappa, mask=None):
+def miscoverage_rate(kappa_lo, kappa_hi, kappa, mask=None):
     """
     Empirical miscoverage rate of the prediction intervals.
 
