@@ -21,7 +21,7 @@ while CONFIGFILE is None:
     except StopIteration:
         break
     else:
-        test_path = os.path.join(configdir, "wlconfig.yml")
+        test_path = os.path.join(configdir, "config.yml")
         if os.path.isfile(test_path):
             CONFIGFILE = test_path
 

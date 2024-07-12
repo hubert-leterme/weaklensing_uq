@@ -1,0 +1,16 @@
+# Configuration file for data directories and file paths
+#
+# Parameters:
+#   verbose: Boolean flag to enable verbose output when importing the wlmmuq library.
+#   cosmos_dir: Path to the COSMOS data directory.
+#   ktng_dir: Path to the kappaTNG data directory.
+#   pycs_dir: Path to the cosmostat code directory.
+#   pickle_dir: Path to the directory for pickled objects,
+#       used in the Python script massmapping.py
+
+verbose: true
+
+cosmos_dir: ~/Documents/Data/COSMOS/v1.0
+ktng_dir: ~/Documents/Data/kappaTNG
+pycs_dir: ~/OneDrive/Documents/Code/cosmostat
+pickle_dir: ~/OneDrive/Documents/Code/obj
