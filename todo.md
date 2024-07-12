@@ -1,3 +1,0 @@
-- [x] **pycs** *(2024-02-29)* Install `pysparse` (problem when installing with `pip`)
-- [ ] **pycs** *(2024-02-29)* Run `black` (https://github.com/psf/black) for code formatting before pushing to GitHub (create a new branch?)
-- [ ] **sparse2d** *(2024-03-14)* Fix the issue with path to shared libraries within virtual environments (see `2024-02-28.ipynb`)
