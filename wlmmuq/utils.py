@@ -222,11 +222,11 @@ def ksfilter(
 
 def _split_test_calib(arr, nimgs_calib, calib_first=True):
     if calib_first:
-        arr_calib = arr[:nimgs_calib]
-        arr_test = arr[nimgs_calib:]
+        arr_calib = arr[:nimgs_calib].copy()
+        arr_test = arr[nimgs_calib:].copy()
     else:
-        arr_calib = arr[-nimgs_calib:]
-        arr_test = arr[:-nimgs_calib]
+        arr_calib = arr[-nimgs_calib:].copy()
+        arr_test = arr[:-nimgs_calib].copy()
     return arr_calib, arr_test
 
 
