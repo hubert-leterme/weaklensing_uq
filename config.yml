@@ -10,7 +10,7 @@
 
 verbose: true
 
-cosmos_dir: ~/Documents/Data/COSMOS/v1.0
-ktng_dir: ~/Documents/Data/kappaTNG
-pycs_dir: ~/OneDrive/Documents/Code/cosmostat
-pickle_dir: ~/OneDrive/Documents/Code/obj
+cosmos_dir:
+ktng_dir:
+pycs_dir:
+pickle_dir:
