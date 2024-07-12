@@ -11,8 +11,10 @@ import wlmmuq.utils as wlutils
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 
-pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
-sys.path.append(pycs_dir) # tested with commit nb 3eff4935bc3cd2368844c67452e429e0f4e7a127
+pycs_dir = wl.CONFIG_DATA['pycs_dir']
+if pycs_dir is not None:
+    pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
+    sys.path.append(pycs_dir)
 
 import pycs.astro.wl.mass_mapping as csmm
 
