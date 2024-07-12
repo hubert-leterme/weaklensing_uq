@@ -1,4 +1,4 @@
-# Weak lensing mass mapping with uncertainty quantification
+# Distribution-free uncertainty quantification for weak lensing mass mapping
 
 ## Requirements and settings
 
