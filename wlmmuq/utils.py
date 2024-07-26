@@ -294,6 +294,10 @@ def normalized_mse(kappa_pred, kappa, mask=None):
     return _get_stats(func, kappa_pred, kappa, mask=mask)
 
 
+def rmse(kappa_pred, kappa, mask=None):
+    return np.sqrt(normalized_mse(kappa_pred, kappa, mask=mask))
+
+
 def mean_val(kappa_pred, mask=None):
     func = lambda kappa_pred: kappa_pred # identity
     return _get_stats(func, kappa_pred, mask=mask)
