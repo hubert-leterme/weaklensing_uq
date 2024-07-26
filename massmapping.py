@@ -5,6 +5,7 @@ import argparse
 import time
 import random
 import numpy as np
+import astropy.table as aptable
 
 import wlmmuq as wl
 import wlmmuq.utils as wlutils
@@ -28,8 +29,10 @@ METHOD_LIST = ["mle", "wiener", "mcalens"]
 
 def main(
         method, picklename, size=SIZE, idx_redshift=None,
+        cosmos_include_faint=False,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
-        nimgs=None, niter=None, Nsigma=None, batch_size=None, uq=False, nsamples=None,
+        nimgs=None, niter=None, Nsigma=None, Inpaint=False, mean_centering=False,
+        batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
@@ -44,23 +47,33 @@ def main(
     size = ktng.size # adjusted opening angle
 
     # Load data from the COSMOS catalog
-    cat_cosmos = wlcosmos.cosmos_catalog(
-        include_faint=False
-    )
-    data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, size)
-    extent = data_cosmos["extent"]
+    cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
 
     # Remove galaxies that are not in the redshift range of the kappaTNG dataset
-    cat_cosmos = cat_cosmos[cat_cosmos['zphot'] >= np.min(wlktng.LIST_OF_Z)]
-    cat_cosmos = cat_cosmos[cat_cosmos['zphot'] < np.max(wlktng.LIST_OF_Z)]
+    cat_cosmos_bright = cat_cosmos_bright[
+        cat_cosmos_bright['zphot'] >= np.min(wlktng.LIST_OF_Z)
+    ]
+    cat_cosmos_bright = cat_cosmos_bright[
+        cat_cosmos_bright['zphot'] < np.max(wlktng.LIST_OF_Z)
+    ]
 
-    # Get standard deviation of galaxy ellipticities
+    # Merge the two catalogs if requested
+    if cosmos_include_faint:
+        cat_cosmos = aptable.vstack(
+            [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
+        )
+    else:
+        cat_cosmos = cat_cosmos_bright
+
+    # Get survey extent and standard deviation of galaxy ellipticities
+    data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, size)
+    extent = data_cosmos["extent"]
     shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
     shapedisp = (shapedisp1 + shapedisp2) / 2
 
     # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
     if ktng.idx_redshift is None:
-        weights_redshift = wlktng.get_weights(cat_cosmos['zphot'])
+        weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
         ktng.weights = weights_redshift
 
     # Load convergence maps from the kappaTNG dataset
@@ -161,9 +174,9 @@ def main(
                 if verbose:
                     print(f"Propagating {Nrea} noise realizations...")
             rec = func(
-                sheardata, Inpaint=False, **kwargs
+                sheardata, Inpaint=Inpaint, **kwargs
             )[0]
-            if method == 'mcalens':
+            if method == 'mcalens' and mean_centering:
                 # Mean centering
                 rec -= np.mean(rec, axis=(-2, -1), keepdims=True)
             recs_batch.append(rec)
@@ -227,6 +240,11 @@ if __name__ == "__main__":
         help="Default = None"
     )
     parser.add_argument(
+        "--cosmos-include-faint", action='store_true',
+        default=argparse.SUPPRESS,
+        help="Whether to include the faint galaxies from the COSMOS S10 shear catalog. Default = False"
+    )
+    parser.add_argument(
         "--ninpimgs", type=int,
         default=argparse.SUPPRESS,
         help=f"Number of input images to load from the kappaTNG dataset. Default = {NINPIMGS}"
@@ -258,6 +276,16 @@ if __name__ == "__main__":
             "Default detection level in wavelet space, for MCALens. "
             "Default = massmap2d.DEF_Sigma"
         )
+    )
+    parser.add_argument(
+        "--Inpaint", action='store_true',
+        default=argparse.SUPPRESS,
+        help="Whether to inpaint the missing data. Default = False"
+    )
+    parser.add_argument(
+        "--mean-centering", action='store_true',
+        default=argparse.SUPPRESS,
+        help="Whether to apply mean centering for MCALens outputs. Default = False"
     )
     parser.add_argument(
         "-b", "--batch-size", type=int,

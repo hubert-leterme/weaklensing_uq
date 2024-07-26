@@ -6,7 +6,7 @@ import os
 import numpy as np
 import matplotlib.path as mpath
 
-import astropy as ap
+import astropy.table as aptable
 
 from . import CONFIG_DATA
 
@@ -52,35 +52,17 @@ COSMOS_VERTICES = [(149.508, 2.880),
 
 RA, DEC = np.array(COSMOS_VERTICES).T
 
-def cosmos_catalog(include_faint=True):
+
+def cosmos_catalog():
 
     # Load data
-    cat_bright = ap.table.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
-    cat_faint = ap.table.Table.read(f'{COSMOS_DIR}/cosmos_faint_cat.asc', format='ascii')
+    cat_bright = aptable.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
+    cat_faint = aptable.Table.read(f'{COSMOS_DIR}/cosmos_faint_cat.asc', format='ascii')
 
     # Discard galaxies with redshift measurement problem
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
 
-    # Merge catalog
-    if include_faint:
-        cat_full = ap.table.Table()
-        cat_full['Ra'] = np.concatenate([cat_bright['Ra'], cat_faint['Ra']])
-        cat_full['Dec'] = np.concatenate([cat_bright['Dec'], cat_faint['Dec']])
-        cat_full['e1iso_rot4_gr_snCal'] = np.concatenate(
-            [cat_bright['e1iso_rot4_gr_snCal'], cat_faint['e1iso_rot4_gr_snCal']]
-        )
-        cat_full['e2iso_rot4_gr_snCal'] = np.concatenate(
-            [cat_bright['e2iso_rot4_gr_snCal'], cat_faint['e2iso_rot4_gr_snCal']]
-        )
-        cat_full['nhweight_int'] = np.concatenate(
-            [cat_bright['nhweight_int'], cat_faint['nhweight_int']]
-        )
-        out = cat_full
-
-    else:
-        out = cat_bright
-
-    return out
+    return cat_bright, cat_faint
 
 
 def get_data_from_cosmos(cat_cosmos, size):
