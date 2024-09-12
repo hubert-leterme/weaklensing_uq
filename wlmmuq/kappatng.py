@@ -23,9 +23,11 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 class BaseKappaTNG:
 
     def __init__(
-            self, size=SIZE, n_samples_per_side=3,
+            self, crop_maps=True, size=SIZE, n_samples_per_side=3,
             shuffle=False, ktng_dir=KTNG_DIR, **kwargs
     ):
+        self.crop_maps = crop_maps
+
         width, size = get_npixels_openingangle(size, **kwargs)
 
         self.width = width
@@ -52,7 +54,10 @@ class BaseKappaTNG:
         list_of_kappa = []
         for idx_dataset in list_of_idx_dataset:
             kappa = self._get_kappa_from_file(idx_dataset)
-            list_of_kappa += self._split_map(kappa)
+            if self.crop_maps:
+                list_of_kappa += self._split_map(kappa)
+            else:
+                list_of_kappa.append(kappa)
 
         list_of_idx = list(range(len(list_of_kappa)))
         if self.shuffle:
