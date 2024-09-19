@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
+import h5py
 
 from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
@@ -407,3 +408,46 @@ def patchify(
         out = np.stack(out, **kwargs)
 
     return out
+
+
+def load_hdf5_in_batches(
+        hdf5_filepath, batch_size, std_noise, shuffle=True
+):
+    """
+    Yield batches of ground-truth convergence maps and noisy shear maps
+    from an HDF5 file in batches with shuffled indices.
+
+    Parameters
+    ----------
+    hdf5_filepath (str)
+        Path to the HDF5 dataset containing the simulated convergence maps
+    std_noise (numpy.ndarray)
+        Array of noise standard deviation.
+    shapedisp (float)
+        Intrinsic shape dispersion of galaxies
+    shuffle (bool, default=True)
+    
+    """
+    with h5py.File(hdf5_filepath, 'r') as f:
+        dataset = f['kappa']
+        nimgs = dataset.shape[0]  # Total number of images
+
+        # Generate and shuffle indices
+        idx = np.arange(nimgs)
+        if shuffle:
+            np.random.shuffle(idx)
+
+        # Yield data in batches based on shuffled indices
+        for i in range(0, nimgs, batch_size):
+            batch_idx = idx[i:min(i+batch_size, nimgs)]
+
+            # Load batch
+            kappa = dataset[batch_idx]
+
+            # Generate noisy shear maps
+            gamma1, gamma2 = get_shear_from_convergence(kappa)
+            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+                gamma1, gamma2, std_noise=std_noise
+            )
+
+            yield kappa, gamma1_noisy, gamma2_noisy
