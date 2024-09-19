@@ -91,7 +91,7 @@ def main(
     # Create noisy shear maps
     gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa)
     gamma1_noisy, gamma2_noisy, std_noise = wlutils.get_masked_and_noisy_shear(
-        gamma1, gamma2, ngal, shapedisp, stdnoise_mask=0.
+        gamma1, gamma2, ngal=ngal, shapedisp=shapedisp, std_noise_mask=0.
     ) # do not add noise to masked data
 
     # Initialize `csmm.shear_data` object

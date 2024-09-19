@@ -85,23 +85,36 @@ def get_shear_from_convergence(kappa, complexconjugate=False):
     return gamma1, gamma2
 
 
+def get_std_noise(ngal, shapedisp, std_noise_mask):
+
+    out = np.nan_to_num(
+        shapedisp / np.sqrt(ngal), posinf=std_noise_mask
+    ) # standard deviation of the noise
+
+    return out
+
+
 def get_masked_and_noisy_shear(
-        gamma1, gamma2, ngal, shapedisp, stdnoise_mask=None, multfact_stdnoise=30.,
+        gamma1, gamma2, std_noise=None, ngal=None, shapedisp=None,
+        std_noise_mask=None, multfact_std_noise=30.,
         inpainting=False
 ):
     """
     Parameters
     ----------
-    gamma1, gamma2 (array-like)
-    ngal (array-like)
+    gamma1, gamma2 (numpy.ndarray)
+    std_noise (numpy.ndarray, default=None)
+        Array of noise standard deviation. If none is given, then arguments
+        `ngal` and `shapedisp` must be provided.
+    ngal (numpy.ndarray)
         Number of measured galaxies per pixel
     shapedisp (float)
         Shape dispersion of galaxies
-    stdnoise_mask (float, default=None)
+    std_noise_mask (float, default=None)
         For masked data, we set in practice a variance which makes the SNR very small,
         such that the signal becomes dominated by the noise. This argument explicitly
         provides the value of the standard deviation for masked data.
-    multfact_stdnoise (float, default=30.)
+    multfact_std_noise (float, default=30.)
         Only used if `stdnoise_mask` is not provided. Then, the standard deviation for
         masked data is set to `multfact_stdnoise` times the squared norm of the shear
         map, divided by the number of pixels.
@@ -124,17 +137,15 @@ def get_masked_and_noisy_shear(
     gamma2_masked = (1 - mask) * gamma2
 
     # Add noise
-    sqnorm_gamma = (
-        np.linalg.norm(gamma1)**2 + np.linalg.norm(gamma2)**2
-    ) / (nimgs * width1 * width2) # normalized squared norm
-    if stdnoise_mask is None:
-        stdnoise_mask = multfact_stdnoise * np.sqrt(sqnorm_gamma / 2)
-
-    std = np.nan_to_num(
-        shapedisp / np.sqrt(ngal), posinf=stdnoise_mask
-    ) # standard deviation of the noise
-    noise1 = std * np.random.randn(nimgs, width1, width2)
-    noise2 = std * np.random.randn(nimgs, width1, width2)
+    if std_noise is None:
+        if std_noise_mask is None:
+            sqnorm_gamma = (
+                np.linalg.norm(gamma1)**2 + np.linalg.norm(gamma2)**2
+            ) / (nimgs * width1 * width2) # normalized squared norm
+            std_noise_mask = multfact_std_noise * np.sqrt(sqnorm_gamma / 2)
+        std_noise = get_std_noise(ngal, shapedisp, std_noise_mask)
+    noise1 = std_noise * np.random.randn(nimgs, width1, width2)
+    noise2 = std_noise * np.random.randn(nimgs, width1, width2)
 
     if not inpainting:
         noise1[:, mask] = 0.
@@ -142,7 +153,7 @@ def get_masked_and_noisy_shear(
     gamma1_noisy = gamma1_masked + noise1
     gamma2_noisy = gamma2_masked + noise2
 
-    return gamma1_noisy, gamma2_noisy, std
+    return gamma1_noisy, gamma2_noisy, std_noise
 
 
 def get_std_ks(
