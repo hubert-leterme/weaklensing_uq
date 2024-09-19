@@ -24,7 +24,7 @@ class BaseKappaTNG:
 
     def __init__(
             self, crop_maps=True, size=SIZE, n_samples_per_side=3,
-            shuffle=False, ktng_dir=KTNG_DIR, **kwargs
+            shuffle=False, ktng_dir=KTNG_DIR, verbose=False, **kwargs
     ):
         self.crop_maps = crop_maps
 
@@ -36,6 +36,7 @@ class BaseKappaTNG:
         self.shuffle = shuffle
         self.ktng_dir = ktng_dir
         self.list_of_idx = None
+        self.verbose = verbose
 
 
     def get_kappa(self, ninpimgs, start_idx=0):
@@ -53,6 +54,7 @@ class BaseKappaTNG:
 
         list_of_kappa = []
         for idx_dataset in list_of_idx_dataset:
+            self.print(f"Processing dataset {idx_dataset}...")
             kappa = self._get_kappa_from_file(idx_dataset)
             if self.crop_maps:
                 list_of_kappa += self._split_map(kappa)
@@ -79,6 +81,11 @@ class BaseKappaTNG:
             kappa, self.width, self.n_samples_per_side, inpsize=WIDTH_ORI,
             centermean=True
         )
+
+
+    def print(self, msg):
+        if self.verbose:
+            print(msg)
 
 
 class KappaTNG(BaseKappaTNG):
@@ -125,9 +132,10 @@ class KappaTNG(BaseKappaTNG):
                     raise AttributeError(
                         f"Attribute `weights` must have {nredshifts} elements"
                     )
-                kappa = np.zeros((WIDTH_ORI, WIDTH_ORI))
-                for idx_redshift, weight in zip(list_of_idx_redshift, self.weights):
-                    kappa += weight * _get_kappa_oneredshift(file, idx_redshift)
+                kappa = sum([
+                    weight * _get_kappa_oneredshift(file, idx_redshift) \
+                        for idx_redshift, weight in zip(list_of_idx_redshift, self.weights)
+                ])
             elif self.idx_redshift is not None:
                 kappa = _get_kappa_oneredshift(file, self.idx_redshift)
             else:
