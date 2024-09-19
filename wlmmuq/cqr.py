@@ -34,13 +34,13 @@ class BaseCQR:
 
         Parameters
         ----------
-        conformity_scores (array-like)
+        conformity_scores (numpy.ndarray)
             Array of shape (nimgs_calib, nx, ny), where nimgs_calib denotes
             the number of images in the calibration set
         
         Returns
         -------
-        quantile_vals (array-like)
+        quantile_vals (numpy.ndarray)
             Array of shape (ns, ny): the adjusted quantiles
         adjusted_quantile (float)
             Adjusted quantile index (between 0 and 1)
@@ -59,12 +59,12 @@ class BaseCQR:
 
         Parameters
         ----------
-        res_test (array-like)
+        res_test (numpy.ndarray)
             Estimated residuals to be calibrated (test set), shape = (nimgs_test, nx, ny).
-        pred_calib, res_calib (array-like)
+        pred_calib, res_calib (numpy.ndarray)
             Estimated convergence maps and residuals (calibration set),
             shape = (nimgs_calib, nx, ny).
-        kappa_calib (array-like)
+        kappa_calib (numpy.ndarray)
             Ground-truth convergence maps (calibration set),
             shape = (nimgs_calib, nx, ny).
         
@@ -164,7 +164,7 @@ class GenCQR(BaseCQR):
         Target error level
     eps (float, default=1e-9)
         Small value to avoid division by 0 (in case of zero residual)
-    mask (array-like, default=None)
+    mask (numpy.ndarray, default=None)
         When proper calibration is impossible (due to the calibration function),
         a warning is triggered. However, the warning will be ignored if this happens
         outside the survey boundaries, delimited by this attribute. The shape is (nx, ny).
@@ -234,7 +234,7 @@ class ChisqCQR(GenCQR):
         Scaling factor
     df (int, default=3)
         Number of degrees of freedom
-    mask (array-like, default=None)
+    mask (numpy.ndarray, default=None)
         When proper calibration is impossible (due to the calibration function),
         a warning is triggered. However, the warning will be ignored if this happens
         outside the survey boundaries, delimited by this attribute. The shape is (nx, ny).

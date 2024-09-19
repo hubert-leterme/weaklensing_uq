@@ -58,7 +58,7 @@ def ngal_per_pixel(ra, dec, width, extent):
     """
     Parameters
     ----------
-    ra, dec (array-like)
+    ra, dec (numpy.ndarray)
     width (int)
         Size of the target convergence maps (nb pixels).
     extent (4-tuple)
@@ -71,7 +71,7 @@ def get_shear_from_convergence(kappa, complexconjugate=False):
     """
     Parameters
     ----------
-    kappa (array-like, shape=(nimgs, width, width))
+    kappa (numpy.ndarray, shape=(nimgs, width, width))
         The convergence maps.
     complexconjugate (bool, default=False)   
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
@@ -123,9 +123,9 @@ def get_masked_and_noisy_shear(
 
     Returns
     -------
-    gamma1_noisy, gamma2_noisy (array-like)
+    gamma1_noisy, gamma2_noisy (numpy.ndarray)
         Noisy shear maps, affected by argument `inpainting`.
-    std (array-like)
+    std (numpy.ndarray)
         Noise standard deviation, unaffected by argument `inpainting`.
     
     """
@@ -194,9 +194,9 @@ def ksfilter(
     """
     Parameters
     ----------
-    gamma1_noisy, gamma2_noisy (array-like)
+    gamma1_noisy, gamma2_noisy (numpy.ndarray)
     get_bounds (bool, default=True)
-    std_noise (array-like, default=None)
+    std_noise (numpy.ndarray, default=None)
     confidence (float, default=None)
         Level of confidence (n-sigma)
     std_gaussianfilter (float)
@@ -274,17 +274,17 @@ def miscoverage_rate(kappa_lo, kappa_hi, kappa, mask=None):
 
     Parameters
     ----------
-    kappa_lo, kappa_hi (array-like)
+    kappa_lo, kappa_hi (numpy.ndarray)
         Arrays of shape (nimgs, nx, ny), lower- and upper-bounds of the
         prediction intervals.
-    kappa (array-like)
+    kappa (numpy.ndarray)
         Array of shape (nimgs, nx, ny), ground-truth convergence map.
-    mask (array-like, default=None)
+    mask (numpy.ndarray, default=None)
         Array of shape (nx, ny) or (nimgs, nx, ny), boundaries of the shape catalog.
 
     Returns
     -------
-    out (array-like)
+    out (numpy.ndarray)
         Array of shape (nimgs,)
     
     """

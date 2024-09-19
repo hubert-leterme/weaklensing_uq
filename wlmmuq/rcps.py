@@ -178,18 +178,18 @@ class BaseRCPS:
 
         Parameters
         ----------
-        res_test (array-like)
+        res_test (numpy.ndarray)
             Estimated residuals to be calibrated (test set), shape = (nimgs_test, nx, ny).
-        pred_calib, res_calib (array-like)
+        pred_calib, res_calib (numpy.ndarray)
             Estimated convergence maps and residuals (calibration set),
             shape = (nimgs_calib, nx, ny).
-        kappa_calib (array-like)
+        kappa_calib (numpy.ndarray)
             Ground-truth convergence maps (calibration set),
             shape = (nimgs_calib, nx, ny).
 
         Returns
         -------
-        res_rcps_test (array-like)
+        res_rcps_test (numpy.ndarray)
             Calibrated residual (test set), shape = (nimgs_test, nx, ny).
         lamb (float)
             Optimal calibration parameter.
