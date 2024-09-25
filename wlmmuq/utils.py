@@ -138,9 +138,9 @@ def get_masked_and_noisy_shear(
 
     # Set masked values to 0
     if mask is None:
-        mask = (ngal == 0)
-    gamma1_masked = (1 - mask) * gamma1
-    gamma2_masked = (1 - mask) * gamma2
+        mask = ngal > 0
+    gamma1_masked = mask * gamma1
+    gamma2_masked = mask * gamma2
 
     # Add noise
     if std_noise is None:
@@ -154,8 +154,8 @@ def get_masked_and_noisy_shear(
     noise2 = std_noise * np.random.randn(nimgs, width1, width2)
 
     if not inpainting:
-        noise1[:, mask] = 0.
-        noise2[:, mask] = 0.
+        noise1[:, ~mask] = 0.
+        noise2[:, ~mask] = 0.
     gamma1_noisy = gamma1_masked + noise1
     gamma2_noisy = gamma2_masked + noise2
 
@@ -446,10 +446,17 @@ def load_hdf5_in_batches(
 
         # Yield data in batches based on shuffled indices
         for i in range(0, nimgs, batch_size):
-            batch_idx = idx[i:min(i+batch_size, nimgs)]
+            batch_idx = idx[i:min(i + batch_size, nimgs)]
 
-            # Load batch
-            kappa = dataset[batch_idx]
+            # Sort batch_idx to ensure increasing order for HDF5 access
+            sorted_batch_idx = np.sort(batch_idx)
+
+            # Load batch with sorted indices
+            kappa = dataset[sorted_batch_idx]
+
+            # Shuffle the batch
+            if shuffle:
+                np.random.shuffle(kappa)
 
             # Generate noisy shear maps
             gamma1, gamma2 = get_shear_from_convergence(kappa)
@@ -457,4 +464,4 @@ def load_hdf5_in_batches(
                 gamma1, gamma2, std_noise=std_noise, mask=mask
             )
 
-            yield kappa, gamma1_noisy, gamma2_noisy
+            yield kappa, gamma1, gamma2, gamma1_noisy, gamma2_noisy
