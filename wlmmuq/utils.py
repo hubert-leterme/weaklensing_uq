@@ -16,7 +16,8 @@ def test_array_shape(list_of_arr):
 
     shape = list_of_arr[0].shape
     for arr in list_of_arr[1:]:
-        assert arr.shape == shape[-len(arr.shape):]
+        if arr is not None:
+            assert arr.shape == shape[-len(arr.shape):]
 
     return shape
 
@@ -96,18 +97,21 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 
 
 def get_masked_and_noisy_shear(
-        gamma1, gamma2, std_noise=None, ngal=None, shapedisp=None,
+        gamma1, gamma2, std_noise=None, mask=None,
+        ngal=None, shapedisp=None,
         std_noise_mask=None, multfact_std_noise=30.,
         inpainting=False
 ):
     """
     Parameters
     ----------
-    gamma1, gamma2 (numpy.ndarray)
-    std_noise (numpy.ndarray, default=None)
-        Array of noise standard deviation. If none is given, then arguments
-        `ngal` and `shapedisp` must be provided.
-    ngal (numpy.ndarray)
+    gamma1, gamma2 (numpy.ndarray, shape = (nimgs, nx, ny))
+    std_noise (numpy.ndarray, shape = (nx, ny), default=None)
+        Array of noise standard deviation.
+        If none is given, then arguments `ngal` and `shapedisp` must be provided.
+    mask (numpy.ndarray, shape = (nx, ny))
+        Array of masked data. If none is given, then argument `ngal` must be provided.
+    ngal (numpy.ndarray, shape = (nx, ny))
         Number of measured galaxies per pixel
     shapedisp (float)
         Shape dispersion of galaxies
@@ -130,10 +134,11 @@ def get_masked_and_noisy_shear(
         Noise standard deviation, unaffected by argument `inpainting`.
     
     """
-    nimgs, width1, width2 = test_array_shape([gamma1, gamma2, ngal])
+    nimgs, width1, width2 = test_array_shape([gamma1, gamma2, std_noise, mask, ngal])
 
     # Set masked values to 0
-    mask = (ngal == 0)
+    if mask is None:
+        mask = (ngal == 0)
     gamma1_masked = (1 - mask) * gamma1
     gamma2_masked = (1 - mask) * gamma2
 
@@ -411,7 +416,7 @@ def patchify(
 
 
 def load_hdf5_in_batches(
-        hdf5_filepath, batch_size, std_noise, shuffle=True
+        hdf5_filepath, batch_size, std_noise, mask, shuffle=True
 ):
     """
     Yield batches of ground-truth convergence maps and noisy shear maps
@@ -421,8 +426,10 @@ def load_hdf5_in_batches(
     ----------
     hdf5_filepath (str)
         Path to the HDF5 dataset containing the simulated convergence maps
-    std_noise (numpy.ndarray)
+    std_noise (numpy.ndarray, shape = (nx, ny))
         Array of noise standard deviation.
+    mask (numpy.ndarray, shape = (nx, ny))
+        Array of masked data.
     shapedisp (float)
         Intrinsic shape dispersion of galaxies
     shuffle (bool, default=True)
@@ -447,7 +454,7 @@ def load_hdf5_in_batches(
             # Generate noisy shear maps
             gamma1, gamma2 = get_shear_from_convergence(kappa)
             gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-                gamma1, gamma2, std_noise=std_noise
+                gamma1, gamma2, std_noise=std_noise, mask=mask
             )
 
             yield kappa, gamma1_noisy, gamma2_noisy
