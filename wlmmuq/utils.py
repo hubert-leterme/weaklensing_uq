@@ -416,7 +416,7 @@ def patchify(
 
 
 def load_hdf5_in_batches(
-        hdf5_filepath, batch_size, std_noise, mask, shuffle=True
+        hdf5_filepath, batch_size, std_noise, mask, beg_idx=0, shuffle=True
 ):
     """
     Yield batches of ground-truth convergence maps and noisy shear maps
@@ -432,6 +432,8 @@ def load_hdf5_in_batches(
         Array of masked data.
     shapedisp (float)
         Intrinsic shape dispersion of galaxies
+    beg_idx (int, default=0)
+        First image index to consider (e.g., for the split training-test sets)
     shuffle (bool, default=True)
     
     """
@@ -440,7 +442,7 @@ def load_hdf5_in_batches(
         nimgs = dataset.shape[0]  # Total number of images
 
         # Generate and shuffle indices
-        idx = np.arange(nimgs)
+        idx = np.arange(beg_idx, beg_idx + nimgs)
         if shuffle:
             np.random.shuffle(idx)
 
