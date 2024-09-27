@@ -416,7 +416,8 @@ def patchify(
 
 
 def load_hdf5_in_batches(
-        hdf5_filepath, batch_size, std_noise, mask, beg_idx=0, shuffle=True
+        hdf5_filepath, batch_size, std_noise, mask, beg_idx=0, shuffle=True,
+        output_shape=None
 ):
     """
     Yield batches of ground-truth convergence maps and noisy shear maps
@@ -439,12 +440,24 @@ def load_hdf5_in_batches(
     """
     with h5py.File(hdf5_filepath, 'r') as f:
         dataset = f['kappa']
-        nimgs = dataset.shape[0]  # Total number of images
+        nimgs, nx, ny = dataset.shape
 
         # Generate and shuffle indices
         idx = np.arange(beg_idx, beg_idx + nimgs)
         if shuffle:
             np.random.shuffle(idx)
+
+        if output_shape is not None:
+            try:
+                nx_new, ny_new = output_shape
+            except TypeError:
+                nx_new = output_shape
+                ny_new = output_shape
+            assert nx_new <= nx and ny_new <= ny
+            beg_idx_x = (nx - nx_new) // 2
+            beg_idx_y = (ny - ny_new) // 2
+            end_idx_x = beg_idx_x + nx_new
+            end_idx_y = beg_idx_y + ny_new
 
         # Yield data in batches based on shuffled indices
         for i in range(0, nimgs, batch_size):
@@ -465,5 +478,13 @@ def load_hdf5_in_batches(
             gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
                 gamma1, gamma2, std_noise=std_noise, mask=mask
             )
+
+            # Crop arrays if required
+            if output_shape is not None:
+                kappa = kappa[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+                gamma1 = gamma1[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+                gamma2 = gamma2[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+                gamma1_noisy = gamma1_noisy[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+                gamma2_noisy = gamma2_noisy[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
 
             yield kappa, gamma1, gamma2, gamma1_noisy, gamma2_noisy
