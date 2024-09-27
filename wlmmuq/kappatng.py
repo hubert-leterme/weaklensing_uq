@@ -180,6 +180,10 @@ class KappaTNGFromSamples(BaseKappaTNG):
         return kappa
 
 
+def get_openingangle(imgsize):
+    return imgsize * RESOLUTION / 60.
+
+
 def get_npixels_openingangle(size, make_even=True):
 
     if not make_even:
@@ -189,7 +193,7 @@ def get_npixels_openingangle(size, make_even=True):
     width = mult * int(size / (mult * RESOLUTION) * 60.)
 
     # Adjust opening angle to match the (integer) number of pixels
-    size = width * RESOLUTION / 60.
+    size = get_openingangle(width)
 
     return width, size
 

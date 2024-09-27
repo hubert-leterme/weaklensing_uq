@@ -65,6 +65,14 @@ def cosmos_catalog():
     return cat_bright, cat_faint
 
 
+def get_extent(ra_cosmos_median, dec_cosmos_median, size):
+    extent = [
+        ra_cosmos_median - size/2, ra_cosmos_median + size/2,
+        dec_cosmos_median - size/2, dec_cosmos_median + size/2
+    ]
+    return extent
+
+
 def get_data_from_cosmos(cat_cosmos, size):
     """
     Parameters
@@ -77,10 +85,7 @@ def get_data_from_cosmos(cat_cosmos, size):
     out = {}
     ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
     dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
-    extent = [
-        ra_cosmos_median - size/2, ra_cosmos_median + size/2,
-        dec_cosmos_median - size/2, dec_cosmos_median + size/2
-    ]
+    extent = get_extent(ra_cosmos_median, dec_cosmos_median, size)
 
     shapedisp1 = np.std(cat_cosmos['e1iso_rot4_gr_snCal'])
     shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
