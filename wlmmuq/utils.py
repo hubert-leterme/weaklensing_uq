@@ -1,3 +1,5 @@
+import os
+import sys
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
@@ -5,6 +7,14 @@ import h5py
 
 from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
+
+from . import CONFIG_DATA
+pycs_dir = CONFIG_DATA['pycs_dir']
+if pycs_dir is not None:
+    pycs_dir = os.path.expanduser(pycs_dir)
+    sys.path.append(pycs_dir)
+
+import pycs.astro.wl.mass_mapping as csmm
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -415,76 +425,251 @@ def patchify(
     return out
 
 
-def load_hdf5_in_batches(
-        hdf5_filepath, batch_size, std_noise, mask, beg_idx=0, shuffle=True,
-        output_shape=None
-):
-    """
-    Yield batches of ground-truth convergence maps and noisy shear maps
-    from an HDF5 file in batches with shuffled indices.
+def get_beg_end_idx(inpsize, outsize):
 
-    Parameters
-    ----------
-    hdf5_filepath (str)
-        Path to the HDF5 dataset containing the simulated convergence maps
-    std_noise (numpy.ndarray, shape = (nx, ny))
-        Array of noise standard deviation.
-    mask (numpy.ndarray, shape = (nx, ny))
-        Array of masked data.
-    shapedisp (float)
-        Intrinsic shape dispersion of galaxies
-    beg_idx (int, default=0)
-        First image index to consider (e.g., for the split training-test sets)
-    shuffle (bool, default=True)
-    
-    """
-    with h5py.File(hdf5_filepath, 'r') as f:
-        dataset = f['kappa']
-        nimgs, nx, ny = dataset.shape
+    beg_idx = (inpsize - outsize) // 2
+    end_idx = beg_idx + outsize
 
-        # Generate and shuffle indices
-        idx = np.arange(beg_idx, beg_idx + nimgs)
-        if shuffle:
-            np.random.shuffle(idx)
+    return beg_idx, end_idx
 
-        if output_shape is not None:
+
+def crop_arr(arr, beg_idx_x, end_idx_x, *args):
+
+    if len(args) == 2:
+        beg_idx_y, end_idx_y = args
+    else:
+        beg_idx_y = beg_idx_x
+        end_idx_y = end_idx_x
+
+    return arr[..., beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+
+
+class HDF5BatchLoader:
+
+    def __init__(
+        self, hdf5_filepath, nimgs, batch_size, std_noise, mask,
+        beg_idx=0, shuffle=True, output_shape=None, sort_by_filename_ori=True,
+        compute_wiener=0, powerspectrum_1d=None, list_of_outputs=None,
+        verbose=False, **kwargs
+    ):
+        """
+        Initialize the batch loader for HDF5 data.
+
+        Parameters
+        ----------
+        hdf5_filepath : str
+            Path to the HDF5 dataset containing the simulated convergence maps.
+        nimgs : int
+            Number of images in the dataset. Indices from `beg_idx` to
+            `beg_idx + nimgs` are considered.
+        batch_size : int
+            Number of images per batch.
+        std_noise : numpy.ndarray
+            Array of noise standard deviation.
+        mask : numpy.ndarray
+            Array of masked data.
+        beg_idx : int, optional
+            First image index to consider (e.g., for split training-test sets). Default is 0.
+            CAUTION: To ensure independence between the training and test sets,
+            `sort_by_filename_ori` must be set to `True`. Moreover, the split position
+            must be chosen so that `filename_ori` values are different in the training and
+            test sets.
+        shuffle : bool, optional
+            Whether to shuffle the indices. Default is True.
+        output_shape : tuple, optional
+            Shape to crop the output images. Default is None.
+        sort_by_filename_ori: bool, optional
+            If True, sort `kappa` elements by ascending order of `filename_ori`.
+            Default is True.
+        compute_wiener: int, optional
+            If greater than 0, compute the Wiener solution using one of the following methods:
+                - 1: standard Wiener filtering (one iteration)
+                - 2: iterative Wiener filtering algorithm.
+            Default is False.
+        powerspectrum_1d: np.ndarray, optional
+            1D power spectrup for iterative Wiener filtering. Its length must be half
+            the image size. Default is None.
+        list_of_outputs: list of str, optional
+            List of outputs to returns. Can be one of 'kappa', 'gamma1', 'gamma2',
+            'gamma1_noisy', 'gamma2_noisy', 'kappa_wiener', 'filename_ori'.
+            If None, returns a dictionary of outputs. Default is None.
+        verbose : bool, optional
+            If True, print progress messages. Default is False.
+        **kwargs
+            Keyword arguments for
+            `pycs.astro.wl.mass_mapping.massmap2d.wiener` or
+            `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
+        """
+        self.hdf5_filepath = hdf5_filepath
+        self.nimgs = nimgs
+        self.batch_size = batch_size
+        self.std_noise = std_noise
+        self.mask = mask
+        self.beg_idx = beg_idx
+        self.shuffle = shuffle
+        self.output_shape = output_shape
+        self.sort_by_filename_ori = sort_by_filename_ori
+        self.compute_wiener = compute_wiener
+        self.powerspectrum_1d = powerspectrum_1d
+        self.kwargs_wiener = kwargs
+        self.list_of_outputs = list_of_outputs
+        self.verbose = verbose
+
+        self.idx = None  # Will hold the shuffled indices
+        self.file = None  # HDF5 file object
+        self.dataset = None
+        self.current_idx = 0  # To track the batch number
+        self.sheardata = None # For Wiener filtering
+
+        self._initialize_dataset()
+        self._initialize_indices()
+        self._initialize_wiener()
+
+
+    def _initialize_dataset(self):
+        """Load the HDF5 file and initialize the dataset."""
+        self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
+        self.dataset = self.file['kappa']
+        self.filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
+        nimgs_tot, nx, ny = self.dataset.shape
+
+        # Check if requested number of images exceeds total available
+        if self.beg_idx + self.nimgs > nimgs_tot:
+            self.file.close()  # Close the file in case of error
+            raise ValueError("The requested size exceeds the size of the dataset.")
+
+        # Sort by `filename_ori` if specified
+        if self.sort_by_filename_ori:
+            self.sorted_idx = np.argsort(self.filename_ori)  # Sort indices of `filename_ori`
+        else:
+            self.sorted_idx = np.arange(nimgs_tot)
+
+        # Get crop indices, if required
+        if self.output_shape is not None:
             try:
-                nx_new, ny_new = output_shape
+                nx_out, ny_out = self.output_shape
             except TypeError:
-                nx_new = output_shape
-                ny_new = output_shape
-            assert nx_new <= nx and ny_new <= ny
-            beg_idx_x = (nx - nx_new) // 2
-            beg_idx_y = (ny - ny_new) // 2
-            end_idx_x = beg_idx_x + nx_new
-            end_idx_y = beg_idx_y + ny_new
+                nx_out = self.output_shape
+                ny_out = self.output_shape
+            self._beg_idx_x, self._end_idx_x = get_beg_end_idx(nx, nx_out)
+            self._beg_idx_y, self._end_idx_y = get_beg_end_idx(ny, ny_out)
+            self.nx = nx_out
+            self.ny = ny_out
+        else:
+            self.nx = nx
+            self.ny = ny
+        assert self.std_noise.shape[-2:] == (self.nx, self.ny)
+        assert self.mask.shape[-2:] == (self.nx, self.ny)
 
-        # Yield data in batches based on shuffled indices
-        for i in range(0, nimgs, batch_size):
-            batch_idx = idx[i:min(i + batch_size, nimgs)]
 
-            # Sort batch_idx to ensure increasing order for HDF5 access
-            sorted_batch_idx = np.sort(batch_idx)
+    def _initialize_indices(self):
+        """Generate and shuffle indices if necessary."""
+        self.idx = self.sorted_idx[self.beg_idx:self.beg_idx + self.nimgs]
+        if self.shuffle:
+            np.random.shuffle(self.idx)
 
-            # Load batch with sorted indices
-            kappa = dataset[sorted_batch_idx]
 
-            # Shuffle the batch
-            if shuffle:
-                np.random.shuffle(kappa)
+    def _initialize_wiener(self):
+        """Initialize the parameters for iterative Wiener filtering."""
+        if self.compute_wiener > 0:
+            # Register data into a `csmm.shear_data` object
+            self.sheardata = csmm.shear_data()
+            self.sheardata.mask = self.mask.astype(int)
+            self.sheardata.Ncov = 2 * self.std_noise**2 # Factor 2 required
 
-            # Generate noisy shear maps
-            gamma1, gamma2 = get_shear_from_convergence(kappa)
-            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-                gamma1, gamma2, std_noise=std_noise, mask=mask
+            # Create a mass mapping structure and initialize it
+            massmap = csmm.massmap2d(name='mass')
+            massmap.init_massmap(self.nx, self.ny)
+            if self.compute_wiener == 1:
+                self.wiener = massmap.wiener
+            else:
+                self.wiener = massmap.prox_wiener_filtering
+
+
+    def __iter__(self):
+        """Reset the index and return the iterator."""
+        self.current_idx = 0
+        if self.shuffle:
+            self._initialize_indices()  # Reshuffle indices if needed
+        return self
+
+
+    def __next__(self):
+        """Load the next batch of data."""
+        if self.current_idx >= self.nimgs:
+            raise StopIteration
+
+        beg_idx = self.current_idx
+        end_idx = min(beg_idx + self.batch_size, self.nimgs)
+        batch_idx = self.idx[beg_idx:end_idx]
+
+        # Sort batch_idx to ensure increasing order for HDF5 access
+        sort_idx = np.argsort(batch_idx)
+        sorted_batch_idx = batch_idx[sort_idx]
+
+        # Load batch with sorted indices
+        kappa = self.dataset[sorted_batch_idx]
+        filename_ori = self.filename_ori[sorted_batch_idx]
+
+        # Re-order the batch
+        reversed_sort_idx = np.argsort(sort_idx)
+        kappa = kappa[reversed_sort_idx]
+        filename_ori = filename_ori[reversed_sort_idx]
+
+        # Crop the batch if output_shape is specified
+        if self.output_shape is not None:
+            kappa = crop_arr(
+                kappa,
+                self._beg_idx_x, self._end_idx_x,
+                self._beg_idx_y, self._end_idx_y
             )
 
-            # Crop arrays if required
-            if output_shape is not None:
-                kappa = kappa[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
-                gamma1 = gamma1[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
-                gamma2 = gamma2[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
-                gamma1_noisy = gamma1_noisy[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
-                gamma2_noisy = gamma2_noisy[:, beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+        # Generate noisy shear maps
+        gamma1, gamma2 = get_shear_from_convergence(kappa)
+        gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+        )
+        if self.verbose:
+            print(f"Images {beg_idx} to {end_idx} loaded.")
 
-            yield kappa, gamma1, gamma2, gamma1_noisy, gamma2_noisy
+        out_dict = dict(
+            kappa=kappa, gamma1=gamma1, gamma2=gamma2,
+            gamma1_noisy=gamma1_noisy, gamma2_noisy=gamma2_noisy,
+            filename_ori=filename_ori
+        )
+
+        # Compute Wiener solution if required
+        if self.compute_wiener > 0:
+            self.sheardata.g1 = gamma1_noisy
+            self.sheardata.g2 = gamma2_noisy
+            kappa_wiener, _ = self.wiener(
+                self.sheardata, self.powerspectrum_1d, **self.kwargs_wiener
+            )
+            out_dict.update(kappa_wiener=kappa_wiener)
+            if self.verbose:
+                print("\tWiener solution computed.")
+
+        # Prepare output
+        if self.list_of_outputs is not None:
+            out = tuple(
+                [out_dict[val] for val in self.list_of_outputs]
+            )
+            if len(out) == 1:
+                out = out[0]
+        else:
+            out = out_dict
+
+        self.current_idx = end_idx  # Move to the next batch
+
+        return out
+
+
+    def close(self):
+        """Close the HDF5 file when done."""
+        if self.file is not None:
+            self.file.close()
+
+
+    def __del__(self):
+        """Destructor to ensure the HDF5 file is closed when the object is deleted."""
+        self.close()
