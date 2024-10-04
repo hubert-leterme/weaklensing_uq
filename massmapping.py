@@ -14,7 +14,7 @@ import wlmmuq.cosmos as wlcosmos
 
 pycs_dir = wl.CONFIG_DATA['pycs_dir']
 if pycs_dir is not None:
-    pycs_dir = os.path.expanduser(wl.CONFIG_DATA['pycs_dir'])
+    pycs_dir = os.path.expanduser(pycs_dir)
     sys.path.append(pycs_dir)
 
 import pycs.astro.wl.mass_mapping as csmm
