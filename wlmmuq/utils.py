@@ -333,9 +333,9 @@ def mean_val(kappa_pred, mask=None):
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, **kwargs
+        printxticks=True, printyticks=True, offset=0., **kwargs
 ):
-    out = plt.imshow(img, origin='lower', **kwargs)
+    out = plt.imshow(img - offset, origin='lower', **kwargs)
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
     if printxylabels:
         plt.xlabel("Right ascension")
@@ -448,9 +448,10 @@ class HDF5BatchLoader:
 
     def __init__(
         self, hdf5_filepath, nimgs, batch_size, std_noise, mask,
-        beg_idx=0, shuffle=True, output_shape=None, sort_by_filename_ori=True,
-        compute_wiener=0, powerspectrum_1d=None, list_of_outputs=None,
-        verbose=False, **kwargs
+        offset=0., beg_idx=0, shuffle=True, output_shape=None,
+        sort_by_filename_ori=True, newaxis=False,
+        compute_wiener=0, powerspectrum_1d=None,
+        list_of_outputs=None, verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -468,6 +469,8 @@ class HDF5BatchLoader:
             Array of noise standard deviation.
         mask : numpy.ndarray
             Array of masked data.
+        offset: float, optional
+            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -481,6 +484,9 @@ class HDF5BatchLoader:
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
+        newaxis: bool, optional
+            If True, the returned arrays will be of shape (nimgs, nx, ny, 1),
+            for training purpose.
         compute_wiener: int, optional
             If greater than 0, compute the Wiener solution using one of the following methods:
                 - 1: standard Wiener filtering (one iteration)
@@ -505,10 +511,12 @@ class HDF5BatchLoader:
         self.batch_size = batch_size
         self.std_noise = std_noise
         self.mask = mask
+        self.offset = offset
         self.beg_idx = beg_idx
         self.shuffle = shuffle
         self.output_shape = output_shape
         self.sort_by_filename_ori = sort_by_filename_ori
+        self.newaxis = newaxis
         self.compute_wiener = compute_wiener
         self.powerspectrum_1d = powerspectrum_1d
         self.kwargs_wiener = kwargs
@@ -522,7 +530,6 @@ class HDF5BatchLoader:
         self.sheardata = None # For Wiener filtering
 
         self._initialize_dataset()
-        self._initialize_indices()
         self._initialize_wiener()
 
 
@@ -538,11 +545,14 @@ class HDF5BatchLoader:
             self.file.close()  # Close the file in case of error
             raise ValueError("The requested size exceeds the size of the dataset.")
 
-        # Sort by `filename_ori` if specified
+        # Initialize list of indices
         if self.sort_by_filename_ori:
-            self.sorted_idx = np.argsort(self.filename_ori)  # Sort indices of `filename_ori`
+            idx = np.argsort(self.filename_ori)  # Sort indices of `filename_ori`
         else:
-            self.sorted_idx = np.arange(nimgs_tot)
+            idx = np.arange(nimgs_tot)
+        self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
+        if self.shuffle:
+            np.random.shuffle(self.idx)
 
         # Get crop indices, if required
         if self.output_shape is not None:
@@ -562,13 +572,6 @@ class HDF5BatchLoader:
         assert self.mask.shape[-2:] == (self.nx, self.ny)
 
 
-    def _initialize_indices(self):
-        """Generate and shuffle indices if necessary."""
-        self.idx = self.sorted_idx[self.beg_idx:self.beg_idx + self.nimgs]
-        if self.shuffle:
-            np.random.shuffle(self.idx)
-
-
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
         if self.compute_wiener > 0:
@@ -586,82 +589,98 @@ class HDF5BatchLoader:
                 self.wiener = massmap.prox_wiener_filtering
 
 
-    def __iter__(self):
-        """Reset the index and return the iterator."""
-        self.current_idx = 0
-        if self.shuffle:
-            self._initialize_indices()  # Reshuffle indices if needed
-        return self
+    def __call__(self):
+        end_idx = 0
+        while True:
+            # Load the next batch of data
+            beg_idx = end_idx
+            end_idx = min(beg_idx + self.batch_size, self.nimgs)
+            batch_idx = self.idx[beg_idx:end_idx]
 
+            # Sort batch_idx to ensure increasing order for HDF5 access
+            sort_idx = np.argsort(batch_idx)
+            sorted_batch_idx = batch_idx[sort_idx]
 
-    def __next__(self):
-        """Load the next batch of data."""
-        if self.current_idx >= self.nimgs:
-            raise StopIteration
+            # Load batch with sorted indices
+            kappa = self.dataset[sorted_batch_idx]
+            filename_ori = self.filename_ori[sorted_batch_idx]
 
-        beg_idx = self.current_idx
-        end_idx = min(beg_idx + self.batch_size, self.nimgs)
-        batch_idx = self.idx[beg_idx:end_idx]
+            # Re-order the batch
+            reversed_sort_idx = np.argsort(sort_idx)
+            kappa = kappa[reversed_sort_idx]
+            filename_ori = filename_ori[reversed_sort_idx]
 
-        # Sort batch_idx to ensure increasing order for HDF5 access
-        sort_idx = np.argsort(batch_idx)
-        sorted_batch_idx = batch_idx[sort_idx]
+            # Crop the batch if output_shape is specified
+            if self.output_shape is not None:
+                kappa = crop_arr(
+                    kappa,
+                    self._beg_idx_x, self._end_idx_x,
+                    self._beg_idx_y, self._end_idx_y
+                )
 
-        # Load batch with sorted indices
-        kappa = self.dataset[sorted_batch_idx]
-        filename_ori = self.filename_ori[sorted_batch_idx]
-
-        # Re-order the batch
-        reversed_sort_idx = np.argsort(sort_idx)
-        kappa = kappa[reversed_sort_idx]
-        filename_ori = filename_ori[reversed_sort_idx]
-
-        # Crop the batch if output_shape is specified
-        if self.output_shape is not None:
-            kappa = crop_arr(
-                kappa,
-                self._beg_idx_x, self._end_idx_x,
-                self._beg_idx_y, self._end_idx_y
+            # Generate noisy shear maps
+            gamma1, gamma2 = get_shear_from_convergence(kappa)
+            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+                gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
             )
-
-        # Generate noisy shear maps
-        gamma1, gamma2 = get_shear_from_convergence(kappa)
-        gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
-        )
-        if self.verbose:
-            print(f"Images {beg_idx} to {end_idx} loaded.")
-
-        out_dict = dict(
-            kappa=kappa, gamma1=gamma1, gamma2=gamma2,
-            gamma1_noisy=gamma1_noisy, gamma2_noisy=gamma2_noisy,
-            filename_ori=filename_ori
-        )
-
-        # Compute Wiener solution if required
-        if self.compute_wiener > 0:
-            self.sheardata.g1 = gamma1_noisy
-            self.sheardata.g2 = gamma2_noisy
-            kappa_wiener, _ = self.wiener(
-                self.sheardata, self.powerspectrum_1d, **self.kwargs_wiener
-            )
-            out_dict.update(kappa_wiener=kappa_wiener)
             if self.verbose:
-                print("\tWiener solution computed.")
+                print(f"Images {beg_idx} to {end_idx} loaded.")
 
-        # Prepare output
-        if self.list_of_outputs is not None:
-            out = tuple(
-                [out_dict[val] for val in self.list_of_outputs]
-            )
-            if len(out) == 1:
-                out = out[0]
-        else:
-            out = out_dict
+            if self.newaxis:
+                out_dict = dict(
+                    kappa=kappa[..., np.newaxis] + self.offset,
+                    gamma1=gamma1[..., np.newaxis],
+                    gamma2=gamma2[..., np.newaxis],
+                    gamma1_noisy=gamma1_noisy[..., np.newaxis],
+                    gamma2_noisy=gamma2_noisy[..., np.newaxis]
+                )
+            else:
+                out_dict = dict(
+                    kappa=kappa + self.offset,
+                    gamma1=gamma1,
+                    gamma2=gamma2,
+                    gamma1_noisy=gamma1_noisy,
+                    gamma2_noisy=gamma2_noisy
+                )
+            out_dict.update(filename_ori=filename_ori)
 
-        self.current_idx = end_idx  # Move to the next batch
 
-        return out
+            # Compute Wiener solution if required
+            if self.compute_wiener > 0:
+                self.sheardata.g1 = gamma1_noisy
+                self.sheardata.g2 = gamma2_noisy
+                kappa_wiener, _ = self.wiener(
+                    self.sheardata, self.powerspectrum_1d, **self.kwargs_wiener
+                )
+                if self.newaxis:
+                    out_dict.update(
+                        kappa_wiener=kappa_wiener[..., np.newaxis] + self.offset
+                    )
+                else:
+                    out_dict.update(
+                        kappa_wiener=kappa_wiener + self.offset
+                    )
+                if self.verbose:
+                    print("\tWiener solution computed.")
+
+            # Prepare output
+            if self.list_of_outputs is not None:
+                out = tuple(
+                    [out_dict[val] for val in self.list_of_outputs]
+                )
+                if len(out) == 1:
+                    out = out[0]
+            else:
+                out = out_dict
+
+            # Handle generator looping (to avoid StopIteration error)
+            # Reset generator and reshuffle indices if needed
+            if end_idx == self.nimgs:
+                end_idx = 0
+                if self.shuffle:
+                    np.random.shuffle(self.idx)
+
+            yield out
 
 
     def close(self):
