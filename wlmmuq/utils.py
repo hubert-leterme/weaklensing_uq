@@ -589,12 +589,15 @@ class HDF5BatchLoader:
                 self.wiener = massmap.prox_wiener_filtering
 
 
-    def __call__(self):
+    def __call__(self, get_all_images=False):
         end_idx = 0
         while True:
             # Load the next batch of data
             beg_idx = end_idx
-            end_idx = min(beg_idx + self.batch_size, self.nimgs)
+            if not get_all_images:
+                end_idx = min(beg_idx + self.batch_size, self.nimgs)
+            else:
+                end_idx = self.nimgs
             batch_idx = self.idx[beg_idx:end_idx]
 
             # Sort batch_idx to ensure increasing order for HDF5 access
