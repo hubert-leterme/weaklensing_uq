@@ -5,6 +5,7 @@ import h5py
 
 from . import CONFIG_DATA
 from . import utils as wlutils
+from . import dataaugm
 
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
@@ -231,3 +232,93 @@ def get_weights(redshifts):
     out /= np.sum(out) # normalize
 
     return out
+
+
+def create_augmented_dataset(
+        hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize, batch_size=50,
+        angle_batch_size=36, angle_step=5, niter_per_angle=1, verbose=False
+):  
+    """
+    Create an augmented dataset from kappaTNG by rotating and randomly cropping images.
+    """
+    # Create HDF5 file structure
+    with h5py.File(hdf5_filepath, 'w') as f:
+        f.create_dataset(
+            "kappa", shape=(0, imgsize, imgsize), maxshape=(None, imgsize, imgsize),
+            dtype='float32'
+        ) # Convergence maps
+        f.create_dataset(
+            "filename_ori", shape=(0,), maxshape=(None,),
+            dtype=np.dtype('S17')
+        ) # Original data realizations (list of filenames)
+        f.create_dataset(
+            "angle", shape=(0,), maxshape=(None,),
+            dtype='float32'
+        ) # Rotation angles
+        f.create_dataset(
+            "top_left_coord", shape=(0, 2), maxshape=(None, 2),
+            dtype='int'
+        ) # Top-left coordinates
+
+    ktng = KappaTNG(idx_lp, crop_maps=False, weights=weights_redshift)
+
+    end_idx = 0
+    while end_idx < nimgs:
+        beg_idx = end_idx
+        end_idx = min(beg_idx + batch_size, nimgs)
+        if verbose:
+            print(f"Processing images {beg_idx} to {end_idx}...")
+
+        # Load $\kappa$-TNG dataset and combine redshifts
+        kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
+        imgsize0 = kappa.shape[-1]
+        assert kappa.shape[-2] == imgsize0
+
+        end_angle = 0
+        while end_angle < 360:
+            beg_angle = end_angle
+            end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
+
+            list_of_kappa_rot = []
+            list_of_idx_rows = []
+            list_of_idx_cols = []
+            for angle in range(beg_angle, end_angle, angle_step):
+                if verbose:
+                    print(f"\tAngle = {angle}...")
+                kappa_rot, rows, cols = dataaugm.rotate_and_crop(
+                    kappa, angle, imgsize, niter=niter_per_angle
+                )
+                list_of_kappa_rot.append(kappa_rot)
+                list_of_idx_rows.append(rows)
+                list_of_idx_cols.append(cols)
+
+            # Shape = (angle_batch_size * nimgs, imgsize, imgsize)
+            kappa_rot = np.concatenate(list_of_kappa_rot, axis=0)
+            rows = np.concatenate(list_of_idx_rows, axis=0)
+            cols = np.concatenate(list_of_idx_cols, axis=0)
+            angle_batch_size_adjusted = -(beg_angle - end_angle) // angle_step
+            nimgs_batch = angle_batch_size_adjusted * niter_per_angle * (end_idx - beg_idx)
+
+            # Update the HDF5 file
+            with h5py.File(hdf5_filepath, 'r+') as f:
+                new_size = f['kappa'].shape[0] + nimgs_batch
+
+                f['kappa'].resize((new_size, imgsize, imgsize))
+                f['kappa'][-nimgs_batch:] = kappa_rot
+
+                f['filename_ori'].resize((new_size,))
+                f['filename_ori'][-nimgs_batch:] = angle_batch_size_adjusted * niter_per_angle * [
+                    f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
+                        np.arange(beg_idx, end_idx)
+                    )
+                ]
+
+                f['angle'].resize((new_size,))
+                f['angle'][-nimgs_batch:] = np.repeat(
+                    np.arange(beg_angle, end_angle, angle_step),
+                    niter_per_angle * (end_idx - beg_idx)
+                )
+
+                f['top_left_coord'].resize((new_size, 2))
+                f['top_left_coord'][-nimgs_batch:, 0] = rows
+                f['top_left_coord'][-nimgs_batch:, 1] = cols
