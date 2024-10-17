@@ -22,7 +22,7 @@ Some packages must be installed manually.
 Update `config.yml` provided at the root of this repository, to configure data directories and file paths:
 
 - `cosmos_dir`: Path to the COSMOS S10 weak lensing shear catalog (Schrabback et al. 2010). The directory contains data files named `cosmos_bright_cat_min.asc` and `cosmos_faint_cat.asc`.
-- `ktng_dir`: Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations. See `https://github.com/0satoken/kappaTNG` to download the dataset. The directory contains HDF5 files named `LP001_run[001-100]_maps.hdf5`.
+- `ktng_dir`: Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations. See `https://github.com/0satoken/kappaTNG` to download the dataset. The directory contains a file named `zs.dat` as well as HDF5 files named `LP[XXX]/LP[XXX]_run[001-100]_maps.hdf5`, where `[XXX]` ranges from `001` to `100`.
 - `pycs_dir`: Path to the `pycs` library (see above). This should be used only if the `pip` installation is unsuccessful. Otherwise, leave it blank.
 - `pickle_dir`: Path to the folder where the pickled objects will be stored. Used when running the script `massmapping.py`.
 

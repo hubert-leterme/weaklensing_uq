@@ -49,13 +49,13 @@ class BaseKappaTNG:
             Index of the first image to load
         
         """
-        list_of_idx_dataset = np.arange(start_idx, start_idx + ninpimgs) + 1
-        list_of_idx_dataset = vectorized_zfill(list_of_idx_dataset)
+        list_of_idx_run = np.arange(start_idx, start_idx + ninpimgs) + 1
+        list_of_idx_run = vectorized_zfill(list_of_idx_run)
 
         list_of_kappa = []
-        for idx_dataset in list_of_idx_dataset:
-            self.print(f"Processing dataset {idx_dataset}...")
-            kappa = self._get_kappa_from_file(idx_dataset)
+        for idx_run in list_of_idx_run:
+            self.print(f"Processing dataset {idx_run}...")
+            kappa = self._get_kappa_from_file(idx_run)
             if self.crop_maps:
                 list_of_kappa += self._split_map(kappa)
             else:
@@ -71,7 +71,7 @@ class BaseKappaTNG:
         return kappa
 
 
-    def _get_kappa_from_file(self, idx_dataset):
+    def _get_kappa_from_file(self, idx_run):
         raise NotImplementedError
 
 
@@ -109,7 +109,10 @@ class KappaTNG(BaseKappaTNG):
     ktng_dir (str, default=KTNG_DIR)
 
     """
-    def __init__(self, *args, weights=None, idx_redshift=None, **kwargs):
+    def __init__(
+            self, idx_lp, *args, weights=None, idx_redshift=None, **kwargs
+    ):
+        self.idx_lp = str(idx_lp).zfill(3)
         self.weights = weights
         if idx_redshift is not None:
             self.idx_redshift = f'z{str(idx_redshift + 1).zfill(2)}'
@@ -118,12 +121,16 @@ class KappaTNG(BaseKappaTNG):
         super().__init__(*args, **kwargs)
 
 
-    def _get_kappa_from_file(self, idx_dataset):
+    def _get_kappa_from_file(self, idx_run):
 
         def _get_kappa_oneredshift(file, idx_redshift):
             return file[os.path.join(idx_redshift, 'kappa')][:]
 
-        fname = os.path.join(self.ktng_dir, f"LP001_run{idx_dataset}_maps.hdf5")
+        fname = os.path.join(
+            self.ktng_dir,
+            f"LP{self.idx_lp}",
+            f"LP{self.idx_lp}_run{idx_run}_maps.hdf5"
+        )
         with h5py.File(fname, 'r') as file:
             list_of_idx_redshift = sorted(file.keys())[1:]
             nredshifts = len(list_of_idx_redshift)
@@ -168,9 +175,9 @@ class KappaTNGFromSamples(BaseKappaTNG):
         super().__init__(*args, **kwargs)
 
 
-    def _get_kappa_from_file(self, idx_dataset):
+    def _get_kappa_from_file(self, idx_run):
 
-        fname = os.path.join(self.ktng_dir, f"run{idx_dataset}", self.bin_file)
+        fname = os.path.join(self.ktng_dir, f"run{idx_run}", self.bin_file)
         with open(fname, 'rb') as f:
             _ = np.fromfile(f, dtype="int32", count=1)
             kappa = np.fromfile(f, dtype="float", count=WIDTH_ORI*WIDTH_ORI)
