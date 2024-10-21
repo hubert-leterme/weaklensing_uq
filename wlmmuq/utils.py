@@ -20,8 +20,6 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
 vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
 
-STD_KSGAUSSIANFILTER = 2.
-
 def test_array_shape(list_of_arr):
 
     shape = list_of_arr[0].shape
@@ -51,7 +49,7 @@ def get_min_nimgs_calib(alpha):
     return np.ceil((1 - alpha) / alpha).astype(int)
 
 
-def get_resolution(width, size):
+def get_resolution(width, openingangle):
     """
     Get resolution in arcmin/pixel.
 
@@ -59,11 +57,11 @@ def get_resolution(width, size):
     ----------
     width (int)
         Size of the convergence maps (nb pixels)
-    size (float)
+    openingangle (float)
         Opening angle of the convergence maps (deg)
     
     """
-    return size / width * 60.
+    return openingangle / width * 60.
 
 
 def ngal_per_pixel(ra, dec, width, extent):
@@ -173,7 +171,7 @@ def get_masked_and_noisy_shear(
 
 
 def get_std_ks(
-        std_noise, width1, width2=None, std_gaussianfilter=STD_KSGAUSSIANFILTER, crop_width=32
+        std_noise, width1, width2=None, std_gaussianfilter=None, crop_width=32
 ):
     if width2 is None:
         width2 = width1
@@ -184,28 +182,32 @@ def get_std_ks(
     dirac_imag = np.zeros((width1, width2))
 
     ksmatr_real, ksmatr_imag = ks93(dirac_real, dirac_imag)
-    ksmatr_gaussian_real = ndimage.gaussian_filter(ksmatr_real, std_gaussianfilter, mode="wrap")
-    ksmatr_gaussian_imag = ndimage.gaussian_filter(ksmatr_imag, std_gaussianfilter, mode="wrap")
-    ksmatr_gaussian_sqmodule = ksmatr_gaussian_real**2 + ksmatr_gaussian_imag**2
-
-    ksmatr_gaussian_sqmodule = np.fft.fftshift(ksmatr_gaussian_sqmodule) # for convolution
+    if std_gaussianfilter is not None:
+        ksmatr_real = ndimage.gaussian_filter(
+            ksmatr_real, std_gaussianfilter, mode="wrap"
+        )
+        ksmatr_imag = ndimage.gaussian_filter(
+            ksmatr_imag, std_gaussianfilter, mode="wrap"
+        )
+    ksmatr_sqmodule = ksmatr_real**2 + ksmatr_imag**2
+    ksmatr_sqmodule = np.fft.fftshift(ksmatr_sqmodule) # for convolution
 
     # Crop convolution kernel for efficiency (fast-decaying coefficients)
     start1 = (width1 - crop_width) // 2
     start2 = (width2 - crop_width) // 2
-    ksmatr_gaussian_sqmodule = ksmatr_gaussian_sqmodule[
+    ksmatr_sqmodule = ksmatr_sqmodule[
         start1:start1+crop_width, start2:start2+crop_width
     ]
 
     out = np.sqrt(
-        signal.convolve2d(std_noise**2, ksmatr_gaussian_sqmodule, mode="same", boundary="wrap")
+        signal.convolve2d(std_noise**2, ksmatr_sqmodule, mode="same", boundary="wrap")
     )
     return out
 
 
 def ksfilter(
         gamma1_noisy, gamma2_noisy, get_bounds=True, std_noise=None, confidence=None,
-        smooth=True, std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=False
+        std_gaussianfilter=None, complexconjugate=False
 ):
     """
     Parameters
@@ -229,7 +231,7 @@ def ksfilter(
     if complexconjugate:
         gamma2_noisy = -gamma2_noisy
     kappa_ks, _ = vectorized_ks93(gamma1_noisy, gamma2_noisy)
-    if smooth:
+    if std_gaussianfilter is not None:
         kappa_ks = ndimage.gaussian_filter(
             kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
         ) # KS reconstruction
@@ -444,13 +446,35 @@ def crop_arr(arr, beg_idx_x, end_idx_x, *args):
     return arr[..., beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
 
 
+def get_1d_powerspectrum(kappa):
+    """
+    Estimate the 1D powerspectrum over a set of isotropic images.
+
+    Parameters
+    ----------
+    kappa: numpy.ndarray, shape = (nimgs, imgsize, imgsize)
+        Set of square images. CAUTION: `imgsize` must be even.
+
+    """
+    _, imgsize, imgsize0 = kappa.shape
+    assert imgsize0 == imgsize
+    powerspectrum = np.mean(
+        np.abs(np.fft.fft2(kappa) / imgsize)**2, axis=0
+    )
+    powerspectrum = powerspectrum[:imgsize//2, :imgsize//2] # Only positive frequencies, by symmetry
+    powerspectrum_1d = (powerspectrum[0, :] + powerspectrum[:, 0]) / 2 # Assumed isotropic
+
+    return powerspectrum_1d
+
+
 class HDF5BatchLoader:
 
     def __init__(
         self, hdf5_filepath, nimgs, batch_size, std_noise, mask,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
-        compute_wiener=0, powerspectrum_1d=None,
+        input_method=None, std_gaussianfilter=None, 
+        powerspectrum_1d=None, niter=1,
         list_of_outputs=None, verbose=False, **kwargs
     ):
         """
@@ -487,23 +511,24 @@ class HDF5BatchLoader:
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1),
             for training purpose.
-        compute_wiener: int, optional
-            If greater than 0, compute the Wiener solution using one of the following methods:
-                - 1: standard Wiener filtering (one iteration)
-                - 2: iterative Wiener filtering algorithm.
-            Default is False.
+        input_method: str, optional
+            Input mass mapping method: None, 'ks' or 'wiener'. Default is None.
+        std_gaussianfilter: float, optional
+            If `input_method` is set to 'ks', standard deviation of the smoothing filter.
+            Default is None.
         powerspectrum_1d: np.ndarray, optional
-            1D power spectrup for iterative Wiener filtering. Its length must be half
+            If `input_method` is set to 'wiener', 1D power spectrum. Its length must be half
             the image size. Default is None.
+        niter: int, optional
+            If `input_method` is set to 'wiener', number of iterations. Default is 1.
         list_of_outputs: list of str, optional
-            List of outputs to returns. Can be one of 'kappa', 'gamma1', 'gamma2',
-            'gamma1_noisy', 'gamma2_noisy', 'kappa_wiener', 'filename_ori'.
+            List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
+            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp', 'filename_ori'.
             If None, returns a dictionary of outputs. Default is None.
         verbose : bool, optional
             If True, print progress messages. Default is False.
         **kwargs
             Keyword arguments for
-            `pycs.astro.wl.mass_mapping.massmap2d.wiener` or
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
         self.hdf5_filepath = hdf5_filepath
@@ -517,8 +542,10 @@ class HDF5BatchLoader:
         self.output_shape = output_shape
         self.sort_by_filename_ori = sort_by_filename_ori
         self.newaxis = newaxis
-        self.compute_wiener = compute_wiener
+        self.input_method = input_method
+        self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
+        self.niter = niter
         self.kwargs_wiener = kwargs
         self.list_of_outputs = list_of_outputs
         self.verbose = verbose
@@ -574,19 +601,15 @@ class HDF5BatchLoader:
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
-        if self.compute_wiener > 0:
+        if self.input_method == 'wiener':
             # Register data into a `csmm.shear_data` object
             self.sheardata = csmm.shear_data()
             self.sheardata.mask = self.mask.astype(int)
             self.sheardata.Ncov = 2 * self.std_noise**2 # Factor 2 required
 
             # Create a mass mapping structure and initialize it
-            massmap = csmm.massmap2d(name='mass')
-            massmap.init_massmap(self.nx, self.ny)
-            if self.compute_wiener == 1:
-                self.wiener = massmap.wiener
-            else:
-                self.wiener = massmap.prox_wiener_filtering
+            self.massmap = csmm.massmap2d(name='mass')
+            self.massmap.init_massmap(self.nx, self.ny)
 
 
     def __call__(self, get_all_images=False):
@@ -605,24 +628,24 @@ class HDF5BatchLoader:
             sorted_batch_idx = batch_idx[sort_idx]
 
             # Load batch with sorted indices
-            kappa = self.dataset[sorted_batch_idx]
+            kappa_true = self.dataset[sorted_batch_idx]
             filename_ori = self.filename_ori[sorted_batch_idx]
 
             # Re-order the batch
             reversed_sort_idx = np.argsort(sort_idx)
-            kappa = kappa[reversed_sort_idx]
+            kappa_true = kappa_true[reversed_sort_idx]
             filename_ori = filename_ori[reversed_sort_idx]
 
             # Crop the batch if output_shape is specified
             if self.output_shape is not None:
-                kappa = crop_arr(
-                    kappa,
+                kappa_true = crop_arr(
+                    kappa_true,
                     self._beg_idx_x, self._end_idx_x,
                     self._beg_idx_y, self._end_idx_y
                 )
 
             # Generate noisy shear maps
-            gamma1, gamma2 = get_shear_from_convergence(kappa)
+            gamma1, gamma2 = get_shear_from_convergence(kappa_true)
             gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
                 gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
             )
@@ -631,7 +654,7 @@ class HDF5BatchLoader:
 
             if self.newaxis:
                 out_dict = dict(
-                    kappa=kappa[..., np.newaxis] + self.offset,
+                    kappa_true=kappa_true[..., np.newaxis] + self.offset,
                     gamma1=gamma1[..., np.newaxis],
                     gamma2=gamma2[..., np.newaxis],
                     gamma1_noisy=gamma1_noisy[..., np.newaxis],
@@ -639,7 +662,7 @@ class HDF5BatchLoader:
                 )
             else:
                 out_dict = dict(
-                    kappa=kappa + self.offset,
+                    kappa_true=kappa_true + self.offset,
                     gamma1=gamma1,
                     gamma2=gamma2,
                     gamma1_noisy=gamma1_noisy,
@@ -647,24 +670,38 @@ class HDF5BatchLoader:
                 )
             out_dict.update(filename_ori=filename_ori)
 
+            # Compute KS solution if required
+            if self.input_method is not None:
+                if self.input_method == 'ks':
+                    kappa_inp = ksfilter(
+                        gamma1_noisy, gamma2_noisy, get_bounds=False,
+                        std_gaussianfilter=self.std_gaussianfilter
+                    )
+                    if self.verbose:
+                        print("\tKaiser-Squires solution computed.")
 
-            # Compute Wiener solution if required
-            if self.compute_wiener > 0:
-                self.sheardata.g1 = gamma1_noisy
-                self.sheardata.g2 = gamma2_noisy
-                kappa_wiener, _ = self.wiener(
-                    self.sheardata, self.powerspectrum_1d, **self.kwargs_wiener
-                )
+                # Compute Wiener solution if required
+                if self.input_method == 'wiener':
+                    self.sheardata.g1 = gamma1_noisy
+                    self.sheardata.g2 = gamma2_noisy
+                    kappa_inp, _ = self.massmap.prox_wiener_filtering(
+                        self.sheardata, self.powerspectrum_1d, self.niter,
+                        **self.kwargs_wiener
+                    )
+                    if self.verbose:
+                        print("\tWiener solution computed.")
+                
+                else:
+                    raise ValueError
+
                 if self.newaxis:
                     out_dict.update(
-                        kappa_wiener=kappa_wiener[..., np.newaxis] + self.offset
+                        kappa_inp=kappa_inp[..., np.newaxis] + self.offset
                     )
                 else:
                     out_dict.update(
-                        kappa_wiener=kappa_wiener + self.offset
+                        kappa_inp=kappa_inp + self.offset
                     )
-                if self.verbose:
-                    print("\tWiener solution computed.")
 
             # Prepare output
             if self.list_of_outputs is not None:

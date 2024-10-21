@@ -65,27 +65,27 @@ def cosmos_catalog():
     return cat_bright, cat_faint
 
 
-def get_extent(ra_cosmos_median, dec_cosmos_median, size):
+def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
     extent = [
-        ra_cosmos_median - size/2, ra_cosmos_median + size/2,
-        dec_cosmos_median - size/2, dec_cosmos_median + size/2
+        ra_cosmos_median - openingangle/2, ra_cosmos_median + openingangle/2,
+        dec_cosmos_median - openingangle/2, dec_cosmos_median + openingangle/2
     ]
     return extent
 
 
-def get_data_from_cosmos(cat_cosmos, size):
+def get_data_from_cosmos(cat_cosmos, openingangle):
     """
     Parameters
     ----------
     cat_cosmos (astropy.Table)
-    size (float)
+    openingangle (float)
         Opening angle of the target convergence maps (deg).
 
     """
     out = {}
     ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
     dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
-    extent = get_extent(ra_cosmos_median, dec_cosmos_median, size)
+    extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
 
     shapedisp1 = np.std(cat_cosmos['e1iso_rot4_gr_snCal'])
     shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])

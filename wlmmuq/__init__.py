@@ -1,7 +1,6 @@
 import os
-import sys
-import yaml
 import warnings
+import yaml
 
 # First, check if the config file wcnn_config.yml is in the current directory.
 # If not in there, check in "~/.config/".

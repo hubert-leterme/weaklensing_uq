@@ -1,4 +1,3 @@
-import os
 import argparse
 import random
 import numpy as np
@@ -10,7 +9,7 @@ OPENINGANGLE = 1.5 # Opening angle
 NIMGS = 100 # Number of input images
 
 def main(
-        path_to_augmented_dataset, hdf5_filename, idx_lp,
+        path_to_augmented_dataset, idx_lp=None,
         openingangle=OPENINGANGLE, nimgs=NIMGS, seed=None, verbose=False,
         **kwargs
 ):
@@ -32,11 +31,10 @@ def main(
 
     # Get nb of pixels in output images and adjust opening angle accordingly
     imgsize, openingangle = wlktng.get_npixels_openingangle(openingangle)
-    hdf5_filepath = os.path.join(path_to_augmented_dataset, hdf5_filename)
 
     # Create augmented dataset and store data
     wlktng.create_augmented_dataset(
-        hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
+        path_to_augmented_dataset, idx_lp, nimgs, weights_redshift, imgsize,
         verbose=verbose, **kwargs
     )
 
@@ -45,15 +43,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "path_to_augmented_dataset", type=str,
-        help="Path to the augmented dataset"
+        help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
-        "hdf5_filename", type=str,
-        help="File name for the augmented dataset"
-    )
-    parser.add_argument(
-        "idx_lp", type=int,
-        help="Index of the lensing potential, from 1 to 100"
+        "--idx-lp", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Index of the learning potential, indicating which folder to look "
+            "into for the HDF5 files containing the dataset (`LPxxx` where `xxx` "
+            "ranges from `001` to `100`). Default = `001`"
+        )
     )
     parser.add_argument(
         "--openingangle", type=float,

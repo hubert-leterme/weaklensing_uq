@@ -19,7 +19,7 @@ if pycs_dir is not None:
 
 import pycs.astro.wl.mass_mapping as csmm
 
-SIZE = 1.5 # opening angle (deg)
+OPENINGANGLE = 1.5 # opening angle (deg)
 NINPIMGS = 25 # number of images to load from the kappaTNG dataset
 NINPIMGS_PS = 20 # separate set of images to compute the power spectrum
 CONFIDENCE = 2 # number of sigmas
@@ -28,7 +28,7 @@ NIMGS_CALIB = 100 # size of the calibration set
 METHOD_LIST = ["mle", "wiener", "mcalens"]
 
 def main(
-        method, picklename, size=SIZE, idx_redshift=None,
+        method, picklename, idx_lp=None, idx_redshift=None, openingangle=OPENINGANGLE,
         cosmos_include_faint=False,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
         nimgs=None, niter=None, Nsigma=None, Inpaint=False, mean_centering=False,
@@ -43,8 +43,10 @@ def main(
     assert method in METHOD_LIST
 
     # Instantiate KappaTNG object
-    ktng = wlktng.KappaTNG(size=size, idx_redshift=idx_redshift)
-    size = ktng.size # adjusted opening angle
+    ktng = wlktng.KappaTNG(
+        idx_lp=idx_lp, idx_redshift=idx_redshift, openingangle=openingangle
+    )
+    openingangle = ktng.openingangle # adjusted opening angle
 
     # Load data from the COSMOS catalog
     cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
@@ -66,7 +68,7 @@ def main(
         cat_cosmos = cat_cosmos_bright
 
     # Get survey extent and standard deviation of galaxy ellipticities
-    data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, size)
+    data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, openingangle)
     extent = data_cosmos["extent"]
     shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
     shapedisp = (shapedisp1 + shapedisp2) / 2
@@ -230,14 +232,23 @@ if __name__ == "__main__":
         help="File name for the saved object"
     )
     parser.add_argument(
-        "-s", "--size", type=float,
+        "--idx-lp", type=str,
         default=argparse.SUPPRESS,
-        help="Opening angle (deg)"
+        help=(
+            "Index of the learning potential, indicating which folder to look "
+            "into for the HDF5 files containing the dataset (`LPxxx` where `xxx` "
+            "ranges from `001` to `100`). Default = `001`"
+        )
     )
     parser.add_argument(
         "--idx-redshift", type=int,
         default=argparse.SUPPRESS,
         help="Default = None"
+    )
+    parser.add_argument(
+        "--openingangle", type=float,
+        default=argparse.SUPPRESS,
+        help="Opening angle (deg)"
     )
     parser.add_argument(
         "--cosmos-include-faint", action='store_true',
