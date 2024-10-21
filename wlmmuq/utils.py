@@ -20,8 +20,6 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
 vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
 
-STD_KSGAUSSIANFILTER = 2.
-
 def test_array_shape(list_of_arr):
 
     shape = list_of_arr[0].shape
@@ -173,7 +171,7 @@ def get_masked_and_noisy_shear(
 
 
 def get_std_ks(
-        std_noise, width1, width2=None, std_gaussianfilter=STD_KSGAUSSIANFILTER, crop_width=32
+        std_noise, width1, width2=None, std_gaussianfilter=None, crop_width=32
 ):
     if width2 is None:
         width2 = width1
@@ -184,28 +182,32 @@ def get_std_ks(
     dirac_imag = np.zeros((width1, width2))
 
     ksmatr_real, ksmatr_imag = ks93(dirac_real, dirac_imag)
-    ksmatr_gaussian_real = ndimage.gaussian_filter(ksmatr_real, std_gaussianfilter, mode="wrap")
-    ksmatr_gaussian_imag = ndimage.gaussian_filter(ksmatr_imag, std_gaussianfilter, mode="wrap")
-    ksmatr_gaussian_sqmodule = ksmatr_gaussian_real**2 + ksmatr_gaussian_imag**2
-
-    ksmatr_gaussian_sqmodule = np.fft.fftshift(ksmatr_gaussian_sqmodule) # for convolution
+    if std_gaussianfilter is not None:
+        ksmatr_real = ndimage.gaussian_filter(
+            ksmatr_real, std_gaussianfilter, mode="wrap"
+        )
+        ksmatr_imag = ndimage.gaussian_filter(
+            ksmatr_imag, std_gaussianfilter, mode="wrap"
+        )
+    ksmatr_sqmodule = ksmatr_real**2 + ksmatr_imag**2
+    ksmatr_sqmodule = np.fft.fftshift(ksmatr_sqmodule) # for convolution
 
     # Crop convolution kernel for efficiency (fast-decaying coefficients)
     start1 = (width1 - crop_width) // 2
     start2 = (width2 - crop_width) // 2
-    ksmatr_gaussian_sqmodule = ksmatr_gaussian_sqmodule[
+    ksmatr_sqmodule = ksmatr_sqmodule[
         start1:start1+crop_width, start2:start2+crop_width
     ]
 
     out = np.sqrt(
-        signal.convolve2d(std_noise**2, ksmatr_gaussian_sqmodule, mode="same", boundary="wrap")
+        signal.convolve2d(std_noise**2, ksmatr_sqmodule, mode="same", boundary="wrap")
     )
     return out
 
 
 def ksfilter(
         gamma1_noisy, gamma2_noisy, get_bounds=True, std_noise=None, confidence=None,
-        smooth=True, std_gaussianfilter=STD_KSGAUSSIANFILTER, complexconjugate=False
+        std_gaussianfilter=None, complexconjugate=False
 ):
     """
     Parameters
@@ -229,7 +231,7 @@ def ksfilter(
     if complexconjugate:
         gamma2_noisy = -gamma2_noisy
     kappa_ks, _ = vectorized_ks93(gamma1_noisy, gamma2_noisy)
-    if smooth:
+    if std_gaussianfilter is not None:
         kappa_ks = ndimage.gaussian_filter(
             kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
         ) # KS reconstruction
