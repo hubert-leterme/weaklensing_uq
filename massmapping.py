@@ -232,7 +232,7 @@ if __name__ == "__main__":
         help="File name for the saved object"
     )
     parser.add_argument(
-        "idx_lp", type=str,
+        "--idx-lp", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Index of the learning potential, indicating which folder to look "

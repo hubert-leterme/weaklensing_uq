@@ -9,7 +9,7 @@ OPENINGANGLE = 1.5 # Opening angle
 NIMGS = 100 # Number of input images
 
 def main(
-        path_to_augmented_dataset, idx_lp,
+        path_to_augmented_dataset, idx_lp=None,
         openingangle=OPENINGANGLE, nimgs=NIMGS, seed=None, verbose=False,
         **kwargs
 ):
@@ -46,8 +46,13 @@ if __name__ == "__main__":
         help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
-        "idx_lp", type=int,
-        help="Index of the lensing potential, from 1 to 100"
+        "--idx-lp", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Index of the learning potential, indicating which folder to look "
+            "into for the HDF5 files containing the dataset (`LPxxx` where `xxx` "
+            "ranges from `001` to `100`). Default = `001`"
+        )
     )
     parser.add_argument(
         "--openingangle", type=float,
