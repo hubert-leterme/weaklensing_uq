@@ -16,7 +16,7 @@ LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 WIDTH = 360 # size of the target convergence maps (nb pixels)
 SIZE_ORI = 5. # opening angle of the simulated convergence maps (deg)
-SIZE = SIZE_ORI * WIDTH / WIDTH_ORI # opening angle of the target convergence maps (deg)
+OPENINGANGLE = SIZE_ORI * WIDTH / WIDTH_ORI # opening angle of the target convergence maps (deg)
 RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
@@ -24,15 +24,15 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 class BaseKappaTNG:
 
     def __init__(
-            self, crop_maps=True, size=SIZE, n_samples_per_side=3,
+            self, crop_maps=True, openingangle=OPENINGANGLE, n_samples_per_side=3,
             shuffle=False, ktng_dir=KTNG_DIR, verbose=False, **kwargs
     ):
         self.crop_maps = crop_maps
 
-        width, size = get_npixels_openingangle(size, **kwargs)
+        width, openingangle = get_npixels_openingangle(openingangle, **kwargs)
 
         self.width = width
-        self.size = size
+        self.openingangle = openingangle
         self.n_samples_per_side = n_samples_per_side
         self.shuffle = shuffle
         self.ktng_dir = ktng_dir
@@ -96,11 +96,15 @@ class KappaTNG(BaseKappaTNG):
 
     Attributes
     ----------
+    idx_lp (int or str, default=None)
+        Index of the learning potential, indicating which folder to look into
+        for the HDF5 files containing the dataset ("LPxxx" where "xxx" ranges
+        from "001" to "100"). By default, "LP001" will be considered.
     weights (list of float, default=None)
         Either one of `weights` and `idx_redshift` must be provided
     idx_redshift (int, default=None)
         Either one of `weights` and `idx_redshift` must be provided
-    size (float, default=SIZE)
+    openingangle (float, default=OPENINGANGLE)
         Opening angle (deg)
     make_even (bool, default=True)
         Wether to force even-sized convergence maps
@@ -111,9 +115,12 @@ class KappaTNG(BaseKappaTNG):
 
     """
     def __init__(
-            self, idx_lp, *args, weights=None, idx_redshift=None, **kwargs
+            self, *args, idx_lp=None, weights=None, idx_redshift=None, **kwargs
     ):
-        self.idx_lp = str(idx_lp).zfill(3)
+        if idx_lp is not None:
+            self.idx_lp = str(idx_lp).zfill(3)
+        else:
+            self.idx_lp = "001"
         self.weights = weights
         if idx_redshift is not None:
             self.idx_redshift = f'z{str(idx_redshift + 1).zfill(2)}'
@@ -161,7 +168,7 @@ class KappaTNGFromSamples(BaseKappaTNG):
     Attributes
     ----------
     idx_redshift (int)
-    size (float, default=SIZE)
+    openingangle (float, default=OPENINGANGLE)
         Opening angle (deg)
     make_even (bool, default=True)
         Wether to force even-sized convergence maps
@@ -192,18 +199,18 @@ def get_openingangle(imgsize):
     return imgsize * RESOLUTION / 60.
 
 
-def get_npixels_openingangle(size, make_even=True):
+def get_npixels_openingangle(openingangle, make_even=True):
 
     if not make_even:
         mult = 1
     else:
         mult = 2
-    width = mult * int(size / (mult * RESOLUTION) * 60.)
+    width = mult * int(openingangle / (mult * RESOLUTION) * 60.)
 
     # Adjust opening angle to match the (integer) number of pixels
-    size = get_openingangle(width)
+    openingangle = get_openingangle(width)
 
-    return width, size
+    return width, openingangle
 
 
 def get_weights(redshifts):
@@ -260,7 +267,7 @@ def create_augmented_dataset(
             dtype='int'
         ) # Top-left coordinates
 
-    ktng = KappaTNG(idx_lp, crop_maps=False, weights=weights_redshift)
+    ktng = KappaTNG(idx_lp=idx_lp, weights=weights_redshift, crop_maps=False)
 
     end_idx = 0
     while end_idx < nimgs:

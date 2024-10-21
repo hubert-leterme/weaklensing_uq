@@ -51,7 +51,7 @@ def get_min_nimgs_calib(alpha):
     return np.ceil((1 - alpha) / alpha).astype(int)
 
 
-def get_resolution(width, size):
+def get_resolution(width, openingangle):
     """
     Get resolution in arcmin/pixel.
 
@@ -59,11 +59,11 @@ def get_resolution(width, size):
     ----------
     width (int)
         Size of the convergence maps (nb pixels)
-    size (float)
+    openingangle (float)
         Opening angle of the convergence maps (deg)
     
     """
-    return size / width * 60.
+    return openingangle / width * 60.
 
 
 def ngal_per_pixel(ra, dec, width, extent):
