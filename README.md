@@ -28,13 +28,49 @@ Update `config.yml` provided at the root of this repository, to configure data d
 
 #### Note
 
-If you encounter the error `ImportError: libpython3.11.so.1.0: cannot open shared object file: No such file or directory`, you can create a symbolic link to resolve it. Typically, the `libpython3.11.so.1.0` file is located in the `~/miniconda3/envs/wlmmuq/lib` directory within your virtual environment. You can link this file to a standard root location such as `/lib/x86_64-linux-gnu` by running the following command:
-```sh
-ln -s ~/miniconda3/envs/wlmmuq/lib/libpython3.11.so.1.0 /lib/x86_64-linux-gnu/libpython3.11.so.1.0
-```
-Please note that this workaround is not recommended as it makes some libraries available outside the virtual environment, which could lead to potential conflicts. However, this solution is provided here in the absence of a better alternative.
+If you encounter the error `ImportError: libpython3.11.so.1.0: cannot open shared object file: No such file or directory` when working within a virtual environment, you may need to append the path to the directory for the shared libraries to `$LD_LIBRARY_PATH`. For example: `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH`.
 
-## Jupyter notebook reproducing our experiments
+## Python scripts
+
+### Mass mapping with uncertainty quantification
+
+#### Compute point estimates
+
+```bash
+python massmapping.py wiener wiener.pred --ninpimgs 25 --seed 42 -v
+```
+
+```bash
+python massmapping.py mcalens mcalens.pred --Nsigma 4 --ninpimgs 25 --seed 42 -v
+```
+
+#### Apply UQ by propagating noise realizations
+
+**Note:** UQ before calibration.
+
+```bash
+python massmapping.py wiener wiener.uq --ninpimgs 25 -b 9 --uq --nsamples 25 --seed 42 -v
+```
+
+```bash
+python massmapping.py mcalens mcalens.uq --Nsigma 4 --ninpimgs 25 -b 9 --uq --nsamples 25 --seed 42 -v
+```
+
+### Creating an augmented dataset
+
+Data augmentation by rotating and randomly cropping convergence maps. Used for training DeepMass.
+
+```bash
+python create_augmented_dataset.py path/to/destination/file.hdf5 --idx-lp 2 --nimgs 100 -b 25 --angle-batch-size 36 --angle-step 1 --niter-per-angle 2 --seed 42 -v
+```
+
+### Running DeepMass
+
+```bash
+python run_deepmass.py path/to/augmented/dataset.hdf5 --input-wlmethod wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
+```
+
+## Jupyter notebook
 
 Check `wlmmuq.ipynb`.
 
