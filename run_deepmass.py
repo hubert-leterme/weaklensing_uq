@@ -169,7 +169,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Weak lensing method used as input ('wiener' or 'ks'). "
-            f"Default = {INPUT_WLMETHOD}"
+            f"Default = '{INPUT_WLMETHOD}'"
         )
     )
     parser.add_argument(
