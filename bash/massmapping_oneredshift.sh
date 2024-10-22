@@ -8,8 +8,8 @@ ninpimgs=25
 Nrea=25
 batch_size=9
 
-python ./scripts/massmapping.py $method $idx_lp ${method}_20240530_idx${idx_redshift}.pred --Nsigma $Nsigma \
+python ./massmapping.py $method $idx_lp ${method}_20240530_idx${idx_redshift}.pred --Nsigma $Nsigma \
         --idx-redshift $idx_redshift --ninpimgs $ninpimgs -v
-python ./scripts/massmapping.py $method $idx_lp ${method}_20240530_idx${idx_redshift}.uq --Nsigma $Nsigma \
+python ./massmapping.py $method $idx_lp ${method}_20240530_idx${idx_redshift}.uq --Nsigma $Nsigma \
         --idx-redshift $idx_redshift --ninpimgs $ninpimgs \
         -b $batch_size --uq --nsamples $Nrea -v
