@@ -681,11 +681,11 @@ class HDF5BatchLoader:
                         print("\tKaiser-Squires solution computed.")
 
                 # Compute Wiener solution if required
-                if self.input_method == 'wiener':
+                elif self.input_method == 'wiener':
                     self.sheardata.g1 = gamma1_noisy
                     self.sheardata.g2 = gamma2_noisy
                     kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                        self.sheardata, self.powerspectrum_1d, self.niter,
+                        self.sheardata, self.powerspectrum_1d, niter=self.niter,
                         **self.kwargs_wiener
                     )
                     if self.verbose:
