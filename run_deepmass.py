@@ -1,6 +1,10 @@
 import os
 import argparse
 import random
+import time
+import cProfile
+import threading
+
 import numpy as np
 from tensorflow import data, keras
 
@@ -274,7 +278,19 @@ if __name__ == "__main__":
         "-v", "--verbose", action='store_true',
         default=argparse.SUPPRESS
     )
-
     args = parser.parse_args()
     kwargs = vars(args).copy()
+
+    def print_stats():
+        while True:
+            time.sleep(15)
+            profiler.dump_stats('profile_results.prof')
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    stats_thread = threading.Thread(target=print_stats, daemon=True)
+    stats_thread.start()
+
     main(**kwargs)
+
+    profiler.disable()
