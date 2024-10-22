@@ -90,7 +90,11 @@ def main(
         list_of_outputs=['kappa_inp', 'kappa_true'], newaxis=True,
         input_method=input_wlmethod, **kwargs
     )
+    if verbose:
+        print("Get one batch")
     kappa_inp, kappa_true = next(train_gen())
+    if verbose:
+        print("Save arrays")
     np.save(os.path.join(output_dir, 'kappa_inp.npy'), kappa_inp)
     np.save(os.path.join(output_dir, 'kappa_true.npy'), kappa_true)
 
