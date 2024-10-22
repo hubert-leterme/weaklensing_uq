@@ -473,7 +473,7 @@ class HDF5BatchLoader:
         self, hdf5_filepath, nimgs, batch_size, std_noise, mask,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
-        input_method=None, std_gaussianfilter=None, 
+        input_method=None, std_gaussianfilter=None,
         powerspectrum_1d=None, niter=1,
         list_of_outputs=None, verbose=False, **kwargs
     ):
@@ -523,7 +523,7 @@ class HDF5BatchLoader:
             If `input_method` is set to 'wiener', number of iterations. Default is 1.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
-            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp', 'filename_ori'.
+            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
             If None, returns a dictionary of outputs. Default is None.
         verbose : bool, optional
             If True, print progress messages. Default is False.
@@ -564,7 +564,7 @@ class HDF5BatchLoader:
         """Load the HDF5 file and initialize the dataset."""
         self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
         self.dataset = self.file['kappa']
-        self.filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
+        filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
         nimgs_tot, nx, ny = self.dataset.shape
 
         # Check if requested number of images exceeds total available
@@ -574,7 +574,7 @@ class HDF5BatchLoader:
 
         # Initialize list of indices
         if self.sort_by_filename_ori:
-            idx = np.argsort(self.filename_ori)  # Sort indices of `filename_ori`
+            idx = np.argsort(filename_ori)  # Sort indices of `filename_ori`
         else:
             idx = np.arange(nimgs_tot)
         self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
@@ -629,12 +629,10 @@ class HDF5BatchLoader:
 
             # Load batch with sorted indices
             kappa_true = self.dataset[sorted_batch_idx]
-            filename_ori = self.filename_ori[sorted_batch_idx]
 
             # Re-order the batch
             reversed_sort_idx = np.argsort(sort_idx)
             kappa_true = kappa_true[reversed_sort_idx]
-            filename_ori = filename_ori[reversed_sort_idx]
 
             # Crop the batch if output_shape is specified
             if self.output_shape is not None:
@@ -652,56 +650,45 @@ class HDF5BatchLoader:
             if self.verbose:
                 print(f"Images {beg_idx} to {end_idx} loaded.")
 
-            if self.newaxis:
-                out_dict = dict(
-                    kappa_true=kappa_true[..., np.newaxis] + self.offset,
-                    gamma1=gamma1[..., np.newaxis],
-                    gamma2=gamma2[..., np.newaxis],
-                    gamma1_noisy=gamma1_noisy[..., np.newaxis],
-                    gamma2_noisy=gamma2_noisy[..., np.newaxis]
-                )
-            else:
-                out_dict = dict(
-                    kappa_true=kappa_true + self.offset,
-                    gamma1=gamma1,
-                    gamma2=gamma2,
-                    gamma1_noisy=gamma1_noisy,
-                    gamma2_noisy=gamma2_noisy
-                )
-            out_dict.update(filename_ori=filename_ori)
+            out_dict = {
+                "kappa_true": kappa_true + self.offset,
+                "gamma1": gamma1,
+                "gamma2": gamma2,
+                "gamma1_noisy": gamma1_noisy,
+                "gamma2_noisy": gamma2_noisy
+            }
 
             # Compute KS solution if required
             if self.input_method is not None:
+                if self.verbose:
+                    print("\tCompute Kaiser-Squires solution")
                 if self.input_method == 'ks':
                     kappa_inp = ksfilter(
                         gamma1_noisy, gamma2_noisy, get_bounds=False,
                         std_gaussianfilter=self.std_gaussianfilter
                     )
-                    if self.verbose:
-                        print("\tKaiser-Squires solution computed.")
 
                 # Compute Wiener solution if required
                 elif self.input_method == 'wiener':
+                    if self.verbose:
+                        print("\tCompute Wiener solution")
                     self.sheardata.g1 = gamma1_noisy
                     self.sheardata.g2 = gamma2_noisy
                     kappa_inp, _ = self.massmap.prox_wiener_filtering(
                         self.sheardata, self.powerspectrum_1d, niter=self.niter,
                         **self.kwargs_wiener
                     )
-                    if self.verbose:
-                        print("\tWiener solution computed.")
-                
+
                 else:
                     raise ValueError
 
-                if self.newaxis:
-                    out_dict.update(
-                        kappa_inp=kappa_inp[..., np.newaxis] + self.offset
-                    )
-                else:
-                    out_dict.update(
-                        kappa_inp=kappa_inp + self.offset
-                    )
+                out_dict.update({
+                    "kappa_inp": kappa_inp + self.offset
+                })
+
+            if self.newaxis:
+                for key in out_dict.keys():
+                    out_dict[key] = out_dict[key][..., np.newaxis]
 
             # Prepare output
             if self.list_of_outputs is not None:
