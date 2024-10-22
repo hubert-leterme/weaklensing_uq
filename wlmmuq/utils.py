@@ -695,24 +695,23 @@ class HDF5BatchLoader:
 
 
     def __call__(self, get_all_images=False):
-        end_idx = 0
-        while True:
-            # Load the next batch of data
-            beg_idx = end_idx
-            if not get_all_images:
-                end_idx = min(beg_idx + self.batch_size, self.nimgs)
-            else:
-                end_idx = self.nimgs
-            out = self._load_batch(beg_idx, end_idx)
+        try:
+            end_idx = 0
+            while end_idx < self.nimgs:
+                # Load the next batch of data
+                beg_idx = end_idx
+                if not get_all_images:
+                    end_idx = min(beg_idx + self.batch_size, self.nimgs)
+                else:
+                    end_idx = self.nimgs
+                out = self._load_batch(beg_idx, end_idx)
 
-            # Handle generator looping (to avoid StopIteration error)
-            # Reset generator and reshuffle indices if needed
-            if end_idx == self.nimgs:
-                end_idx = 0
-                if self.shuffle:
-                    np.random.shuffle(self.idx)
+                yield out
 
-            yield out
+        finally:
+            # Reshuffle indices if needed
+            if self.shuffle:
+                np.random.shuffle(self.idx)
 
 
     def close(self):
