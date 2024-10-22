@@ -741,15 +741,20 @@ class HDF5BatchLoader:
                 yield out
 
         try:
-            tensor_shape = (None, *self.output_shape, 1)
+            tensor_shape = (None, *self.output_shape)
         except TypeError:
-            tensor_shape = (None, self.output_shape, self.output_shape, 1)
+            tensor_shape = (None, self.output_shape, self.output_shape)
+
+        if self.newaxis:
+            tensor_shape += (1,)
+
+        output_signature = tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)
+        noutputs = len(self.list_of_outputs)
+        if noutputs > 1:
+            output_signature = noutputs * (output_signature,)
+
         out = tf.data.Dataset.from_generator(
-            generator,
-            output_signature = (
-                tf.TensorSpec(shape=tensor_shape, dtype=tf.float32),  # kappa_inp
-                tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)   # kappa_true
-            )
+            generator, output_signature=output_signature
         )
         return out
 
