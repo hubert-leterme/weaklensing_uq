@@ -504,7 +504,7 @@ class HDF5BatchLoader:
             test sets.
         shuffle : bool, optional
             Whether to shuffle the indices. Default is True.
-        output_shape : tuple, optional
+        output_shape : int or tuple, optional
             Shape to crop the output images. Default is None.
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
@@ -724,10 +724,14 @@ class HDF5BatchLoader:
                         print("Reshuffle indices")
                     np.random.shuffle(self.idx)
 
+        try:
+            tensor_shape = (None, *self.output_shape, 1)
+        except TypeError:
+            tensor_shape = (None, self.output_shape, self.output_shape, 1)
         out = tf.data.Dataset.from_generator(
             generator,
             output_signature=tf.TensorSpec(
-                shape=(None, *self.output_shape, 1), dtype=tf.float32
+                shape=tensor_shape, dtype=tf.float32
             )
         )
         return out
