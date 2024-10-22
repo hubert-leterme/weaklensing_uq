@@ -476,7 +476,8 @@ class HDF5BatchLoader:
         sort_by_filename_ori=True, newaxis=False,
         input_method=None, std_gaussianfilter=None,
         powerspectrum_1d=None, niter=1,
-        list_of_outputs=None, verbose=False, **kwargs
+        list_of_outputs=None, close_after_batch=False,
+        verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -526,6 +527,8 @@ class HDF5BatchLoader:
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
             If None, returns a dictionary of outputs. Default is None.
+        close_after_batch: bool, optional
+            Default is False.
         verbose : bool, optional
             If True, print progress messages. Default is False.
         **kwargs
@@ -549,6 +552,7 @@ class HDF5BatchLoader:
         self.niter = niter
         self.kwargs_wiener = kwargs
         self.list_of_outputs = list_of_outputs
+        self.close_after_batch = close_after_batch
         self.verbose = verbose
 
         self.idx = None  # Will hold the shuffled indices
@@ -561,10 +565,14 @@ class HDF5BatchLoader:
         self._initialize_wiener()
 
 
-    def _initialize_dataset(self):
-        """Load the HDF5 file and initialize the dataset."""
+    def _open_and_get_dataset(self):
         self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
         self.dataset = self.file['kappa']
+
+
+    def _initialize_dataset(self):
+        """Load the HDF5 file and initialize the dataset."""
+        self._open_and_get_dataset()
         filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
         nimgs_tot, nx, ny = self.dataset.shape
 
@@ -599,6 +607,9 @@ class HDF5BatchLoader:
         assert self.std_noise.shape[-2:] == (self.nx, self.ny)
         assert self.mask.shape[-2:] == (self.nx, self.ny)
 
+        if self.close_after_batch:
+            self.close()
+
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
@@ -628,7 +639,12 @@ class HDF5BatchLoader:
         sorted_batch_idx = batch_idx[sort_idx]
 
         # Load batch with sorted indices
+        # TODO: use `with self.open():`
+        if self.close_after_batch:
+            self._open_and_get_dataset()
         kappa_true = self.dataset[sorted_batch_idx]
+        if self.close_after_batch:
+            self.close()
 
         # Re-order the batch
         reversed_sort_idx = np.argsort(sort_idx)
