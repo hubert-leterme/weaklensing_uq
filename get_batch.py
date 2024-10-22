@@ -13,12 +13,12 @@ IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_PS = 256 # To compute the power spectrum
 BATCH_SIZE = 32
-
+OUTPUT_DIR = '.'
 
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
         fwhm=FWHM, imgsize=IMGSIZE, nimgs_train=NIMGS_TRAIN,
-        batch_size=BATCH_SIZE, output_dir='.',
+        batch_size=BATCH_SIZE, output_dir=OUTPUT_DIR,
         seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
@@ -140,6 +140,14 @@ if __name__ == "__main__":
         help=(
             "Batch size for training and validation. "
             f"Default = {BATCH_SIZE}"
+        )
+    )
+    parser.add_argument(
+        "--output-dir", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Directory in which to save the NumPy arrays. "
+            f"Default = '{OUTPUT_DIR}'"
         )
     )
     parser.add_argument(
