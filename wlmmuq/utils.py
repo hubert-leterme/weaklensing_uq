@@ -707,22 +707,22 @@ class HDF5BatchLoader:
     def to_tf_dataset(self, **kwargs):
 
         def generator():
-            try:
-                end_idx = 0
-                while end_idx < self.nimgs:
-                    # Load the next batch
-                    beg_idx = end_idx
-                    out, end_idx = self.load_batch(
-                        beg_idx, return_end_idx=True, **kwargs
-                    )
-                    yield out
+            end_idx = 0
+            while True:
+                # Load the next batch of data
+                beg_idx = end_idx
+                out, end_idx = self.load_batch(
+                    beg_idx, return_end_idx=True, **kwargs
+                )
 
-            finally:
-                # Reshuffle indices if needed
-                if self.shuffle:
-                    if self.verbose:
-                        print("Reshuffle indices")
-                    np.random.shuffle(self.idx)
+                # Handle generator looping (to avoid StopIteration error)
+                # Reset generator and reshuffle indices if needed
+                if end_idx == self.nimgs:
+                    end_idx = 0
+                    if self.shuffle:
+                        np.random.shuffle(self.idx)
+
+                yield out
 
         try:
             tensor_shape = (None, *self.output_shape, 1)
