@@ -720,11 +720,11 @@ class HDF5BatchLoader:
         return out
 
 
-    def to_tf_dataset(self, **kwargs):
+    def to_tf_dataset(self, raise_stop_iteration=False, **kwargs):
 
         def generator():
             end_idx = 0
-            while True:
+            while end_idx < self.nimgs:
                 # Load the next batch of data
                 beg_idx = end_idx
                 out, end_idx = self.load_batch(
@@ -733,7 +733,7 @@ class HDF5BatchLoader:
 
                 # Handle generator looping (to avoid StopIteration error)
                 # Reset generator and reshuffle indices if needed
-                if end_idx == self.nimgs:
+                if end_idx == self.nimgs and not raise_stop_iteration:
                     end_idx = 0
                     if self.shuffle:
                         np.random.shuffle(self.idx)
