@@ -730,8 +730,9 @@ class HDF5BatchLoader:
             tensor_shape = (None, self.output_shape, self.output_shape, 1)
         out = tf.data.Dataset.from_generator(
             generator,
-            output_signature=tf.TensorSpec(
-                shape=tensor_shape, dtype=tf.float32
+            output_signature = (
+                tf.TensorSpec(shape=tensor_shape, dtype=tf.float32),  # kappa_inp
+                tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)   # kappa_true
             )
         )
         return out
