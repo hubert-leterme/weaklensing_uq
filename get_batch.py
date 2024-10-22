@@ -72,7 +72,8 @@ def main(
             std_noise=std_noise, mask=mask, output_shape=imgsize,
             list_of_outputs=['kappa_true']
         )
-        kappa_ps = next(train_gen_ps())
+        kappa_ps = train_gen_ps.load_batch()
+        train_gen_ps.close()
 
         # Compute the 1D power spectrum
         powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
@@ -92,7 +93,8 @@ def main(
     )
     if verbose:
         print("Get one batch")
-    kappa_inp, kappa_true = next(train_gen())
+    kappa_inp, kappa_true = train_gen.load_batch()
+    train_gen.close()
     if verbose:
         print("Save arrays")
     np.save(os.path.join(output_dir, 'kappa_inp.npy'), kappa_inp)

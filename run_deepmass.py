@@ -2,7 +2,7 @@ import os
 import argparse
 import random
 import numpy as np
-from tensorflow import keras
+from tensorflow import data, keras
 
 from deepmass import map_functions as mf
 from deepmass import lens_data as ld
@@ -93,7 +93,8 @@ def main(
             std_noise=std_noise, mask=mask, output_shape=imgsize,
             list_of_outputs=['kappa_true']
         )
-        kappa_ps = next(train_gen_ps())
+        kappa_ps = train_gen_ps.load_batch()
+        train_gen_ps.close()
 
         # Compute the 1D power spectrum
         powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
@@ -147,14 +148,20 @@ def main(
         )
         callbacks.append(csvlogger_callback)
 
+    # Prefetch datasets for efficiency
+    train_set_prefetched = train_gen.to_tf_dataset().prefetch(data.AUTOTUNE)
+    val_set_prefetched = val_gen.to_tf_dataset().prefetch(data.AUTOTUNE)
+
     # Fit model
     cnn_model.fit(
-        train_gen(), epochs=nepochs,
+        train_set_prefetched, epochs=nepochs,
         steps_per_epoch=nimgs_train // batch_size,
-        validation_data=val_gen(),
+        validation_data=val_set_prefetched,
         validation_steps=nimgs_val // batch_size,
         callbacks=callbacks
     )
+    train_gen.close()
+    val_gen.close()
 
 
 if __name__ == "__main__":
