@@ -16,8 +16,8 @@ import wlmmuq.utils as wlutils
 INPUT_WLMETHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
-NIMGS_TRAIN = 6336 # Corresponding to the 88 first realizations in the original dataset
-NIMGS_VAL = 864 # Remaining 12 realizations
+NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
+NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
