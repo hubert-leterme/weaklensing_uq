@@ -64,7 +64,7 @@ def main(
     extent = data_cosmos['extent']
     ngal = wlutils.ngal_per_pixel(
         cat_cosmos_bright['Ra'], cat_cosmos_bright['Dec'],
-        openingangle, extent
+        imgsize, extent
     )
     mask = ngal > 0
 
@@ -78,7 +78,6 @@ def main(
 
     # Initialize batch generators for training and validation
     if input_wlmethod == 'ks':
-        kwargs.update(compute_ks=True)
         if fwhm is not None:
             resolution = openingangle / imgsize * 60. # arcmin/pixel
             std_gaussianfilter_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
@@ -92,14 +91,14 @@ def main(
         train_gen_ps = wlutils.HDF5BatchLoader(
             path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
             std_noise=std_noise, mask=mask, output_shape=imgsize,
-            list_of_outputs=['kappa']
+            list_of_outputs=['kappa_true']
         )
         kappa_ps = next(train_gen_ps())
 
         # Compute the 1D power spectrum
         powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
         del kappa_ps
-        kwargs.update(compute_wiener=2, powerspectrum_1d=powerspectrum_1d)
+        kwargs.update(powerspectrum_1d=powerspectrum_1d)
 
     else:
         raise ValueError
@@ -110,14 +109,14 @@ def main(
         path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
         list_of_outputs=['kappa_inp', 'kappa_true'], offset=OFFSET, newaxis=True,
-        **kwargs
+        input_method=input_wlmethod, **kwargs
     )
     val_gen = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_val, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
         offset=OFFSET, newaxis=True,
-        **kwargs
+        input_method=input_wlmethod, **kwargs
     )
 
     # Initialize model
@@ -142,7 +141,7 @@ def main(
         )
         callbacks.append(backup_callback)
     if path_to_csv_log is not None:
-        csvlogger_callback = keras.CSVLogger(
+        csvlogger_callback = keras.callbacks.CSVLogger(
             path_to_csv_log, append=True
 
         )
@@ -205,7 +204,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--n-epochs", type=int,
+        "--nepochs", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of training epochs. "
