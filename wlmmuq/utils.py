@@ -612,6 +612,88 @@ class HDF5BatchLoader:
             self.massmap.init_massmap(self.nx, self.ny)
 
 
+    def _load_batch(self, beg_idx, end_idx):
+
+        batch_idx = self.idx[beg_idx:end_idx]
+
+        # Sort batch_idx to ensure increasing order for HDF5 access
+        sort_idx = np.argsort(batch_idx)
+        sorted_batch_idx = batch_idx[sort_idx]
+
+        # Load batch with sorted indices
+        kappa_true = self.dataset[sorted_batch_idx]
+
+        # Re-order the batch
+        reversed_sort_idx = np.argsort(sort_idx)
+        kappa_true = kappa_true[reversed_sort_idx]
+
+        # Crop the batch if output_shape is specified
+        if self.output_shape is not None:
+            kappa_true = crop_arr(
+                kappa_true,
+                self._beg_idx_x, self._end_idx_x,
+                self._beg_idx_y, self._end_idx_y
+            )
+
+        # Generate noisy shear maps
+        gamma1, gamma2 = get_shear_from_convergence(kappa_true)
+        gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+        )
+        if self.verbose:
+            print(f"Images {beg_idx} to {end_idx} loaded.")
+
+        out_dict = {
+            "kappa_true": kappa_true + self.offset,
+            "gamma1": gamma1,
+            "gamma2": gamma2,
+            "gamma1_noisy": gamma1_noisy,
+            "gamma2_noisy": gamma2_noisy
+        }
+
+        # Compute KS solution if required
+        if self.input_method is not None:
+            if self.verbose:
+                print("\tCompute Kaiser-Squires solution")
+            if self.input_method == 'ks':
+                kappa_inp = ksfilter(
+                    gamma1_noisy, gamma2_noisy, get_bounds=False,
+                    std_gaussianfilter=self.std_gaussianfilter
+                )
+            # Compute Wiener solution if required
+            elif self.input_method == 'wiener':
+                if self.verbose:
+                    print("\tCompute Wiener solution")
+                self.sheardata.g1 = gamma1_noisy
+                self.sheardata.g2 = gamma2_noisy
+                kappa_inp, _ = self.massmap.prox_wiener_filtering(
+                    self.sheardata, self.powerspectrum_1d, niter=self.niter,
+                    **self.kwargs_wiener
+                )
+            else:
+                raise ValueError
+
+            out_dict.update({
+                "kappa_inp": kappa_inp + self.offset
+            })
+
+        if self.newaxis:
+            for key in out_dict:
+                out_dict[key] = out_dict[key][..., np.newaxis]
+
+        # Prepare output
+        if self.list_of_outputs is not None:
+            out = tuple(
+                [out_dict[val] for val in self.list_of_outputs]
+            )
+            if len(out) == 1:
+                out = out[0]
+        else:
+            out = out_dict
+
+        return out
+
+
     def __call__(self, get_all_images=False):
         end_idx = 0
         while True:
@@ -621,84 +703,7 @@ class HDF5BatchLoader:
                 end_idx = min(beg_idx + self.batch_size, self.nimgs)
             else:
                 end_idx = self.nimgs
-            batch_idx = self.idx[beg_idx:end_idx]
-
-            # Sort batch_idx to ensure increasing order for HDF5 access
-            sort_idx = np.argsort(batch_idx)
-            sorted_batch_idx = batch_idx[sort_idx]
-
-            # Load batch with sorted indices
-            kappa_true = self.dataset[sorted_batch_idx]
-
-            # Re-order the batch
-            reversed_sort_idx = np.argsort(sort_idx)
-            kappa_true = kappa_true[reversed_sort_idx]
-
-            # Crop the batch if output_shape is specified
-            if self.output_shape is not None:
-                kappa_true = crop_arr(
-                    kappa_true,
-                    self._beg_idx_x, self._end_idx_x,
-                    self._beg_idx_y, self._end_idx_y
-                )
-
-            # Generate noisy shear maps
-            gamma1, gamma2 = get_shear_from_convergence(kappa_true)
-            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-                gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
-            )
-            if self.verbose:
-                print(f"Images {beg_idx} to {end_idx} loaded.")
-
-            out_dict = {
-                "kappa_true": kappa_true + self.offset,
-                "gamma1": gamma1,
-                "gamma2": gamma2,
-                "gamma1_noisy": gamma1_noisy,
-                "gamma2_noisy": gamma2_noisy
-            }
-
-            # Compute KS solution if required
-            if self.input_method is not None:
-                if self.verbose:
-                    print("\tCompute Kaiser-Squires solution")
-                if self.input_method == 'ks':
-                    kappa_inp = ksfilter(
-                        gamma1_noisy, gamma2_noisy, get_bounds=False,
-                        std_gaussianfilter=self.std_gaussianfilter
-                    )
-
-                # Compute Wiener solution if required
-                elif self.input_method == 'wiener':
-                    if self.verbose:
-                        print("\tCompute Wiener solution")
-                    self.sheardata.g1 = gamma1_noisy
-                    self.sheardata.g2 = gamma2_noisy
-                    kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                        self.sheardata, self.powerspectrum_1d, niter=self.niter,
-                        **self.kwargs_wiener
-                    )
-
-                else:
-                    raise ValueError
-
-                out_dict.update({
-                    "kappa_inp": kappa_inp + self.offset
-                })
-
-            if self.newaxis:
-                for key in out_dict.keys():
-                    out_dict[key] = out_dict[key][..., np.newaxis]
-
-            # Prepare output
-            if self.list_of_outputs is not None:
-                out = tuple(
-                    [out_dict[val] for val in self.list_of_outputs]
-                )
-                if len(out) == 1:
-                    out = out[0]
-            else:
-                out = out_dict
+            out = self._load_batch(beg_idx, end_idx)
 
             # Handle generator looping (to avoid StopIteration error)
             # Reset generator and reshuffle indices if needed
