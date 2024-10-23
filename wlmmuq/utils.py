@@ -471,7 +471,7 @@ def get_1d_powerspectrum(kappa):
 class HDF5BatchLoader:
 
     def __init__(
-        self, hdf5_filepath, nimgs, batch_size, std_noise, mask,
+        self, hdf5_filepath, nimgs, batch_size, std_noise=None, mask=None,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
         input_method=None, std_gaussianfilter=None,
@@ -491,10 +491,10 @@ class HDF5BatchLoader:
             `beg_idx + nimgs` are considered.
         batch_size : int
             Number of images per batch.
-        std_noise : numpy.ndarray
-            Array of noise standard deviation.
-        mask : numpy.ndarray
-            Array of masked data.
+        std_noise : numpy.ndarray, optional
+            Array of noise standard deviation. Default is None.
+        mask : numpy.ndarray, optional
+            Array of masked data. Default is None.
         offset: float, optional
             Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
@@ -604,8 +604,10 @@ class HDF5BatchLoader:
         else:
             self.nx = nx
             self.ny = ny
-        assert self.std_noise.shape[-2:] == (self.nx, self.ny)
-        assert self.mask.shape[-2:] == (self.nx, self.ny)
+        if self.std_noise is not None:
+            assert self.std_noise.shape[-2:] == (self.nx, self.ny)
+        if self.mask is not None:
+            assert self.mask.shape[-2:] == (self.nx, self.ny)
 
         if self.close_after_batch:
             self.close()
@@ -657,28 +659,32 @@ class HDF5BatchLoader:
                 self._beg_idx_x, self._end_idx_x,
                 self._beg_idx_y, self._end_idx_y
             )
-
-        # Generate noisy shear maps
+        
         gamma1, gamma2 = get_shear_from_convergence(kappa_true)
-        gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
-        )
-        if self.verbose:
-            print(f"Images {beg_idx} to {end_idx} loaded.")
 
         out_dict = {
             "kappa_true": kappa_true + self.offset,
             "gamma1": gamma1,
-            "gamma2": gamma2,
-            "gamma1_noisy": gamma1_noisy,
-            "gamma2_noisy": gamma2_noisy
+            "gamma2": gamma2
         }
 
-        # Compute KS solution if required
+        if self.verbose:
+            print(f"Images {beg_idx} to {end_idx} loaded.")
+
+        # Generate noisy shear maps
         if self.input_method is not None:
-            if self.verbose:
-                print("\tCompute Kaiser-Squires solution")
+            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+                gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+            )
+            out_dict.update({
+                "gamma1_noisy": gamma1_noisy,
+                "gamma2_noisy": gamma2_noisy
+            })
+
+            # Compute KS solution if required
             if self.input_method == 'ks':
+                if self.verbose:
+                    print("\tCompute Kaiser-Squires solution")
                 kappa_inp = ksfilter(
                     gamma1_noisy, gamma2_noisy, get_bounds=False,
                     std_gaussianfilter=self.std_gaussianfilter
