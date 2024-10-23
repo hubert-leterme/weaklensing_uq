@@ -21,12 +21,7 @@ def main(
     if verbose:
         print("Computing redshift weights from COSMOS...")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] >= np.min(wlktng.LIST_OF_Z)
-    ]
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] < np.max(wlktng.LIST_OF_Z)
-    ]
+    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
     weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
 
     # Get nb of pixels in output images and adjust opening angle accordingly

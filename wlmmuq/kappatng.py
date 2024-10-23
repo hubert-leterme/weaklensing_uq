@@ -5,6 +5,7 @@ import h5py
 
 from . import CONFIG_DATA
 from . import utils as wlutils
+from . import cosmos as wlcosmos
 from . import dataaugm
 
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
@@ -238,6 +239,39 @@ def get_weights(redshifts):
     out = np.bincount(idxs, weights=weights, minlength=len(LIST_OF_Z)) # shape = nz
     out /= np.sum(out) # normalize
 
+    return out
+
+
+def filter_by_redshifts(cat_cosmos_bright):
+    cat_cosmos_bright = cat_cosmos_bright[
+        cat_cosmos_bright['zphot'] >= np.min(LIST_OF_Z)
+    ]
+    cat_cosmos_bright = cat_cosmos_bright[
+        cat_cosmos_bright['zphot'] < np.max(LIST_OF_Z)
+    ]
+    return cat_cosmos_bright
+
+
+def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
+
+    openingangle = get_openingangle(imgsize)
+    data_cosmos = wlcosmos.get_data_from_cosmos(
+        cat_cosmos, openingangle
+    )
+    extent = data_cosmos['extent']
+    shapedisp = data_cosmos["shapedisp"]
+    ngal = wlutils.ngal_per_pixel(
+        cat_cosmos['Ra'], cat_cosmos['Dec'],
+        imgsize, extent
+    )
+    mask = ngal > 0
+
+    out = {
+        'openingangle': openingangle,
+        'shapedisp': shapedisp,
+        'ngal': ngal,
+        'mask': mask
+    }
     return out
 
 

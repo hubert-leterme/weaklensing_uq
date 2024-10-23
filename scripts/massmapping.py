@@ -52,12 +52,7 @@ def main(
     cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
 
     # Remove galaxies that are not in the redshift range of the kappaTNG dataset
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] >= np.min(wlktng.LIST_OF_Z)
-    ]
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] < np.max(wlktng.LIST_OF_Z)
-    ]
+    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
 
     # Merge the two catalogs if requested
     if cosmos_include_faint:
@@ -70,8 +65,7 @@ def main(
     # Get survey extent and standard deviation of galaxy ellipticities
     data_cosmos = wlcosmos.get_data_from_cosmos(cat_cosmos, openingangle)
     extent = data_cosmos["extent"]
-    shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
-    shapedisp = (shapedisp1 + shapedisp2) / 2
+    shapedisp = data_cosmos["shapedisp"]
 
     # Get a list of weights, for each redshift in the $\kappa$-TNG dataset
     if ktng.idx_redshift is None:

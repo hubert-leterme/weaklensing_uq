@@ -15,7 +15,7 @@ fi
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python run_deepmass.py $path_to_augmented_dataset \
+python train_deepmass.py $path_to_augmented_dataset \
   --input-wlmethod $2 \
   --checkpoint-dir $checkpoint_dir/checkpoint_$2 \
   --save-freq $save_freq \

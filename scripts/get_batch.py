@@ -29,26 +29,12 @@ def main(
     if verbose:
         print("Compute a map of number of galaxies per pixels and a binary mask")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] >= np.min(wlktng.LIST_OF_Z)
-    ]
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] < np.max(wlktng.LIST_OF_Z)
-    ]
-
-    openingangle = wlktng.get_openingangle(imgsize)
-    data_cosmos = wlcosmos.get_data_from_cosmos(
-        cat_cosmos_bright, openingangle
-    )
-    extent = data_cosmos['extent']
-    ngal = wlutils.ngal_per_pixel(
-        cat_cosmos_bright['Ra'], cat_cosmos_bright['Dec'],
-        imgsize, extent
-    )
-    mask = ngal > 0
-
-    shapedisp1, shapedisp2 = data_cosmos["shapedisp"]
-    shapedisp = (shapedisp1 + shapedisp2) / 2
+    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
+    data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
+    openingangle = data_dict["openingangle"]
+    shapedisp = data_dict["shapedisp"]
+    ngal = data_dict["ngal"]
+    mask = data_dict["mask"]
 
     # Compute noise covariance matrix
     if verbose:

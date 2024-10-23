@@ -82,19 +82,24 @@ def get_data_from_cosmos(cat_cosmos, openingangle):
         Opening angle of the target convergence maps (deg).
 
     """
-    out = {}
     ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
     dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
     extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
 
     shapedisp1 = np.std(cat_cosmos['e1iso_rot4_gr_snCal'])
     shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
+    shapedisp = (shapedisp1 + shapedisp2) / 2
 
     out.update(
         ra_cosmos_median=ra_cosmos_median, dec_cosmos_median=dec_cosmos_median,
-        extent=extent, shapedisp=(shapedisp1, shapedisp2)
+        extent=extent, shapedisp=shapedisp
     )
-
+    out = {
+        'ra_cosmos_median': ra_cosmos_median,
+        'dec_cosmos_median': dec_cosmos_median,
+        'extent': extent,
+        'shapedisp': shapedisp
+    }
     return out
 
 

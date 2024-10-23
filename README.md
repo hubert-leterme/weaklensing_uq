@@ -64,10 +64,10 @@ Data augmentation by rotating and randomly cropping convergence maps. Used for t
 python create_augmented_dataset.py path/to/destination/file.hdf5 --idx-lp 2 --nimgs 100 -b 25 --angle-batch-size 36 --angle-step 1 --niter-per-angle 2 --seed 42 -v
 ```
 
-### Running DeepMass
+### Training DeepMass
 
 ```bash
-python run_deepmass.py path/to/augmented/dataset.hdf5 --input-wlmethod wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
+python train_deepmass.py path/to/augmented/dataset.hdf5 --input-wlmethod wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
 ```
 
 ## Jupyter notebook
