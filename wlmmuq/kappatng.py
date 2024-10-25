@@ -277,7 +277,7 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
 
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshift, imgsize, batch_size=None,
-        **kwargs
+        verbose=False, **kwargs
 ):
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
@@ -309,6 +309,8 @@ def create_cropped_dataset(
     while end_idx < ninpimgs:
         beg_idx = end_idx
         end_idx = min(beg_idx + batch_size, ninpimgs)
+        if verbose:
+            print(f"Processing images {beg_idx} to {end_idx}...")
 
         # Load $\kappa$-TNG dataset and combine redshifts
         kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)

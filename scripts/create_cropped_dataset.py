@@ -9,7 +9,7 @@ NINPIMGS = 100 # Number of input images
 def main(
         path_to_cropped_dataset, idx_lp=None,
         openingangle=OPENINGANGLE, ninpimgs=NINPIMGS,
-        **kwargs
+        verbose=False, **kwargs
 ):
     # Get redshift weights from the COSMOS catalog
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
@@ -22,7 +22,7 @@ def main(
     # Create augmented dataset and store data
     wlktng.create_cropped_dataset(
         path_to_cropped_dataset, idx_lp, ninpimgs, weights_redshift, imgsize,
-        **kwargs
+        verbose=verbose, **kwargs
     )
 
 
@@ -60,6 +60,10 @@ if __name__ == "__main__":
             "Batch size, to avoid memory overload. "
             "Default = 50"
         )
+    )
+    parser.add_argument(
+        "-v", "--verbose", action='store_true',
+        default=argparse.SUPPRESS
     )
 
     args = parser.parse_args()
