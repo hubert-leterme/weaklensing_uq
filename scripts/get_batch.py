@@ -17,8 +17,8 @@ OUTPUT_DIR = '.'
 
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
-        fwhm=FWHM, imgsize=IMGSIZE, nimgs_train=NIMGS_TRAIN,
-        batch_size=BATCH_SIZE, output_dir=OUTPUT_DIR,
+        fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
+        nimgs_train=NIMGS_TRAIN, batch_size=BATCH_SIZE, output_dir=OUTPUT_DIR,
         seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
@@ -52,18 +52,24 @@ def main(
     elif input_wlmethod == 'wiener':
         if verbose:
             print("Estimate the power spectrum for Wiener filtering")
-        # Load a set of convergence maps among the training set
-        train_gen_ps = wlutils.HDF5BatchLoader(
-            path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
-            std_noise=std_noise, mask=mask, output_shape=imgsize,
-            list_of_outputs=['kappa_true']
-        )
-        kappa_ps = train_gen_ps.load_batch()
-        train_gen_ps.close()
 
-        # Compute the 1D power spectrum
-        powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
-        del kappa_ps
+        if path_to_powerspectrum is None:
+            # Load a set of convergence maps among the training set
+            train_gen_ps = wlutils.HDF5BatchLoader(
+                path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
+                std_noise=std_noise, mask=mask, output_shape=imgsize,
+                list_of_outputs=['kappa_true']
+            )
+            kappa_ps = train_gen_ps.load_batch()
+            train_gen_ps.close()
+
+            # Compute the 1D power spectrum
+            powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
+            del kappa_ps
+        
+        else:
+            powerspectrum_1d = np.load(path_to_powerspectrum)
+
         kwargs.update(powerspectrum_1d=powerspectrum_1d)
 
     else:
@@ -107,6 +113,16 @@ if __name__ == "__main__":
         help=(
             "If the selected method is Kaiser-Squires ('ks'), FWHM of "
             f"the smoothing filter, in arcmin. Default = {FWHM}"
+        )
+    )
+    parser.add_argument(
+        "-ps", "--path-to-powerspectrum", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the .npy file containing the 1D power spectrum. "
+            "If not provided, and if argument --input-wlmethod is set to "
+            "'wiener', then the power spectrum will be inferred from the "
+            f"dataset. Default = None"
         )
     )
     parser.add_argument(

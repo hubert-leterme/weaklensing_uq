@@ -30,7 +30,7 @@ METHOD_LIST = ["mle", "wiener", "mcalens"]
 def main(
         method, picklename, idx_lp=None, idx_redshift=None, openingangle=OPENINGANGLE,
         cosmos_include_faint=False,
-        ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS,
+        ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS, path_to_powerspectrum=None,
         nimgs=None, niter=None, Nsigma=None, Inpaint=False, mean_centering=False,
         batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, seed=None, verbose=False, **kwargs
@@ -107,16 +107,20 @@ def main(
 
     # Compute the 1D power spectrum from simulated convergence maps
     if method in ("wiener", "mcalens"):
-        kappa_ps = ktng.get_kappa(ninpimgs_ps, start_idx=ninpimgs)
-        powerspectrum = np.mean(
-            np.abs(np.fft.fft2(kappa_ps) / ktng.width)**2, axis=0
-        ) # expected value of the squared Fourier modulus
-        # Only positive frequencies, by symmetry
-        powerspectrum = powerspectrum[:ktng.width//2, :ktng.width//2]
-        powerspectrum_1d = (
-            powerspectrum[0, :] + powerspectrum[:, 0]
-        ) / 2 # assumed isotropic
-        del kappa_ps
+        if path_to_powerspectrum is None:
+            kappa_ps = ktng.get_kappa(ninpimgs_ps, start_idx=ninpimgs)
+            powerspectrum = np.mean(
+                np.abs(np.fft.fft2(kappa_ps) / ktng.width)**2, axis=0
+            ) # expected value of the squared Fourier modulus
+            # Only positive frequencies, by symmetry
+            powerspectrum = powerspectrum[:ktng.width//2, :ktng.width//2]
+            powerspectrum_1d = (
+                powerspectrum[0, :] + powerspectrum[:, 0]
+            ) / 2 # assumed isotropic
+            del kappa_ps
+
+        else:
+            powerspectrum_1d = np.load(path_to_powerspectrum)
 
     # Select mass mapping method
     if method == "wiener":
@@ -258,6 +262,16 @@ if __name__ == "__main__":
         "--ninpimgs-ps", type=int,
         default=argparse.SUPPRESS,
         help=f"Number of additional input images to compute the power spectrum. Default = {NINPIMGS_PS}"
+    )
+    parser.add_argument(
+        "-ps", "--path-to-powerspectrum", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the .npy file containing the 1D power spectrum. "
+            "If not provided, and if argument `method` is set to "
+            "'wiener' or mcalens', then the power spectrum will be inferred from the "
+            f"dataset. Default = None"
+        )
     )
     parser.add_argument(
         "--nimgs", type=int,
