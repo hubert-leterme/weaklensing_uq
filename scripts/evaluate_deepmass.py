@@ -91,7 +91,7 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "path_to_test_dataset", type=str,
+        "path_to_test_set", type=str,
         help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
