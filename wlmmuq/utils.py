@@ -578,7 +578,8 @@ class HDF5BatchLoader:
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
         self._open_and_get_dataset()
-        filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
+        if self.sort_by_filename_ori:
+            filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
         nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
         # Check if requested number of images exceeds total available
