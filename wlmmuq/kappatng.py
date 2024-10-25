@@ -314,14 +314,13 @@ def create_cropped_dataset(
 
         # Load $\kappa$-TNG dataset and combine redshifts
         kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
-        imgsize0 = kappa.shape[-1]
-        assert kappa.shape[-2] == imgsize0
+        nimgs = kappa.shape[0]
 
         # Update the HDF5 file
         with h5py.File(hdf5_filepath, 'r+') as f:
-            new_size = f['kappa'].shape[0] + (end_idx - beg_idx)
+            new_size = f['kappa'].shape[0] + nimgs
             f['kappa'].resize((new_size, imgsize, imgsize))
-            f['kappa'][-(end_idx - beg_idx):] = kappa
+            f['kappa'][-nimgs:] = kappa
 
 
 def create_augmented_dataset(
