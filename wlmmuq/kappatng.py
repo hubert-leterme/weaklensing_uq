@@ -275,6 +275,53 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
     return out
 
 
+def create_cropped_dataset(
+        hdf5_filepath, idx_lp, ninpimgs, weights_redshift, imgsize, batch_size=None,
+        **kwargs
+):
+    """
+    Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
+    """
+    # Create HDF5 file structure
+    with h5py.File(hdf5_filepath, 'w') as f:
+        f.create_dataset(
+            "kappa", shape=(0, imgsize, imgsize), maxshape=(None, imgsize, imgsize),
+            dtype='float32'
+        ) # Convergence maps
+        # f.create_dataset(
+        #     "filename_ori", shape=(0,), maxshape=(None,),
+        #     dtype=np.dtype('S17')
+        # ) # Original data realizations (list of filenames)
+        # f.create_dataset(
+        #     "top_left_coord", shape=(0, 2), maxshape=(None, 2),
+        #     dtype='int'
+        # ) # Top-left coordinates
+
+    openingangle = get_openingangle(imgsize)
+    ktng = KappaTNG(
+        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle, **kwargs
+    )
+
+    if batch_size is None:
+        batch_size = ninpimgs
+
+    end_idx = 0
+    while end_idx < ninpimgs:
+        beg_idx = end_idx
+        end_idx = min(beg_idx + batch_size, ninpimgs)
+
+        # Load $\kappa$-TNG dataset and combine redshifts
+        kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
+        imgsize0 = kappa.shape[-1]
+        assert kappa.shape[-2] == imgsize0
+
+        # Update the HDF5 file
+        with h5py.File(hdf5_filepath, 'r+') as f:
+            new_size = f['kappa'].shape[0] + (end_idx - beg_idx)
+            f['kappa'].resize((new_size, imgsize, imgsize))
+            f['kappa'][-(end_idx - beg_idx):] = kappa
+
+
 def create_augmented_dataset(
         hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize, batch_size=50,
         angle_batch_size=36, angle_step=5, niter_per_angle=1, verbose=False
