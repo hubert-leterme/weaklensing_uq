@@ -90,10 +90,6 @@ def get_data_from_cosmos(cat_cosmos, openingangle):
     shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
     shapedisp = (shapedisp1 + shapedisp2) / 2
 
-    out.update(
-        ra_cosmos_median=ra_cosmos_median, dec_cosmos_median=dec_cosmos_median,
-        extent=extent, shapedisp=shapedisp
-    )
     out = {
         'ra_cosmos_median': ra_cosmos_median,
         'dec_cosmos_median': dec_cosmos_median,
