@@ -557,7 +557,8 @@ class HDF5BatchLoader:
 
         self.idx = None  # Will hold the shuffled indices
         self.file = None  # HDF5 file object
-        self.dataset = None
+        self.ds_kappa_true = None
+        self.ds_kappa_inp = None
         self.current_idx = 0  # To track the batch number
         self.sheardata = None # For Wiener filtering
 
@@ -567,14 +568,18 @@ class HDF5BatchLoader:
 
     def _open_and_get_dataset(self):
         self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
-        self.dataset = self.file['kappa']
-
+        self.ds_kappa_true = self.file['kappa']
+        if self.input_method is not None:
+            try:
+                self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
+            except KeyError:
+                pass
 
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
         self._open_and_get_dataset()
         filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
-        nimgs_tot, nx, ny = self.dataset.shape
+        nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
         # Check if requested number of images exceeds total available
         if self.beg_idx + self.nimgs > nimgs_tot:
@@ -615,7 +620,7 @@ class HDF5BatchLoader:
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
-        if self.input_method == 'wiener':
+        if self.input_method == 'wiener' and self.ds_kappa_inp is None:
             # Register data into a `csmm.shear_data` object
             self.sheardata = csmm.shear_data()
             self.sheardata.mask = self.mask.astype(int)
@@ -644,13 +649,17 @@ class HDF5BatchLoader:
         # TODO: use `with self.open():`
         if self.close_after_batch:
             self._open_and_get_dataset()
-        kappa_true = self.dataset[sorted_batch_idx]
+        kappa_true = self.ds_kappa_true[sorted_batch_idx]
+        if self.ds_kappa_inp is not None:
+            kappa_inp = self.ds_kappa_inp[sorted_batch_idx]
         if self.close_after_batch:
             self.close()
 
         # Re-order the batch
         reversed_sort_idx = np.argsort(sort_idx)
         kappa_true = kappa_true[reversed_sort_idx]
+        if self.ds_kappa_inp is not None:
+            kappa_inp = kappa_inp[reversed_sort_idx]
 
         # Crop the batch if output_shape is specified
         if self.output_shape is not None:
@@ -659,6 +668,12 @@ class HDF5BatchLoader:
                 self._beg_idx_x, self._end_idx_x,
                 self._beg_idx_y, self._end_idx_y
             )
+            if self.ds_kappa_inp is not None:
+                kappa_inp = crop_arr(
+                    kappa_inp,
+                    self._beg_idx_x, self._end_idx_x,
+                    self._beg_idx_y, self._end_idx_y
+                )
         
         gamma1, gamma2 = get_shear_from_convergence(kappa_true)
 
@@ -673,34 +688,35 @@ class HDF5BatchLoader:
 
         # Generate noisy shear maps
         if self.input_method is not None:
-            gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
-                gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
-            )
-            out_dict.update({
-                "gamma1_noisy": gamma1_noisy,
-                "gamma2_noisy": gamma2_noisy
-            })
+            if self.ds_kappa_inp is None:
+                gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
+                    gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+                )
+                out_dict.update({
+                    "gamma1_noisy": gamma1_noisy,
+                    "gamma2_noisy": gamma2_noisy
+                })
 
-            # Compute KS solution if required
-            if self.input_method == 'ks':
-                if self.verbose:
-                    print("\tCompute Kaiser-Squires solution")
-                kappa_inp = ksfilter(
-                    gamma1_noisy, gamma2_noisy, get_bounds=False,
-                    std_gaussianfilter=self.std_gaussianfilter
-                )
-            # Compute Wiener solution if required
-            elif self.input_method == 'wiener':
-                if self.verbose:
-                    print("\tCompute Wiener solution")
-                self.sheardata.g1 = gamma1_noisy
-                self.sheardata.g2 = gamma2_noisy
-                kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                    self.sheardata, self.powerspectrum_1d, niter=self.niter,
-                    **self.kwargs_wiener
-                )
-            else:
-                raise ValueError
+                # Compute KS solution if required
+                if self.input_method == 'ks':
+                    if self.verbose:
+                        print("\tCompute Kaiser-Squires solution")
+                    kappa_inp = ksfilter(
+                        gamma1_noisy, gamma2_noisy, get_bounds=False,
+                        std_gaussianfilter=self.std_gaussianfilter
+                    )
+                # Compute Wiener solution if required
+                elif self.input_method == 'wiener':
+                    if self.verbose:
+                        print("\tCompute Wiener solution")
+                    self.sheardata.g1 = gamma1_noisy
+                    self.sheardata.g2 = gamma2_noisy
+                    kappa_inp, _ = self.massmap.prox_wiener_filtering(
+                        self.sheardata, self.powerspectrum_1d, niter=self.niter,
+                        **self.kwargs_wiener
+                    )
+                else:
+                    raise ValueError
 
             out_dict.update({
                 "kappa_inp": kappa_inp + self.offset
