@@ -1,4 +1,3 @@
-import os
 import pickle
 import argparse
 import random
@@ -65,7 +64,7 @@ def main(
         path_to_test_set, nimgs=nimgs_test, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_test, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
-        offset=OFFSET, newaxis=True,
+        offset=OFFSET, newaxis=True, sort_by_filename_ori=False,
         input_method=input_wlmethod, **kwargs
     )
 
@@ -125,7 +124,7 @@ if __name__ == "__main__":
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-wlmethod is set to "
             "'wiener', then the power spectrum will be inferred from the "
-            f"dataset. Default = None"
+            "dataset. Default = None"
         )
     )
     
