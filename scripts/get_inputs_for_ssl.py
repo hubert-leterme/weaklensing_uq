@@ -9,7 +9,7 @@ import wlmmuq.utils as wlutils
 
 INPUT_WLMETHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
-NIMGS = 70816
+NIMGS = 72000
 IMGSIZE = 306
 BATCH_SIZE = 32
 NIMGS_PS = 256
