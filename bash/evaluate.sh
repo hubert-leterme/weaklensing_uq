@@ -1,6 +1,7 @@
 #!/bin/bash
 
 nimgs_test=225 # Evaluate on the same dataset as KS, Wiener and MCALens
+batch_size=45
 
 # Set paths
 path_to_test_set=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped.hdf5
@@ -21,5 +22,5 @@ python scripts/evaluate_deepmass.py $path_to_test_set $path_to_model $path_to_ou
   --input-wlmethod $2 \
   -ps $path_to_powerspectrum \
   --nimgs-test $nimgs_test \
-  -b $nimgs_test \
+  -b $batch_size \
   --seed 42 -v
