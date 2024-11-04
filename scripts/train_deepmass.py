@@ -155,6 +155,8 @@ def main(
             epochs_drop = nepochs // 4
             if epoch % epochs_drop == 0 and epoch > 0:
                 return lr * drop_rate
+            else:
+                return lr
 
         lrscheduler_callback = keras.callbacks.LearningRateScheduler(
             schedule, verbose=verbose
