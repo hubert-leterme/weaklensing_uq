@@ -44,8 +44,8 @@ def main(
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
-        lr_scheduler=True, checkpoint_dir=None, save_freq=None, backup_dir=None,
-        path_to_csv_log=None, path_to_tensorboard_log=None,
+        lr_scheduler=True, offset=OFFSET, checkpoint_dir=None, save_freq=None,
+        backup_dir=None, path_to_csv_log=None, path_to_tensorboard_log=None,
         seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
@@ -107,14 +107,14 @@ def main(
     train_gen = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        list_of_outputs=['kappa_inp', 'kappa_true'], offset=OFFSET, newaxis=True,
+        list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset, newaxis=True,
         input_method=input_wlmethod, **kwargs
     )
     val_gen = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_val, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
-        offset=OFFSET, newaxis=True,
+        offset=offset, newaxis=True,
         input_method=input_wlmethod, **kwargs
     )
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-wlmethod is set to "
             "'wiener', then the power spectrum will be inferred from the "
-            f"dataset. Default = None"
+            "dataset. Default = None"
         )
     )
     parser.add_argument(
@@ -262,7 +262,14 @@ if __name__ == "__main__":
         "--lr-scheduler", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            f"Drop the learning rate by a factor 10 three times during training"
+            "Drop the learning rate by a factor 10 three times during training"
+        )
+    )
+    parser.add_argument(
+        "--offset", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            f"Default convergence value for a perfectly uniform universe. Default = {OFFSET:.2f}"
         )
     )
     parser.add_argument(
