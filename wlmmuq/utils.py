@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
@@ -512,7 +513,7 @@ class HDF5BatchLoader:
             Default is True.
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1),
-            for training purpose.
+            for training purpose. Default is False.
         input_method: str, optional
             Input mass mapping method: None, 'ks' or 'wiener'. Default is None.
         std_gaussianfilter: float, optional
@@ -579,7 +580,13 @@ class HDF5BatchLoader:
         """Load the HDF5 file and initialize the dataset."""
         self._open_and_get_dataset()
         if self.sort_by_filename_ori:
-            filename_ori = self.file['filename_ori']  # Load the `filename_ori` dataset
+            try:
+                filename_ori = self.file['filename_ori']
+            except KeyError:
+                warnings.warn(
+                    "The 'filename_ori' dataset is missing; input images will not be sorted."
+                )
+                self.sort_by_filename_ori = False
         nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
         # Check if requested number of images exceeds total available
@@ -675,7 +682,7 @@ class HDF5BatchLoader:
                     self._beg_idx_x, self._end_idx_x,
                     self._beg_idx_y, self._end_idx_y
                 )
-        
+
         gamma1, gamma2 = get_shear_from_convergence(kappa_true)
 
         out_dict = {

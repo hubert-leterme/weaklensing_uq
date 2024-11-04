@@ -4,7 +4,7 @@
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
 path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002.npy
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
-save_freq=8
+save_freq=1
 backup_dir=/ceph/chercheurs/leterme231/backups
 
 # Check if correct number of arguments are provided

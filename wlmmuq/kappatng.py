@@ -16,7 +16,9 @@ LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 
 WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 WIDTH = 360 # size of the target convergence maps (nb pixels)
+N_SAMPLES_PER_SIDE = 3
 SIZE_ORI = 5. # opening angle of the simulated convergence maps (deg)
+
 OPENINGANGLE = SIZE_ORI * WIDTH / WIDTH_ORI # opening angle of the target convergence maps (deg)
 RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 
@@ -25,7 +27,7 @@ vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 class BaseKappaTNG:
 
     def __init__(
-            self, crop_maps=True, openingangle=OPENINGANGLE, n_samples_per_side=3,
+            self, crop_maps=True, openingangle=OPENINGANGLE, n_samples_per_side=N_SAMPLES_PER_SIDE,
             shuffle=False, ktng_dir=KTNG_DIR, verbose=False, **kwargs
     ):
         self.crop_maps = crop_maps
