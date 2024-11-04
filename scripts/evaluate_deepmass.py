@@ -127,7 +127,6 @@ if __name__ == "__main__":
             "dataset. Default = None"
         )
     )
-    
     parser.add_argument(
         "--imgsize", type=int,
         default=argparse.SUPPRESS,

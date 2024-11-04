@@ -675,7 +675,7 @@ class HDF5BatchLoader:
                     self._beg_idx_x, self._end_idx_x,
                     self._beg_idx_y, self._end_idx_y
                 )
-        
+
         gamma1, gamma2 = get_shear_from_convergence(kappa_true)
 
         out_dict = {
