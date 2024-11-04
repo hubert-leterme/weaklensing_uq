@@ -4,7 +4,7 @@ nimgs_test=225 # Evaluate on the same dataset as KS, Wiener and MCALens
 
 # Set paths
 path_to_test_set=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped.hdf5
-path_to_model=/ceph/chercheurs/leterme231/checkpoints/checkpoints_$2/20.keras
+path_to_model=/ceph/chercheurs/leterme231/checkpoints/checkpoint_$2/20.keras
 path_to_output=/ceph/chercheurs/leterme231/eval/$2.pickle
 path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002.npy
 
