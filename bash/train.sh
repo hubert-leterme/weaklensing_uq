@@ -2,6 +2,7 @@
 
 # Set paths
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
+path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002.npy
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=8
 backup_dir=/ceph/chercheurs/leterme231/backups
@@ -15,10 +16,11 @@ fi
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python train_deepmass.py $path_to_augmented_dataset \
+python scripts/train_deepmass.py $path_to_augmented_dataset \
   --input-wlmethod $2 \
+  -ps $path_to_powerspectrum --lr-scheduler \
   --checkpoint-dir $checkpoint_dir/checkpoint_$2 \
   --save-freq $save_freq \
   --backup-dir $backup_dir/backup_$2 \
-  -log log_$2.csv --seed 42 -v
+  --path-to-csv-log log_$2.csv --seed 42 -v
   #--nimgs-train 512 --nimgs-val 128 --nepochs 2
