@@ -472,7 +472,7 @@ def get_1d_powerspectrum(kappa):
 class HDF5BatchLoader:
 
     def __init__(
-        self, hdf5_filepath, nimgs, batch_size, std_noise=None, mask=None,
+        self, hdf5_filepath, nimgs, batch_size=None, std_noise=None, mask=None,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
         input_method=None, std_gaussianfilter=None,
@@ -491,7 +491,7 @@ class HDF5BatchLoader:
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
         batch_size : int
-            Number of images per batch.
+            Number of images per batch. Default is None.
         std_noise : numpy.ndarray, optional
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
@@ -643,6 +643,8 @@ class HDF5BatchLoader:
             self, beg_idx=0, get_all_images=False, return_end_idx=False
     ):
         if not get_all_images:
+            if self.batch_size is None:
+                raise ValueError("Attribute 'batch_size' must be specified.")
             end_idx = min(beg_idx + self.batch_size, self.nimgs)
         else:
             end_idx = self.nimgs
