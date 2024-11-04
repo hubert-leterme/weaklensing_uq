@@ -252,7 +252,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "-lr", "--learning-rate", type=int,
+        "-lr", "--learning-rate", type=float,
         default=argparse.SUPPRESS,
         help=(
             f"Learning rate. Default = {LEARNING_RATE}"

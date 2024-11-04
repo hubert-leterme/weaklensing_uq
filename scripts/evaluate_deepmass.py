@@ -62,7 +62,7 @@ def main(
         print("Initialize batch generators for training and validation")
     test_gen = wlutils.HDF5BatchLoader(
         path_to_test_set, nimgs=nimgs_test, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, beg_idx=nimgs_test, shuffle=False,
+        std_noise=std_noise, mask=mask, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
         offset=OFFSET, newaxis=True, sort_by_filename_ori=False,
         input_method=input_wlmethod, **kwargs
