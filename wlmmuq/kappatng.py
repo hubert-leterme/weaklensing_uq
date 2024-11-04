@@ -260,6 +260,8 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
     data_cosmos = wlcosmos.get_data_from_cosmos(
         cat_cosmos, openingangle
     )
+    ra_cosmos_median = data_cosmos['ra_cosmos_median']
+    dec_cosmos_median = data_cosmos['dec_cosmos_median']
     extent = data_cosmos['extent']
     shapedisp = data_cosmos["shapedisp"]
     ngal = wlutils.ngal_per_pixel(
@@ -269,6 +271,9 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
     mask = ngal > 0
 
     out = {
+        'ra_cosmos_median': ra_cosmos_median,
+        'dec_cosmos_median': dec_cosmos_median,
+        'extent': extent,
         'openingangle': openingangle,
         'shapedisp': shapedisp,
         'ngal': ngal,
