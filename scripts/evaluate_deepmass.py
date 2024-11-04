@@ -78,7 +78,8 @@ def main(
 
     # Fit model
     out_dict = cnn_model.evaluate(
-        test_set_prefetched, return_dict=True
+        test_set_prefetched, steps=nimgs_test // batch_size,
+        return_dict=True
     )
     test_gen.close()
 
