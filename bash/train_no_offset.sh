@@ -19,7 +19,7 @@ export CUDA_VISIBLE_DEVICES=$1
 python scripts/train_deepmass.py $path_to_augmented_dataset \
   --input-wlmethod $2 \
   -ps $path_to_powerspectrum \
-  -lr $3 --lr-scheduler \
+  -lr $3 --lr-scheduler --offset 0. \
   --checkpoint-dir $checkpoint_dir/checkpoint_$2 \
   --save-freq $save_freq \
   --backup-dir $backup_dir/backup_$2 \
