@@ -78,10 +78,15 @@ def main(
 
     if verbose:
         print("Initialize batch generator")
+
+    # *** CAUTION ***
+    # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
+    # False in order input convergence maps `kappa_inp` to be stored in the
+    # same order as the targets `kappa_true`.
     data_loader = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, shuffle=False, output_shape=imgsize,
-        list_of_outputs=['kappa_inp'],
+        std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
+        shuffle=False, output_shape=imgsize, list_of_outputs=['kappa_inp'],
         input_method=input_wlmethod, close_after_batch=True, **kwargs
     )
     data_gen = data_loader.to_tf_dataset(raise_stop_iteration=True)
