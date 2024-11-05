@@ -1,4 +1,5 @@
 import argparse
+import warnings
 import random
 import h5py
 import numpy as np
@@ -66,7 +67,7 @@ def main(
             # Compute the 1D power spectrum
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
             del kappa_ps
-        
+
         else:
             powerspectrum_1d = np.load(path_to_powerspectrum)
 
@@ -93,11 +94,10 @@ def main(
         except KeyError:
             pass
         else:
-            if verbose:
-                print(
-                    f"Found existing dataset for {idx_dataset}; "
-                    "it will be overwritten."
-                )
+            warnings.warn(
+                f"Found existing dataset for {idx_dataset}; "
+                "it will be overwritten."
+            )
         file.create_dataset(
             idx_dataset, shape=(nimgs, imgsize, imgsize),
             dtype='float32'
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-wlmethod is set to "
             "'wiener', then the power spectrum will be inferred from the "
-            f"dataset. Default = None"
+            "dataset. Default = None"
         )
     )
     parser.add_argument(
