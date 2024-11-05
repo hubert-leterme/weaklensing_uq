@@ -13,13 +13,14 @@ IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_PS = 256 # To compute the power spectrum
 BATCH_SIZE = 32
+OFFSET = 0.5 # As in DeepMass
 OUTPUT_DIR = '.'
 
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
-        nimgs_train=NIMGS_TRAIN, batch_size=BATCH_SIZE, output_dir=OUTPUT_DIR,
-        seed=None, verbose=False, **kwargs
+        nimgs_train=NIMGS_TRAIN, batch_size=BATCH_SIZE, offset=OFFSET,
+        output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -66,7 +67,7 @@ def main(
             # Compute the 1D power spectrum
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
             del kappa_ps
-        
+
         else:
             powerspectrum_1d = np.load(path_to_powerspectrum)
 
@@ -80,8 +81,8 @@ def main(
     train_gen = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        list_of_outputs=['kappa_inp', 'kappa_true'], newaxis=True,
-        input_method=input_wlmethod, **kwargs
+        list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset,
+        newaxis=True, input_method=input_wlmethod, **kwargs
     )
     if verbose:
         print("Get one batch")
@@ -122,7 +123,7 @@ if __name__ == "__main__":
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-wlmethod is set to "
             "'wiener', then the power spectrum will be inferred from the "
-            f"dataset. Default = None"
+            "dataset. Default = None"
         )
     )
     parser.add_argument(
@@ -150,7 +151,14 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--output-dir", type=str,
+        "--offset", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            f"Default convergence value for a perfectly uniform universe. Default = {OFFSET:.2f}"
+        )
+    )
+    parser.add_argument(
+        "-o", "--output-dir", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Directory in which to save the NumPy arrays. "
