@@ -86,8 +86,9 @@ def main(
     data_loader = wlutils.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
+        input_method=input_wlmethod, compute_inputs=True,
         shuffle=False, output_shape=imgsize, list_of_outputs=['kappa_inp'],
-        input_method=input_wlmethod, close_after_batch=True, **kwargs
+        close_after_batch=True, **kwargs
     )
     data_gen = data_loader.to_tf_dataset(raise_stop_iteration=True)
     data_gen = iter(data_gen)
