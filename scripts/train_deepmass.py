@@ -93,7 +93,7 @@ def main(
             # Compute the 1D power spectrum
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
             del kappa_ps
-        
+
         else:
             powerspectrum_1d = np.load(path_to_powerspectrum)
 
