@@ -173,8 +173,7 @@ if __name__ == "__main__":
         "-b", "--batch-size", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Batch size for training and validation. "
-            f"Default = {BATCH_SIZE}"
+            f"Batch size. Default = {BATCH_SIZE}"
         )
     )
     parser.add_argument(
