@@ -8,7 +8,7 @@ save_freq=1
 backup_dir=/ceph/chercheurs/leterme231/backups
 
 # Check if correct number of arguments are provided
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <GPU_ID> <WL_METHOD> <LEARNING_RATE>"
   echo "Example: $0 0 ks 1e-5"
   exit 1
@@ -20,8 +20,8 @@ python scripts/train_deepmass.py $path_to_augmented_dataset \
   --input-wlmethod $2 \
   -ps $path_to_powerspectrum \
   -lr $3 --lr-scheduler --offset 0. \
-  --checkpoint-dir $checkpoint_dir/checkpoint_$2 \
+  --checkpoint-dir $checkpoint_dir/checkpoint_no_offset_$2 \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/backup_$2 \
-  --path-to-csv-log log_$2.csv --seed 42 -v
+  --backup-dir $backup_dir/backup_no_offset_$2 \
+  --path-to-csv-log log_no_offset_$2.csv --seed 42 -v
   #--nimgs-train 512 --nimgs-val 128 --nepochs 2
