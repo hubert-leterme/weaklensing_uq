@@ -475,7 +475,7 @@ class HDF5BatchLoader:
         self, hdf5_filepath, nimgs, batch_size=None, std_noise=None, mask=None,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
-        input_method=None, std_gaussianfilter=None,
+        input_method=None, compute_inputs=False, std_gaussianfilter=None,
         powerspectrum_1d=None, niter=1,
         list_of_outputs=None, close_after_batch=False,
         verbose=False, **kwargs
@@ -516,6 +516,9 @@ class HDF5BatchLoader:
             for training purpose. Default is False.
         input_method: str, optional
             Input mass mapping method: None, 'ks' or 'wiener'. Default is None.
+        compute_inputs: bool, optional
+            If True, compute inputs (KS or Wiener solution) from the groud truth convergence maps,
+            even if the corresponding dataset already exists in the HDF5 file. Default is False.
         std_gaussianfilter: float, optional
             If `input_method` is set to 'ks', standard deviation of the smoothing filter.
             Default is None.
@@ -548,6 +551,7 @@ class HDF5BatchLoader:
         self.sort_by_filename_ori = sort_by_filename_ori
         self.newaxis = newaxis
         self.input_method = input_method
+        self.compute_inputs = compute_inputs
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
         self.niter = niter
@@ -570,11 +574,11 @@ class HDF5BatchLoader:
     def _open_and_get_dataset(self):
         self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
         self.ds_kappa_true = self.file['kappa']
-        if self.input_method is not None:
+        if (self.input_method is not None) and (not self.compute_inputs):
             try:
                 self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
             except KeyError:
-                pass
+                self.compute_inputs = True
 
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
@@ -628,7 +632,7 @@ class HDF5BatchLoader:
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
-        if self.input_method == 'wiener' and self.ds_kappa_inp is None:
+        if self.input_method == 'wiener' and self.compute_inputs:
             # Register data into a `csmm.shear_data` object
             self.sheardata = csmm.shear_data()
             self.sheardata.mask = self.mask.astype(int)
@@ -660,7 +664,7 @@ class HDF5BatchLoader:
         if self.close_after_batch:
             self._open_and_get_dataset()
         kappa_true = self.ds_kappa_true[sorted_batch_idx]
-        if self.ds_kappa_inp is not None:
+        if not self.compute_inputs:
             kappa_inp = self.ds_kappa_inp[sorted_batch_idx]
         if self.close_after_batch:
             self.close()
@@ -668,7 +672,7 @@ class HDF5BatchLoader:
         # Re-order the batch
         reversed_sort_idx = np.argsort(sort_idx)
         kappa_true = kappa_true[reversed_sort_idx]
-        if self.ds_kappa_inp is not None:
+        if not self.compute_inputs:
             kappa_inp = kappa_inp[reversed_sort_idx]
 
         # Crop the batch if output_shape is specified
@@ -678,7 +682,7 @@ class HDF5BatchLoader:
                 self._beg_idx_x, self._end_idx_x,
                 self._beg_idx_y, self._end_idx_y
             )
-            if self.ds_kappa_inp is not None:
+            if not self.compute_inputs:
                 kappa_inp = crop_arr(
                     kappa_inp,
                     self._beg_idx_x, self._end_idx_x,
@@ -698,7 +702,7 @@ class HDF5BatchLoader:
 
         # Generate noisy shear maps
         if self.input_method is not None:
-            if self.ds_kappa_inp is None:
+            if self.compute_inputs:
                 gamma1_noisy, gamma2_noisy, _ = get_masked_and_noisy_shear(
                     gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
                 )
