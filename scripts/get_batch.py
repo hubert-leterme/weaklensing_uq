@@ -19,8 +19,8 @@ OUTPUT_DIR = '.'
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
-        nimgs_train=NIMGS_TRAIN, batch_size=BATCH_SIZE, offset=OFFSET,
-        output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
+        nimgs=NIMGS_TRAIN, batch_size=BATCH_SIZE, keep_unsorted=None,
+        offset=OFFSET, output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -76,10 +76,14 @@ def main(
     else:
         raise ValueError
 
+    # Check whether the dataset should be sorted by their original filenames
+    if keep_unsorted is not None:
+        kwargs.update(sort_by_filename_ori=False)
+
     if verbose:
         print("Initialize batch generators for training and validation")
     train_gen = wlutils.HDF5BatchLoader(
-        path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
+        path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
         list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset,
         newaxis=True, input_method=input_wlmethod, **kwargs
@@ -135,10 +139,10 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--nimgs-train", type=int,
+        "--nimgs", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of images in the training set. "
+            "Number of images in the dataset. "
             f"Default = {NIMGS_TRAIN}"
         )
     )
@@ -148,6 +152,14 @@ if __name__ == "__main__":
         help=(
             "Batch size for training and validation. "
             f"Default = {BATCH_SIZE}"
+        )
+    )
+    parser.add_argument(
+        "--keep-unsorted", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Do not sort by filename in the original dataset. Useful to avoid IndexError "
+            "when the dataset is incomplete."
         )
     )
     parser.add_argument(
