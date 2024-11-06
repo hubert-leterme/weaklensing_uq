@@ -12,11 +12,6 @@ import wlmmuq.utils as wlutils
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 
-pycs_dir = wl.CONFIG_DATA['pycs_dir']
-if pycs_dir is not None:
-    pycs_dir = os.path.expanduser(pycs_dir)
-    sys.path.append(pycs_dir)
-
 import pycs.astro.wl.mass_mapping as csmm
 
 OPENINGANGLE = 1.5 # opening angle (deg)

@@ -16,6 +16,7 @@ from deepmass import cnn_keras as cnn
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
+import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -82,7 +83,7 @@ def main(
 
         if path_to_powerspectrum is None:
             # Load a set of convergence maps among the training set
-            train_gen_ps = wlutils.HDF5BatchLoader(
+            train_gen_ps = wlbl.HDF5BatchLoader(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
                 std_noise=std_noise, mask=mask, output_shape=imgsize,
                 list_of_outputs=['kappa_true']
@@ -104,13 +105,13 @@ def main(
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = wlutils.HDF5BatchLoader(
+    train_gen = wlbl.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
         list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset, newaxis=True,
         input_method=input_wlmethod, **kwargs
     )
-    val_gen = wlutils.HDF5BatchLoader(
+    val_gen = wlbl.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs_val, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
