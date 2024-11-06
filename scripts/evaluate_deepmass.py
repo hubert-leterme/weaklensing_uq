@@ -8,6 +8,7 @@ from tensorflow import data, keras
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
+import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -60,7 +61,7 @@ def main(
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    test_gen = wlutils.HDF5BatchLoader(
+    test_gen = wlbl.HDF5BatchLoader(
         path_to_test_set, nimgs=nimgs_test, batch_size=batch_size,
         std_noise=std_noise, mask=mask, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],

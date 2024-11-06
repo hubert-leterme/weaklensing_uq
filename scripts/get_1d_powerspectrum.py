@@ -2,6 +2,7 @@ import argparse
 import random
 import numpy as np
 import wlmmuq.utils as wlutils
+import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
 IMGSIZE = 304
@@ -17,7 +18,7 @@ def main(
         random.seed(seed)
         np.random.seed(seed)
 
-    data_loader = wlutils.HDF5BatchLoader(
+    data_loader = wlbl.HDF5BatchLoader(
         path_to_dataset, nimgs=nimgs, batch_size=batch_size,
         output_shape=imgsize, list_of_outputs=['kappa_true'],
         shuffle=True

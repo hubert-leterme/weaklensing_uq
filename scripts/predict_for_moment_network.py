@@ -8,6 +8,7 @@ from tensorflow import keras, data
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
+import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -60,7 +61,7 @@ def main(
 
         if path_to_powerspectrum is None:
             # Load a set of convergence maps among the training set
-            train_gen_ps = wlutils.HDF5BatchLoader(
+            train_gen_ps = wlbl.HDF5BatchLoader(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
                 std_noise=std_noise, mask=mask, output_shape=imgsize,
                 list_of_outputs=['kappa_true']
@@ -87,7 +88,7 @@ def main(
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
     # False in order input convergence maps `kappa_inp` to be stored in the
     # same order as the targets `kappa_true`.
-    data_loader = wlutils.HDF5BatchLoader(
+    data_loader = wlbl.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, sort_by_filename_ori=False, shuffle=False,
         input_method=input_wlmethod, output_shape=imgsize, list_of_outputs=['kappa_inp'],
@@ -125,6 +126,7 @@ def main(
             kappa_deepmass = cnn_model.predict(
                 ds, steps=(end_idx - beg_idx) // batch_size
             )
+            kappa_deepmass -= offset # Remove offset before saving
             file[idx_dataset][beg_idx:end_idx] = kappa_deepmass[..., 0]
 
 
