@@ -126,6 +126,7 @@ def main(
             kappa_deepmass = cnn_model.predict(
                 ds, steps=(end_idx - beg_idx) // batch_size
             )
+            kappa_deepmass -= offset # Remove offset before saving
             file[idx_dataset][beg_idx:end_idx] = kappa_deepmass
 
 
