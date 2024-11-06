@@ -19,6 +19,7 @@ import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
+MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
@@ -42,6 +43,7 @@ keras.optimizers.Adam.__init__ = new_init
 
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
+        moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
@@ -105,17 +107,19 @@ def main(
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = wlbl.HDF5BatchLoader(
-        path_to_augmented_dataset, nimgs=nimgs_train, batch_size=batch_size,
+    train_gen = wlbl.HDF5BatchLoaderMomentNetwork(
+        order=moment_order, hdf5_filepath=path_to_augmented_dataset,
+        pred_filepath=path_to_pred_dataset,
+        nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset, newaxis=True,
-        input_method=input_wlmethod, **kwargs
+        offset=offset, newaxis=True, input_method=input_wlmethod, **kwargs
     )
-    val_gen = wlbl.HDF5BatchLoader(
-        path_to_augmented_dataset, nimgs=nimgs_val, batch_size=batch_size,
+    val_gen = wlbl.HDF5BatchLoaderMomentNetwork(
+        order=moment_order, hdf5_filepath=path_to_augmented_dataset,
+        pred_filepath=path_to_pred_dataset,
+        nimgs=nimgs_val, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, list_of_outputs=['kappa_inp', 'kappa_true'],
-        offset=offset, newaxis=True,
+        output_shape=imgsize, offset=offset, newaxis=True,
         input_method=input_wlmethod, **kwargs
     )
 
@@ -126,7 +130,14 @@ def main(
     # Define the checkpoint callback
     callbacks = []
     if checkpoint_dir is not None:
-        filepath = os.path.join(checkpoint_dir, "{epoch:02d}.keras")
+        if moment_order == 1:
+            output_type = "pe" # Point estimate
+        else:
+            output_type = "var" # Variance
+        filepath = os.path.join(
+            checkpoint_dir,
+            f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
+        )
         checkpoint_callback = keras.callbacks.ModelCheckpoint(
             filepath=filepath,
             save_weights_only=False,
@@ -192,6 +203,23 @@ if __name__ == "__main__":
         help=(
             "Weak lensing method used as input ('wiener' or 'ks'). "
             f"Default = '{INPUT_WLMETHOD}'"
+        )
+    )
+    parser.add_argument(
+        "--moment-order", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Order of the moment network. "
+            f"Default = {MOMENT_ORDER}"
+        )
+    )
+    parser.add_argument(
+        "--path-to-pred-dataset", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the prediction dataset (HDF5 file), computed with "
+            "a previously-trained network. This is useful to train a moment "
+            "network of order 2. Default = None"
         )
     )
     parser.add_argument(
