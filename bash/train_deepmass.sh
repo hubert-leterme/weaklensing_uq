@@ -23,7 +23,7 @@ python scripts/train_deepmass.py $path_to_augmented_dataset \
   --input-wlmethod $2 \
   -ps $path_to_powerspectrum \
   -lr $3 --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${current_date} \
+  --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${current_date}/pe \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/backup_${2}_${current_date} \
-  --path-to-csv-log $stats_dir/log_${2}_${current_date}.csv --seed 42 -v
+  --backup-dir $backup_dir/backup_${2}_${current_date}/pe \
+  --path-to-csv-log $stats_dir/log_${2}_${current_date}_pe.csv --seed 42 -v
