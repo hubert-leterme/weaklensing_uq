@@ -108,6 +108,8 @@ class HDF5BatchLoader:
         self.current_idx = 0  # To track the batch number
         self.sheardata = None # For Wiener filtering
 
+        self.noutputs = len(self.list_of_outputs)
+
         self._initialize_dataset()
         self._initialize_wiener()
 
@@ -302,16 +304,9 @@ class HDF5BatchLoader:
                 out_dict[key] = out_dict[key][..., np.newaxis]
 
         return out_dict, end_idx
+    
 
-
-    def load_batch(
-            self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
-    ):
-        out_dict, end_idx = self._load_batch_dict(
-            beg_idx=beg_idx, max_idx=max_idx, get_all_images=get_all_images
-        )
-
-        # Prepare output
+    def _prepare_output(self, out_dict):
         if self.list_of_outputs is not None:
             out = tuple(
                 [out_dict[val] for val in self.list_of_outputs]
@@ -321,6 +316,16 @@ class HDF5BatchLoader:
         else:
             out = out_dict
 
+        return out
+
+
+    def load_batch(
+            self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
+    ):
+        out_dict, end_idx = self._load_batch_dict(
+            beg_idx=beg_idx, max_idx=max_idx, get_all_images=get_all_images
+        )
+        out = self._prepare_output(out_dict)
         if return_end_idx:
             out = (out, end_idx)
 
@@ -360,9 +365,8 @@ class HDF5BatchLoader:
             tensor_shape += (1,)
 
         output_signature = tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)
-        noutputs = len(self.list_of_outputs)
-        if noutputs > 1:
-            output_signature = noutputs * (output_signature,)
+        if self.noutputs > 1:
+            output_signature = self.noutputs * (output_signature,)
 
         out = tf.data.Dataset.from_generator(
             generator, output_signature=output_signature
@@ -381,3 +385,26 @@ class HDF5BatchLoader:
     def __del__(self):
         """Destructor to ensure the HDF5 file is closed when the object is deleted."""
         self.close()
+
+
+class HDF5BatchLoaderMomentNetwork(HDF5BatchLoader):
+
+    def __init__(self, order, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.order = order # Must be equal to 1 or 2
+        self.list_of_outputs = None
+        self.noutputs = 2 # Network's input and target
+
+    def _prepare_output(self, out_dict):
+        kappa_inp = out_dict["kappa_inp"]
+        kappa_true = out_dict["kappa_true"]
+
+        if self.order == 1:
+            target = kappa_true
+        elif self.order == 2:
+            kappa_pred = out_dict["kappa_pred"] # Estimates the posterior mean
+            target = (kappa_true - kappa_pred)**2
+        else:
+            raise ValueError("Wrong value for argument `order`: must be equal to 1 or 2.")
+
+        return kappa_inp, target
