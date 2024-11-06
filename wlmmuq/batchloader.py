@@ -9,7 +9,8 @@ from . import utils as wlutils
 class HDF5BatchLoader:
 
     def __init__(
-        self, hdf5_filepath, nimgs, batch_size=None, std_noise=None, mask=None,
+        self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
+        std_noise=None, mask=None,
         offset=0., beg_idx=0, shuffle=True, output_shape=None,
         sort_by_filename_ori=True, newaxis=False,
         input_method=None, compute_inputs=False, std_gaussianfilter=None,
@@ -77,6 +78,7 @@ class HDF5BatchLoader:
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
         self.hdf5_filepath = hdf5_filepath
+        self.pred_filepath = pred_filepath
         self.nimgs = nimgs
         self.batch_size = batch_size
         self.std_noise = std_noise
@@ -99,8 +101,10 @@ class HDF5BatchLoader:
 
         self.idx = None  # Will hold the shuffled indices
         self.file = None  # HDF5 file object
+        self.file_pred = None # HDF5 file object
         self.ds_kappa_true = None
         self.ds_kappa_inp = None
+        self.ds_kappa_pred = None
         self.current_idx = 0  # To track the batch number
         self.sheardata = None # For Wiener filtering
 
@@ -120,6 +124,12 @@ class HDF5BatchLoader:
                     f"The {self.input_method} solution will be computed for each new batch."
                 )
                 self.compute_inputs = True
+
+        # Load dataset of predictions
+        if self.pred_filepath is not None:
+            self.file_pred = h5py.File(self.pred_filepath, 'r') # Keep file open
+            self.ds_kappa_pred = self.file_pred['kappa_deepmass']
+
 
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
@@ -184,9 +194,7 @@ class HDF5BatchLoader:
             self.massmap.init_massmap(self.nx, self.ny)
 
 
-    def load_batch(
-            self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
-    ):
+    def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
         if max_idx is None:
             max_idx = self.nimgs
         if not get_all_images:
@@ -202,13 +210,15 @@ class HDF5BatchLoader:
         sort_idx = np.argsort(batch_idx)
         sorted_batch_idx = batch_idx[sort_idx]
 
-        # Load batch with sorted indices
+        # Load batches with sorted indices
         # TODO: use `with self.open():`
         if self.close_after_batch:
             self._open_and_get_dataset()
         kappa_true = self.ds_kappa_true[sorted_batch_idx]
         if not self.compute_inputs:
             kappa_inp = self.ds_kappa_inp[sorted_batch_idx]
+        if self.pred_filepath is not None:
+            kappa_pred = self.ds_kappa_pred[sorted_batch_idx]
         if self.close_after_batch:
             self.close()
 
@@ -217,8 +227,12 @@ class HDF5BatchLoader:
         kappa_true = kappa_true[reversed_sort_idx]
         if not self.compute_inputs:
             kappa_inp = kappa_inp[reversed_sort_idx]
+        if self.pred_filepath is not None:
+            kappa_pred = kappa_pred[reversed_sort_idx]
 
-        # Crop the batch if output_shape is specified
+        # Crop the batches if output_shape is specified
+        # No cropping for kappa_pred as it was already computed
+        # from cropped inputs
         if self.output_shape is not None:
             kappa_true = wlutils.crop_arr(
                 kappa_true,
@@ -232,13 +246,14 @@ class HDF5BatchLoader:
                     self._beg_idx_y, self._end_idx_y
                 )
 
-        gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
-
         out_dict = {
-            "kappa_true": kappa_true + self.offset,
-            "gamma1": gamma1,
-            "gamma2": gamma2
+            "kappa_true": kappa_true + self.offset
         }
+        if self.pred_filepath is not None:
+            assert kappa_pred.shape == kappa_true.shape
+            out_dict.update({
+                "kappa_pred": kappa_pred + self.offset
+            })
 
         if self.verbose:
             print(f"Images {beg_idx} to {end_idx} loaded.")
@@ -246,10 +261,13 @@ class HDF5BatchLoader:
         # Generate noisy shear maps
         if self.input_method is not None:
             if self.compute_inputs:
+                gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
                 gamma1_noisy, gamma2_noisy, _ = wlutils.get_masked_and_noisy_shear(
                     gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
                 )
                 out_dict.update({
+                    "gamma1": gamma1,
+                    "gamma2": gamma2,
                     "gamma1_noisy": gamma1_noisy,
                     "gamma2_noisy": gamma2_noisy
                 })
@@ -282,6 +300,16 @@ class HDF5BatchLoader:
         if self.newaxis:
             for key in out_dict:
                 out_dict[key] = out_dict[key][..., np.newaxis]
+
+        return out_dict, end_idx
+
+
+    def load_batch(
+            self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
+    ):
+        out_dict, end_idx = self._load_batch_dict(
+            beg_idx=beg_idx, max_idx=max_idx, get_all_images=get_all_images
+        )
 
         # Prepare output
         if self.list_of_outputs is not None:
@@ -346,6 +374,8 @@ class HDF5BatchLoader:
         """Close the HDF5 file when done."""
         if self.file is not None:
             self.file.close()
+        if self.file_pred is not None:
+            self.file_pred.close()
 
 
     def __del__(self):
