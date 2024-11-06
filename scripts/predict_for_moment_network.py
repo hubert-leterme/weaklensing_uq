@@ -99,7 +99,7 @@ def main(
     if verbose:
         cnn_model.summary()
 
-    with h5py.File(path_to_output_dataset, 'r+') as file:
+    with h5py.File(path_to_output_dataset, 'w') as file:
         idx_dataset = "kappa_deepmass"
         try:
             del file[idx_dataset]
@@ -125,7 +125,7 @@ def main(
             kappa_deepmass = cnn_model.predict(
                 ds, steps=(end_idx - beg_idx) // batch_size
             )
-            file[idx_dataset][beg_idx:end_idx] = kappa_deepmass
+            file[idx_dataset][beg_idx:end_idx] = kappa_deepmass[..., 0]
 
 
 if __name__ == "__main__":
