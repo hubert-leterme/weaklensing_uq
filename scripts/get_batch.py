@@ -57,13 +57,13 @@ def main(
 
         if path_to_powerspectrum is None:
             # Load a set of convergence maps among the training set
-            train_gen_ps = wlbl.HDF5BatchLoader(
+            datagen_ps = wlbl.HDF5BatchLoader(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
                 std_noise=std_noise, mask=mask, output_shape=imgsize,
                 list_of_outputs=['kappa_true']
             )
-            kappa_ps = train_gen_ps.load_batch()
-            train_gen_ps.close()
+            kappa_ps = datagen_ps.load_batch()
+            datagen_ps.close()
 
             # Compute the 1D power spectrum
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
