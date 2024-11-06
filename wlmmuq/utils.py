@@ -648,14 +648,16 @@ class HDF5BatchLoader:
 
 
     def load_batch(
-            self, beg_idx=0, get_all_images=False, return_end_idx=False
+            self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
     ):
+        if max_idx is None:
+            max_idx = self.nimgs
         if not get_all_images:
             if self.batch_size is None:
                 raise ValueError("Attribute 'batch_size' must be specified.")
-            end_idx = min(beg_idx + self.batch_size, self.nimgs)
+            end_idx = min(beg_idx + self.batch_size, max_idx)
         else:
-            end_idx = self.nimgs
+            end_idx = max_idx
 
         batch_idx = self.idx[beg_idx:end_idx]
 
@@ -760,20 +762,24 @@ class HDF5BatchLoader:
         return out
 
 
-    def to_tf_dataset(self, raise_stop_iteration=False, **kwargs):
+    def to_tf_dataset(
+            self, min_idx=0, max_idx=None, raise_stop_iteration=False, **kwargs
+    ):
+        if max_idx is None:
+            max_idx = self.nimgs
 
         def generator():
-            end_idx = 0
-            while end_idx < self.nimgs:
+            end_idx = min_idx
+            while end_idx < max_idx:
                 # Load the next batch of data
                 beg_idx = end_idx
                 out, end_idx = self.load_batch(
-                    beg_idx, return_end_idx=True, **kwargs
+                    beg_idx, max_idx=max_idx, return_end_idx=True, **kwargs
                 )
 
                 # Handle generator looping (to avoid StopIteration error)
                 # Reset generator and reshuffle indices if needed
-                if end_idx == self.nimgs and not raise_stop_iteration:
+                if end_idx == max_idx and not raise_stop_iteration:
                     end_idx = 0
                     if self.shuffle:
                         np.random.shuffle(self.idx)
