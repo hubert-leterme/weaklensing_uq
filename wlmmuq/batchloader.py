@@ -108,7 +108,10 @@ class HDF5BatchLoader:
         self.current_idx = 0  # To track the batch number
         self.sheardata = None # For Wiener filtering
 
-        self.noutputs = len(self.list_of_outputs)
+        if self.list_of_outputs is not None:
+            self.noutputs = len(self.list_of_outputs)
+        else:
+            self.noutputs = None
 
         self._initialize_dataset()
         self._initialize_wiener()
