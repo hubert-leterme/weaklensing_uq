@@ -578,6 +578,10 @@ class HDF5BatchLoader:
             try:
                 self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
             except KeyError:
+                warnings.warn(
+                    f"Dataset 'kappa_{self.input_method}' absent from the HDF5 file. "
+                    f"The {self.input_method} solution will be computed for each new batch."
+                )
                 self.compute_inputs = True
 
     def _initialize_dataset(self):
