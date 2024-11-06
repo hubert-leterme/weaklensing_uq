@@ -9,6 +9,7 @@ import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
 INPUT_WLMETHOD = "wiener"
+MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
@@ -19,6 +20,7 @@ OUTPUT_DIR = '.'
 
 def main(
         path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
+        moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
         nimgs=NIMGS_TRAIN, batch_size=BATCH_SIZE, keep_unsorted=None,
         offset=OFFSET, output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
@@ -83,20 +85,21 @@ def main(
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = wlbl.HDF5BatchLoader(
-        path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
+    train_gen = wlbl.HDF5BatchLoaderMomentNetwork(
+        order=moment_order, hdf5_filepath=path_to_augmented_dataset,
+        pred_filepath=path_to_pred_dataset,
+        nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        list_of_outputs=['kappa_inp', 'kappa_true'], offset=offset,
-        newaxis=True, input_method=input_wlmethod, **kwargs
+        offset=offset, newaxis=True, input_method=input_wlmethod, **kwargs
     )
     if verbose:
         print("Get one batch")
-    kappa_inp, kappa_true = train_gen.load_batch()
+    kappa_inp, target = train_gen.load_batch()
     train_gen.close()
     if verbose:
         print("Save arrays")
     np.save(os.path.join(output_dir, 'kappa_inp.npy'), kappa_inp)
-    np.save(os.path.join(output_dir, 'kappa_true.npy'), kappa_true)
+    np.save(os.path.join(output_dir, 'target.npy'), target)
 
 
 if __name__ == "__main__":
@@ -111,6 +114,23 @@ if __name__ == "__main__":
         help=(
             "Weak lensing method used as input ('wiener' or 'ks'). "
             f"Default = '{INPUT_WLMETHOD}'"
+        )
+    )
+    parser.add_argument(
+        "--moment-order", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Order of the moment network. "
+            f"Default = {MOMENT_ORDER}"
+        )
+    )
+    parser.add_argument(
+        "--path-to-pred-dataset", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the prediction dataset (HDF5 file), computed with "
+            "a previously-trained network. This is useful to train a moment "
+            "network of order 2. Default = None"
         )
     )
     parser.add_argument(
