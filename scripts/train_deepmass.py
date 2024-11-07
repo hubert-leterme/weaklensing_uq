@@ -135,7 +135,7 @@ def main(
         else:
             output_type = "var" # Variance
         filepath = os.path.join(
-            checkpoint_dir,
+            checkpoint_dir, output_type,
             f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
         )
         checkpoint_callback = keras.callbacks.ModelCheckpoint(
@@ -147,8 +147,7 @@ def main(
         callbacks.append(checkpoint_callback)
     if backup_dir is not None:
         backup_callback = keras.callbacks.BackupAndRestore(
-            backup_dir=backup_dir,
-            save_freq="epoch"
+            backup_dir=os.path.join(backup_dir, output_type), save_freq="epoch"
         )
         callbacks.append(backup_callback)
     if path_to_csv_log is not None:
