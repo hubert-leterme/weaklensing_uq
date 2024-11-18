@@ -16,12 +16,15 @@ if [ "$#" -ne 3 ]; then
   exit 1
 fi
 
+scale_formatted=$(printf "%.2e" "$2")
+scale_dir=$(echo "$scale_formatted" | sed 's/[.-]/_/g')
+
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train_deepmass.py $path_to_augmented_dataset \
   --denoiser --scale-denoiser $2 \
   -lr $3 --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/denoiser_${current_date}/pe \
+  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date}/pe \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${current_date}/pe \
-  --path-to-csv-log $stats_dir/log_denoiser_${current_date}_pe.csv --seed 42 -v
+  --backup-dir $backup_dir/denoiser_${scale_dir}_${current_date}/pe \
+  --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${current_date}_pe.csv --seed 42 -v
