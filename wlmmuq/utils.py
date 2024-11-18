@@ -66,22 +66,67 @@ def ngal_per_pixel(ra, dec, width, extent):
     return bin2d(ra, dec, npix=width, extent=extent)
 
 
-def get_shear_from_convergence(kappa, complexconjugate=False):
+def _get_shear_fromto_convergence(
+        func, inp1, inp2=None, complexconjugate=False, return_complex=False
+):
+    if inp2 is None:
+        inp2 = inp1.imag
+        inp1 = inp1.real
+    out1, out2 = func(inp1, inp2)
+    if complexconjugate:
+        # Use convention from jax_lensing (due to the inversion of the x-axis?)
+        out2 = -out2
+
+    if return_complex:
+        out = out1 + 1j * out2
+    else:
+        out = (out1, out2)
+
+    return out
+
+
+def get_shear_from_convergence(
+        kappa1, kappa2=None, complexconjugate=False, return_complex=False
+):
     """
     Parameters
     ----------
-    kappa (numpy.ndarray, shape=(nimgs, width, width))
-        The convergence maps.
+    kappa1, kappa2 (numpy.ndarray, shape=(nimgs, width, width), default=None for kappa2)
+        Real and imaginary parts of the input shear maps. If kappa2 is None, then kappa1
+        is assumed to be complex-valued.
     complexconjugate (bool, default=False)   
-        Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
+        Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
+    return_complex (bool, default=False)
+        If True, then a complex-valued numpy array will be returned. If False, then
+        two real-valued numpy arrays will be returned.
     
     """
-    bmode = np.zeros_like(kappa) # no B-mode (convergence maps are real-valued)
-    gamma1, gamma2 = vectorized_ks93inv(kappa, bmode)
-    if complexconjugate:
-        gamma2 = -gamma2 # use convention from jax_lensing (due to the inversion of the x-axis?)
+    return _get_shear_fromto_convergence(
+        vectorized_ks93inv, kappa1, kappa2,
+        complexconjugate=complexconjugate, return_complex=return_complex
+    )
 
-    return gamma1, gamma2
+
+def get_convergence_from_shear(
+        gamma1, gamma2=None, complexconjugate=False, return_complex=False
+):
+    """
+    Parameters
+    ----------
+    gamma1, gamma2 (numpy.ndarray, default=None for gamma2)
+        Real and imaginary parts of the input shear maps. If gamma2 is None, then gamma1
+        is assumed to be complex-valued.
+    complexconjugate (bool, default=éTrue)   
+        Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
+    return_complex (bool, default=False)
+        If True, then a complex-valued numpy array will be returned. If False, then
+        two real-valued numpy arrays will be returned.
+    
+    """
+    return _get_shear_fromto_convergence(
+        vectorized_ks93, gamma1, gamma2,
+        complexconjugate=complexconjugate, return_complex=return_complex
+    )
 
 
 def get_std_noise(ngal, shapedisp, std_noise_mask):
@@ -217,9 +262,9 @@ def ksfilter(
         arrs.append(std_noise)
     _, width1, width2 = test_array_shape(arrs)
 
-    if complexconjugate:
-        gamma2_noisy = -gamma2_noisy
-    kappa_ks, _ = vectorized_ks93(gamma1_noisy, gamma2_noisy)
+    kappa_ks = get_convergence_from_shear(
+        gamma1_noisy, gamma2_noisy, complexconjugate=complexconjugate
+    )
     if std_gaussianfilter is not None:
         kappa_ks = ndimage.gaussian_filter(
             kappa_ks, std_gaussianfilter, mode="wrap", axes=(1, 2)
