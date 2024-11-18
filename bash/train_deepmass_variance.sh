@@ -11,7 +11,7 @@ stats_dir=/ceph/chercheurs/leterme231/stats
 # Check if correct number of arguments are provided
 if [ "$#" -ne 5 ]; then
   echo "Usage: $0 <GPU_ID> <WL_METHOD> <PRED_DATASET> <TRAINING_DATE> <LEARNING_RATE>"
-  echo "Example: $0 0 ks /path/to/pred/dataset.hdf5 20241105_213110 1e-5"
+  echo "Example: $0 0 ks /path/to/pred/dataset.hdf5 20241105_213110 1e-4"
   exit 1
 fi
 

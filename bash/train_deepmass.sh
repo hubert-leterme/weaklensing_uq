@@ -13,7 +13,7 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <GPU_ID> <WL_METHOD> <LEARNING_RATE>"
-  echo "Example: $0 0 ks 1e-5"
+  echo "Example: $0 0 ks 1e-4"
   exit 1
 fi
 
