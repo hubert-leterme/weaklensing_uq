@@ -18,6 +18,7 @@ import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
+SCALE_DENOISER = 7e-2
 INPUT_WLMETHOD = "wiener"
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -42,7 +43,8 @@ keras.optimizers.Adam.__init__ = new_init
 
 
 def main(
-        path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
+        path_to_augmented_dataset, denoiser=False, scale_denoiser=SCALE_DENOISER,
+        input_wlmethod=INPUT_WLMETHOD,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
         fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
@@ -72,55 +74,60 @@ def main(
     std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
 
     # Initialize batch generators for training and validation
-    if input_wlmethod == 'ks':
-        if fwhm is not None:
-            resolution = openingangle / imgsize * 60. # arcmin/pixel
-            std_gaussianfilter_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
-            std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
-            kwargs.update(std_gaussianfilter=std_gaussianfilter)
+    if denoiser:
+        batch_loader = wlbl.HDF5BatchLoaderDenoiser
+        kwargs.update(scale=scale_denoiser)
+    else:
+        batch_loader = wlbl.HDF5BatchLoaderDeepMass
+        kwargs.update(input_method=input_wlmethod)
+        if input_wlmethod == 'ks':
+            if fwhm is not None:
+                resolution = openingangle / imgsize * 60. # arcmin/pixel
+                std_gaussianfilter_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
+                std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
+                kwargs.update(std_gaussianfilter=std_gaussianfilter)
 
-    elif input_wlmethod == 'wiener':
-        if verbose:
-            print("Estimate the power spectrum for Wiener filtering")
+        elif input_wlmethod == 'wiener':
+            if verbose:
+                print("Estimate the power spectrum for Wiener filtering")
 
-        if path_to_powerspectrum is None:
-            # Load a set of convergence maps among the training set
-            datagen_ps = wlbl.HDF5BatchLoader(
-                path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
-                std_noise=std_noise, mask=mask, output_shape=imgsize,
-                list_of_outputs=['kappa_true']
-            )
-            kappa_ps = datagen_ps.load_batch()
-            datagen_ps.close()
+            if path_to_powerspectrum is None:
+                # Load a set of convergence maps among the training set
+                datagen_ps = wlbl.HDF5BatchLoader(
+                    path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
+                    std_noise=std_noise, mask=mask, output_shape=imgsize,
+                    list_of_outputs=['kappa_true']
+                )
+                kappa_ps = datagen_ps.load_batch()
+                datagen_ps.close()
 
-            # Compute the 1D power spectrum
-            powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
-            del kappa_ps
+                # Compute the 1D power spectrum
+                powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
+                del kappa_ps
+
+            else:
+                powerspectrum_1d = np.load(path_to_powerspectrum)
+
+            kwargs.update(powerspectrum_1d=powerspectrum_1d)
 
         else:
-            powerspectrum_1d = np.load(path_to_powerspectrum)
-
-        kwargs.update(powerspectrum_1d=powerspectrum_1d)
-
-    else:
-        raise ValueError
+            raise ValueError
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = wlbl.HDF5BatchLoaderDeepMass(
+    train_gen = batch_loader(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        offset=offset, newaxis=True, input_method=input_wlmethod, **kwargs
+        offset=offset, newaxis=True, **kwargs
     )
-    val_gen = wlbl.HDF5BatchLoaderDeepMass(
+    val_gen = batch_loader(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, offset=offset, newaxis=True,
-        input_method=input_wlmethod, **kwargs
+        output_shape=imgsize, offset=offset, newaxis=True, **kwargs
     )
 
     # Initialize model
@@ -195,6 +202,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_augmented_dataset", type=str,
         help="Path to the augmented dataset (HDF5 file)"
+    )
+    parser.add_argument(
+        "--denoiser", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Generate noisy convergence maps instead of KS- or Wiener-estimations."
+        )
+    )
+    parser.add_argument(
+        "--scale-denoiser", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Noise standard deviation, if option `--denoiser` is used. "
+            f"Default = '{SCALE_DENOISER}'"
+        )
     )
     parser.add_argument(
         "--input-wlmethod", type=str,
