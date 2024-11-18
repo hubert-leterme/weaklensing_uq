@@ -85,7 +85,7 @@ def main(
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = wlbl.HDF5BatchLoaderMomentNetwork(
+    train_gen = wlbl.HDF5BatchLoaderDeepMass(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs, batch_size=batch_size,
