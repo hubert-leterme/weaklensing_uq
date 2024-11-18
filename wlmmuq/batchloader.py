@@ -533,6 +533,8 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
 
         kappa_true = out_dict["kappa_true"]
+        if self.verbose:
+            print("Generate white Gaussian noise")
         noise = np.random.normal(0, self.scale, size=kappa_true.shape)
         out_dict["kappa_inp"] = kappa_true + noise
 
