@@ -539,7 +539,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         return out_dict, end_idx
 
 
-class HDF5BatchLoaderMomentNetwork(HDF5BatchLoader):
+class MomentNetworkMixin:
 
     def __init__(self, order, *args, **kwargs):
         super().__init__(*args, **kwargs)
