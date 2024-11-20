@@ -7,10 +7,6 @@ import threading
 
 import numpy as np
 from tensorflow import data, keras
-
-from deepmass import map_functions as mf
-from deepmass import lens_data as ld
-from deepmass import wiener
 from deepmass import cnn_keras as cnn
 
 import wlmmuq.kappatng as wlktng
