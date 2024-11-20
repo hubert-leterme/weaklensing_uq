@@ -1,3 +1,9 @@
+"""
+TODO
+- rename file into 'train.py'
+- train_gen and val_gen: put arguments 'std_noise' and 'mask' into **kwargs
+
+"""
 import os
 import argparse
 import random
