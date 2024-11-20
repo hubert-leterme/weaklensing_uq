@@ -87,7 +87,7 @@ def main(
     data_loader = wlbl.HDF5BatchLoader(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
-        input_method=input_wlmethod, compute_inputs=True,
+        input_method=input_wlmethod, recompute_inputs=True,
         shuffle=False, output_shape=imgsize, list_of_outputs=['kappa_inp'],
         close_after_batch=True, **kwargs
     )

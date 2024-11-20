@@ -305,7 +305,7 @@ class HDF5BatchLoader:
 class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 
     def __init__(
-            self, *args, input_method, compute_inputs=False,
+            self, *args, input_method=None, recompute_inputs=False,
             std_gaussianfilter=None, powerspectrum_1d=None, niter=1, **kwargs
     ):
         """
@@ -319,7 +319,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
         input_method: str
-            Input mass mapping method: 'ks' or 'wiener'.
+            Input mass mapping method: 'ks' or 'wiener'. Default is None.
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -347,7 +347,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1),
             for training purpose. Default is False.
-        compute_inputs: bool, optional
+        recompute_inputs: bool, optional
             If True, compute inputs (KS or Wiener solution) from the groud truth convergence maps,
             even if the corresponding dataset already exists in the HDF5 file. Default is False.
         std_gaussianfilter: float, optional
@@ -371,7 +371,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
         self.input_method = input_method
-        self.compute_inputs = compute_inputs
+        self.recompute_inputs = recompute_inputs
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
         self.niter = niter
@@ -386,7 +386,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
-        if self.input_method == 'wiener' and self.compute_inputs:
+        if self.input_method == 'wiener' and self.recompute_inputs:
             # Register data into a `csmm.shear_data` object
             self.sheardata = csmm.shear_data()
             self.sheardata.mask = self.mask.astype(int)
@@ -401,7 +401,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 
         super()._open_and_get_dataset()
 
-        if not self.compute_inputs:
+        if self.input_method is not None and not self.recompute_inputs:
             try:
                 self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
             except KeyError:
@@ -409,14 +409,14 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
                     f"Dataset 'kappa_{self.input_method}' absent from the HDF5 file. "
                     f"The {self.input_method} solution will be computed for each new batch."
                 )
-                self.compute_inputs = True
+                self.recompute_inputs = True
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
 
         out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
 
-        if not self.compute_inputs:
+        if self.input_method is not None and not self.recompute_inputs:
             kappa_inp = self.ds_kappa_inp[self.sorted_batch_idx]
             kappa_inp = kappa_inp[self.reversed_sort_idx]
             if self.output_shape is not None:
@@ -441,29 +441,33 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             })
 
             # Compute KS solution if required
-            if self.input_method == 'ks':
-                if self.verbose:
-                    print("\tCompute Kaiser-Squires solution")
-                kappa_inp = wlutils.ksfilter(
-                    gamma1_noisy, gamma2_noisy, get_bounds=False,
-                    std_gaussianfilter=self.std_gaussianfilter
-                )
-            # Compute Wiener solution if required
-            elif self.input_method == 'wiener':
-                if self.verbose:
-                    print("\tCompute Wiener solution")
-                self.sheardata.g1 = gamma1_noisy
-                self.sheardata.g2 = gamma2_noisy
-                kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                    self.sheardata, self.powerspectrum_1d, niter=self.niter,
-                    **self.kwargs_wiener
-                )
-            else:
-                raise ValueError
+            if self.input_method is not None:
+                if self.input_method == 'ks':
+                    if self.verbose:
+                        print("\tCompute Kaiser-Squires solution")
+                    kappa_inp = wlutils.ksfilter(
+                        gamma1_noisy, gamma2_noisy, get_bounds=False,
+                        std_gaussianfilter=self.std_gaussianfilter
+                    )
+                # Compute Wiener solution if required
+                elif self.input_method == 'wiener':
+                    if self.verbose:
+                        print("\tCompute Wiener solution")
+                    self.sheardata.g1 = gamma1_noisy
+                    self.sheardata.g2 = gamma2_noisy
+                    kappa_inp, _ = self.massmap.prox_wiener_filtering(
+                        self.sheardata, self.powerspectrum_1d, niter=self.niter,
+                        **self.kwargs_wiener
+                    )
+                else:
+                    raise ValueError
 
-        out_dict.update({
-            "kappa_inp": kappa_inp + self.offset
-        })
+        try:
+            out_dict.update({
+                "kappa_inp": kappa_inp + self.offset
+            })
+        except NameError: # Name 'kappa_inp' is not defined
+            pass
 
         return out_dict, end_idx
 
