@@ -24,7 +24,7 @@ export CUDA_VISIBLE_DEVICES=$1
 python scripts/train_deepmass.py $path_to_augmented_dataset \
   --denoiser --scale-denoiser $2 \
   -lr $3 --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date}/pe \
+  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date} \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${scale_dir}_${current_date}/pe \
+  --backup-dir $backup_dir/denoiser_${scale_dir}_${current_date} \
   --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${current_date}_pe.csv --seed 42 -v
