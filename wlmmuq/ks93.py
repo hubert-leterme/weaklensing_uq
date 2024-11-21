@@ -51,7 +51,7 @@ def ks93(g1, g2):
     assert g1.shape == g2.shape
 
     # Compute Fourier space grids
-    (nx, ny) = g1.shape
+    (nx, ny) = g1.shape[-2:]
     k1, k2 = np.meshgrid(np.fft.fftfreq(ny), np.fft.fftfreq(nx))
 
     # Compute Fourier transforms of g1 and g2
@@ -106,7 +106,7 @@ def ks93inv(kE, kB):
     assert kE.shape == kB.shape
 
     # Compute Fourier space grids
-    (nx, ny) = kE.shape
+    (nx, ny) = kE.shape[-2:]
     k1, k2 = np.meshgrid(np.fft.fftfreq(ny), np.fft.fftfreq(nx))
 
     # Compute Fourier transforms of kE and kB

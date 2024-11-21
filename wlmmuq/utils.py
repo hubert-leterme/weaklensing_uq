@@ -2,12 +2,14 @@ import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
 
-from lenspack.image.inversion import ks93, ks93inv
+#from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
 
+from . import ks93
+
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
-vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
-vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
+#vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
+#vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
 
 def test_array_shape(list_of_arr):
 
@@ -102,7 +104,7 @@ def get_shear_from_convergence(
     
     """
     return _get_shear_fromto_convergence(
-        vectorized_ks93inv, kappa1, kappa2,
+        ks93.ks93inv, kappa1, kappa2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
 
@@ -124,7 +126,7 @@ def get_convergence_from_shear(
     
     """
     return _get_shear_fromto_convergence(
-        vectorized_ks93, gamma1, gamma2,
+        ks93.ks93, gamma1, gamma2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
 
