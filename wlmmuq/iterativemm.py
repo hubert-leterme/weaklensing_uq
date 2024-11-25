@@ -2,6 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+import pycs.astro.wl.mass_mapping as csmm
+
 from . import utils as wlutils
 
 class PGDMassMapping:
@@ -221,3 +223,30 @@ class RMSE(Callback):
         if self.path_to_saved_stats is not None:
             rmse = np.stack([self.rmse_forward, self.rmse_backward])
             np.save(self.path_to_saved_stats, rmse)
+
+
+class ProximalWiener:
+    r"""
+    Class for instantiating a backward operator for iterative Wiener filtering.
+    $$
+    \text{prox}_{\tau g}(\kappa) := \mathbf F^\ast \left(
+        \mathbf I + \tau \Sigma_{\kappa}^{-1}
+    \right)^{-1} \mathbf F \kappa
+    $$
+
+    """
+    def __init__(self, imgsize, powerspectrum_1d, step_size):
+
+        assert 2 * len(powerspectrum_1d) == imgsize
+        powerspectrum = csmm.get_ima_spectrum_map(powerspectrum_1d, imgsize, imgsize)
+        powerspectrum = np.fft.fftshift(powerspectrum)
+        self.fourierfilter = 1 / (1 + step_size / powerspectrum)
+
+
+    def __call__(self, inp):
+
+        out = np.fft.fft2(inp)
+        out = self.fourierfilter * out
+        out = np.fft.ifft2(out)
+
+        return out.real
