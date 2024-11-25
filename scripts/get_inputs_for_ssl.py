@@ -51,11 +51,11 @@ def main(
             std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
             kwargs.update(std_gaussianfilter=std_gaussianfilter)
 
-    elif input_wlmethod == 'wiener':
-        if verbose:
-            print("Estimate the power spectrum for Wiener filtering")
-
+    elif input_wlmethod in ('wiener', 'wiener_pgd'):
         if path_to_powerspectrum is None:
+            if verbose:
+                print("Estimate the power spectrum for Wiener filtering")
+
             # Load a set of convergence maps among the training set
             train_gen_ps = wlbl.HDF5BatchLoader(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
@@ -133,7 +133,7 @@ if __name__ == "__main__":
         "--input-wlmethod", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Weak lensing method used as input ('wiener' or 'ks'). "
+            "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
             f"Default = '{INPUT_WLMETHOD}'"
         )
     )
@@ -151,8 +151,25 @@ if __name__ == "__main__":
         help=(
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-wlmethod is set to "
-            "'wiener', then the power spectrum will be inferred from the "
-            "dataset. Default = None"
+            "'wiener' or 'wiener_pgd', then the power spectrum will be inferred "
+            "from the dataset. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--step-size", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "If the selected method is 'wiener_pgd', step size of "
+            "the gradient descent step. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--niter", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "If the selected method is 'wiener' or 'wiener_pgd', "
+            "number of iterations. Required for 'wiener_pgd'. Default is 1 "
+            "for 'wiener'."
         )
     )
     parser.add_argument(
