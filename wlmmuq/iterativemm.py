@@ -47,12 +47,16 @@ class PGDMassMapping:
         self.verbose = verbose
 
 
-    def __call__(self, gamma, callbacks=None):
+    def __call__(self, gamma, kappa0=None, callbacks=None):
 
-        var_noise = self.std_noise**2
         if callbacks is None:
             callbacks = []
-        kappa = np.zeros(gamma.shape) # Shape = ([nimgs], nx, ny)
+        var_noise = self.std_noise**2
+        if kappa0 is not None:
+            assert kappa0.shape == gamma.shape
+            kappa = kappa0.copy() # Shape = ([nimgs], nx, ny)
+        else:
+            kappa = np.zeros(gamma.shape) # Shape = ([nimgs], nx, ny)
         for callback in callbacks:
             callback.on_predict_begin(kappa)
         for i in range(self.niter):
