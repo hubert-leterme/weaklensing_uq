@@ -4,6 +4,7 @@ import h5py
 import tensorflow as tf
 import pycs.astro.wl.mass_mapping as csmm
 
+from . import iterativemm as wlpgd
 from . import utils as wlutils
 
 class HDF5BatchLoader:
@@ -306,7 +307,8 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 
     def __init__(
             self, *args, input_method=None, recompute_inputs=False,
-            std_gaussianfilter=None, powerspectrum_1d=None, niter=1, **kwargs
+            std_gaussianfilter=None, powerspectrum_1d=None, step_size=None, niter=1,
+            **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -319,7 +321,10 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
         input_method: str
-            Input mass mapping method: 'ks' or 'wiener'. Default is None.
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
+            If set to 'ks' or 'wiener', the implementations from
+            `pycs.astro.wl.mass_mapping` will be used. If set to 'wiener_pgd, the
+            implementation from `iterativemm.PGDMassMapping` will be used. Default is None.
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -354,10 +359,14 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             If `input_method` is set to 'ks', standard deviation of the smoothing filter.
             Default is None.
         powerspectrum_1d: np.ndarray, optional
-            If `input_method` is set to 'wiener', 1D power spectrum. Its length must be half
-            the image size. Default is None.
+            If `input_method` is set to 'wiener' or 'wiener_pdg', 1D power spectrum.
+            Its length must be half the image size. Default is None.
+        step_size: If `input_method` is set to 'wiener_pgd', step size of the gradient descent
+            operator. If `input_method` is set to 'wiener', the step size if inferred
+            automatically from `std_noise`. Default is None.
         niter: int, optional
-            If `input_method` is set to 'wiener', number of iterations. Default is 1.
+            If `input_method` is set to 'wiener' or 'wiener_pgd', number of iterations.
+            Default is 1.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
@@ -374,6 +383,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
         self.recompute_inputs = recompute_inputs
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
+        self.step_size = step_size
         self.niter = niter
 
         self.ds_kappa_inp = None
@@ -458,6 +468,18 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
                     kappa_inp, _ = self.massmap.prox_wiener_filtering(
                         self.sheardata, self.powerspectrum_1d, niter=self.niter,
                         **self.kwargs_wiener
+                    )
+                elif self.input_method == 'wiener_pgd':
+                    nx, ny = kappa_true.shape[-2:]
+                    assert nx == ny
+                    imgsize = nx
+                    prox_wiener = wlpgd.ProximalWiener(
+                        imgsize, self.powerspectrum_1d, self.step_size
+                    )
+                    kappa_inp = wlpgd.PGDMassMapping(
+                        std_noise=self.std_noise, step_size=self.step_size,
+                        niter=self.niter, backward=prox_wiener, mask=self.mask,
+                        verbose=self.verbose
                     )
                 else:
                     raise ValueError
