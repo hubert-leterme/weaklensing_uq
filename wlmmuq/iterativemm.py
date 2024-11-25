@@ -241,6 +241,7 @@ class ProximalWiener:
         powerspectrum = csmm.get_ima_spectrum_map(powerspectrum_1d, imgsize, imgsize)
         powerspectrum = np.fft.fftshift(powerspectrum)
         self.fourierfilter = 1 / (1 + step_size / powerspectrum)
+        self.fourierfilter = np.nan_to_num(self.fourierfilter, nan=0.0) # Division by infinity
 
 
     def __call__(self, inp):
