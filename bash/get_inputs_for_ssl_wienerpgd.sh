@@ -5,7 +5,7 @@ path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002.np
 batch_size=256
 
 # Check if correct number of arguments are provided
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <GPU_ID> <STEP_SIZE> <NITER>"
   echo "Example: $0 0 1.4e-1 5"
   exit 1
