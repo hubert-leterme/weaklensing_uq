@@ -11,7 +11,7 @@ class PGDMassMapping:
 
     """
     def __init__(
-            self, std_noise, step_size, backward, niter, mask=None
+            self, std_noise, step_size, backward, niter, mask=None, verbose=False
     ):
         """
         Parameters
@@ -33,6 +33,7 @@ class PGDMassMapping:
         mask: np.ndarray, shape = (nx, ny), default = None
             Mask to apply in case of missing data. In practice, the noise
             covariance matrix is set to infinity in the masked regions.
+        verbose: bool, default=False
         
         """
         self.std_noise = std_noise
@@ -43,6 +44,7 @@ class PGDMassMapping:
             self.mask = mask
         else:
             self.mask = std_noise != 0
+        self.verbose = verbose
 
 
     def __call__(self, gamma, callbacks=None):
@@ -54,7 +56,8 @@ class PGDMassMapping:
         for callback in callbacks:
             callback.on_predict_begin(kappa)
         for i in range(self.niter):
-            print(f'Iteration {i+1}')
+            if self.verbose:
+                print(f'Iteration {i+1}')
 
             #########################################################################
             # Forward step
@@ -106,7 +109,7 @@ class Callback:
 
 class SaveIntermediateMaps(Callback):
 
-    def __init__(self, savedir):
+    def __init__(self, savedir, saveevery=1):
         """
         Parameters
         ----------
@@ -115,13 +118,15 @@ class SaveIntermediateMaps(Callback):
         
         """
         self.savedir = savedir
+        self.saveevery = saveevery
 
     def _save(self, i, kappa, savedir):
-        np.save(
-            os.path.join(
-                self.savedir, savedir, f'kappa_{i+1}.npy'
-            ), kappa
-        )
+        if (i+1) % self.saveevery == 0:
+            np.save(
+                os.path.join(
+                    self.savedir, savedir, f'kappa_{i+1}.npy'
+                ), kappa
+            )
 
     def on_forward_end(self, i, kappa):
         self._save(i, kappa, 'forward')
