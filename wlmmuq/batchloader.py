@@ -476,11 +476,12 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
                     prox_wiener = wlpgd.ProximalWiener(
                         imgsize, self.powerspectrum_1d, self.step_size
                     )
-                    kappa_inp = wlpgd.PGDMassMapping(
+                    wiener_pdg = wlpgd.PGDMassMapping(
                         std_noise=self.std_noise, step_size=self.step_size,
                         niter=self.niter, backward=prox_wiener, mask=self.mask,
                         verbose=self.verbose
                     )
+                    kappa_inp = wiener_pdg(gamma1_noisy + 1j* gamma2_noisy)
                 else:
                     raise ValueError
 
