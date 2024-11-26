@@ -45,7 +45,7 @@ def main(
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
-        lr_scheduler=True, offset=OFFSET, checkpoint_dir=None, save_freq=None,
+        lr_scheduler=False, offset=OFFSET, checkpoint_dir=None, save_freq=None,
         backup_dir=None, path_to_csv_log=None, path_to_tensorboard_log=None,
         seed=None, verbose=False, **kwargs
 ):
