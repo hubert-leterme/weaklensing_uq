@@ -159,7 +159,10 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "If the selected method is 'wiener_pgd', step size of "
-            "the gradient descent step. Default = None"
+            "the gradient descent step. Should be smaller than `2 * stdmin**2`, "
+            "where `std_min` denotes the smallest noise standard deviation, "
+            "corresponding to the pixel with the largest number of measured galaxies. "
+            "Default = None"
         )
     )
     parser.add_argument(
