@@ -11,12 +11,10 @@ fi
 path_to_trained_model=/ceph/chercheurs/leterme231/checkpoints/$3
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
 path_to_output_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/$4
-path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002.npy
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/predict_for_moment_network.py \
   $path_to_trained_model $path_to_augmented_dataset $path_to_output_dataset \
-  --input-wlmethod $2 \
-  -ps $path_to_powerspectrum \
+  --input-method $2 \
   --seed 42 -v

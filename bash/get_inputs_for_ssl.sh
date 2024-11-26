@@ -14,6 +14,6 @@ fi
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/get_inputs_for_ssl.py $path_to_augmented_dataset \
-  --input-wlmethod $2 \
+  --input-method $2 \
   -ps $path_to_powerspectrum \
   -b $batch_size --seed 42 -v
