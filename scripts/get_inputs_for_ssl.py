@@ -9,7 +9,7 @@ import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
-INPUT_WLMETHOD = "wiener"
+INPUT_METHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 NIMGS = 72000
 IMGSIZE = 306
@@ -17,7 +17,7 @@ BATCH_SIZE = 32
 NIMGS_PS = 256
 
 def main(
-        path_to_augmented_dataset, input_wlmethod=INPUT_WLMETHOD,
+        path_to_augmented_dataset, input_method=INPUT_METHOD,
         fwhm=FWHM, path_to_powerspectrum=None, nimgs=NIMGS, imgsize=IMGSIZE,
         batch_size=BATCH_SIZE, seed=None, verbose=False, **kwargs
 ):
@@ -44,14 +44,14 @@ def main(
     std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
 
     # Initialize batch generators for training and validation
-    if input_wlmethod == 'ks':
+    if input_method == 'ks':
         if fwhm is not None:
             resolution = openingangle / imgsize * 60. # arcmin/pixel
             std_gaussianfilter_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
             std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
             kwargs.update(std_gaussianfilter=std_gaussianfilter)
 
-    elif input_wlmethod in ('wiener', 'wiener_pgd'):
+    elif input_method in ('wiener', 'wiener_pgd'):
         if path_to_powerspectrum is None:
             if verbose:
                 print("Estimate the power spectrum for Wiener filtering")
@@ -87,7 +87,7 @@ def main(
     data_loader = wlbl.HDF5BatchLoaderGammaKappa(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
-        input_method=input_wlmethod, recompute_inputs=True,
+        input_method=input_method, recompute_inputs=True,
         shuffle=False, output_shape=imgsize, list_of_outputs=['kappa_inp'],
         close_after_batch=True, **kwargs
     )
@@ -95,7 +95,7 @@ def main(
     data_gen = iter(data_gen)
 
     with h5py.File(path_to_augmented_dataset, 'r+') as file:
-        idx_dataset = f"kappa_{input_wlmethod}"
+        idx_dataset = f"kappa_{input_method}"
         try:
             del file[idx_dataset]
         except KeyError:
@@ -130,11 +130,11 @@ if __name__ == "__main__":
         help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
-        "--input-wlmethod", type=str,
+        "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
-            f"Default = '{INPUT_WLMETHOD}'"
+            f"Default = '{INPUT_METHOD}'"
         )
     )
     parser.add_argument(
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Path to the .npy file containing the 1D power spectrum. "
-            "If not provided, and if argument --input-wlmethod is set to "
+            "If not provided, and if argument --input-method is set to "
             "'wiener' or 'wiener_pgd', then the power spectrum will be inferred "
             "from the dataset. Default = None"
         )

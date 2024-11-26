@@ -4,7 +4,6 @@ import numpy as np
 import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
-INPUT_WLMETHOD = "wiener"
 IMGSIZE = 304
 NIMGS = 2048
 BATCH_SIZE = 256

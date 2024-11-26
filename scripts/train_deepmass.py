@@ -15,13 +15,9 @@ import numpy as np
 from tensorflow import data, keras
 from deepmass import cnn_keras as cnn
 
-import wlmmuq.kappatng as wlktng
-import wlmmuq.cosmos as wlcosmos
-import wlmmuq.utils as wlutils
 import wlmmuq.batchloader as wlbl
 
 SCALE_DENOISER = 7e-2
-INPUT_WLMETHOD = "wiener"
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
@@ -46,9 +42,7 @@ keras.optimizers.Adam.__init__ = new_init
 
 def main(
         path_to_augmented_dataset, denoiser=False, scale_denoiser=SCALE_DENOISER,
-        input_wlmethod=INPUT_WLMETHOD,
-        moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
-        fwhm=FWHM, path_to_powerspectrum=None, imgsize=IMGSIZE,
+        moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
         lr_scheduler=True, offset=OFFSET, checkpoint_dir=None, save_freq=None,
@@ -59,61 +53,12 @@ def main(
         random.seed(seed)
         np.random.seed(seed)
 
-    # Compute a map of number of galaxies per pixels and a binary mask
-    if verbose:
-        print("Compute a map of number of galaxies per pixels and a binary mask")
-    cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
-    data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
-    openingangle = data_dict["openingangle"]
-    shapedisp = data_dict["shapedisp"]
-    ngal = data_dict["ngal"]
-    mask = data_dict["mask"]
-
-    # Compute noise covariance matrix
-    if verbose:
-        print("Compute noise covariance matrix")
-    std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-
     # Initialize batch generators for training and validation
     if denoiser:
         batch_loader = wlbl.HDF5BatchLoaderDenoiser
         kwargs.update(scale=scale_denoiser)
     else:
         batch_loader = wlbl.HDF5BatchLoaderDeepMass
-        kwargs.update(input_method=input_wlmethod)
-        if input_wlmethod == 'ks':
-            if fwhm is not None:
-                resolution = openingangle / imgsize * 60. # arcmin/pixel
-                std_gaussianfilter_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
-                std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
-                kwargs.update(std_gaussianfilter=std_gaussianfilter)
-
-        elif input_wlmethod == 'wiener':
-            if verbose:
-                print("Estimate the power spectrum for Wiener filtering")
-
-            if path_to_powerspectrum is None:
-                # Load a set of convergence maps among the training set
-                datagen_ps = wlbl.HDF5BatchLoader(
-                    path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
-                    std_noise=std_noise, mask=mask, output_shape=imgsize,
-                    list_of_outputs=['kappa_true']
-                )
-                kappa_ps = datagen_ps.load_batch()
-                datagen_ps.close()
-
-                # Compute the 1D power spectrum
-                powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
-                del kappa_ps
-
-            else:
-                powerspectrum_1d = np.load(path_to_powerspectrum)
-
-            kwargs.update(powerspectrum_1d=powerspectrum_1d)
-
-        else:
-            raise ValueError
 
     if verbose:
         print("Initialize batch generators for training and validation")
@@ -121,14 +66,14 @@ def main(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, output_shape=imgsize,
+        output_shape=imgsize,
         offset=offset, newaxis=True, **kwargs
     )
     val_gen = batch_loader(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, beg_idx=nimgs_train, shuffle=False,
+        beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, offset=offset, newaxis=True, **kwargs
     )
 
@@ -221,11 +166,13 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--input-wlmethod", type=str,
+        "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Weak lensing method used as input ('wiener' or 'ks'). "
-            f"Default = '{INPUT_WLMETHOD}'"
+            "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
+            "If option `--denoiser` is activated, then the network will be trained "
+            "on the residuals between the ground truth convergence maps and the "
+            "reconstructed image using the provided method. Default = None"
         )
     )
     parser.add_argument(
@@ -243,24 +190,6 @@ if __name__ == "__main__":
             "Path to the prediction dataset (HDF5 file), computed with "
             "a previously-trained network. This is useful to train a moment "
             "network of order 2. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--fwhm", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "If the selected method is Kaiser-Squires ('ks'), FWHM of "
-            f"the smoothing filter, in arcmin. Default = {FWHM}"
-        )
-    )
-    parser.add_argument(
-        "-ps", "--path-to-powerspectrum", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the .npy file containing the 1D power spectrum. "
-            "If not provided, and if argument --input-wlmethod is set to "
-            "'wiener', then the power spectrum will be inferred from the "
-            "dataset. Default = None"
         )
     )
     parser.add_argument(
