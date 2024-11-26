@@ -86,10 +86,9 @@ def main(
     # same order as the targets `kappa_true`.
     data_loader = wlbl.HDF5BatchLoaderGammaKappa(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
-        input_method=input_method, recompute_inputs=True,
-        shuffle=False, output_shape=imgsize, list_of_outputs=['kappa_inp'],
-        close_after_batch=True, **kwargs
+        std_noise=std_noise, mask=mask, input_method=input_method,
+        sort_by_filename_ori=False, shuffle=False, output_shape=imgsize,
+        list_of_outputs=['kappa_inp'], close_after_batch=True, **kwargs
     )
     data_gen = data_loader.to_tf_dataset(raise_stop_iteration=True)
     data_gen = iter(data_gen)
