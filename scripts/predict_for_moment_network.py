@@ -12,7 +12,7 @@ NIMGS = 72000
 IMGSIZE = 304
 NIMGS_ITER = 1024
 BATCH_SIZE = 32
-OFFSET = 0.5
+OFFSET = 0.
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,

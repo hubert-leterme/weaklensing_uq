@@ -27,7 +27,7 @@ NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
-OFFSET = 0.5 # As in DeepMass
+OFFSET = 0. # As in DeepMass
 
 # Monkey-patch Adam (to avoid `ValueError: Argument(s) not recognized: {'lr': 1e-05}`)
 _init_ = keras.optimizers.Adam.__init__
