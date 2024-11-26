@@ -11,7 +11,7 @@ class HDF5BatchLoader:
 
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
-            std_noise=None, mask=None,
+            std_noise=None, mask=None, input_method=None,
             offset=0., beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
@@ -36,6 +36,9 @@ class HDF5BatchLoader:
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
+        input_method: str, optional
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            registered in the HDF5 dataset. Default is None.
         offset: float, optional
             Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
@@ -72,6 +75,7 @@ class HDF5BatchLoader:
         self.batch_size = batch_size
         self.std_noise = std_noise
         self.mask = mask
+        self.input_method = input_method
         self.offset = offset
         self.beg_idx = beg_idx
         self.shuffle = shuffle
@@ -86,8 +90,10 @@ class HDF5BatchLoader:
         self.idx = None  # Will hold the shuffled indices
         self.file = None  # HDF5 file object
         self.file_pred = None # HDF5 file object
+        self.ds_kappa_inp = None
         self.ds_kappa_true = None
         self.ds_kappa_pred = None
+        self.input_exists = False
         self.current_idx = 0  # To track the batch number
 
         self.sorted_batch_idx = None # Sorted indices for a given batch
@@ -105,7 +111,18 @@ class HDF5BatchLoader:
         self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
         self.ds_kappa_true = self.file['kappa']
 
-        # Load dataset of predictions
+        # Load dataset of input mass mapping method
+        if self.input_method is not None:
+            try:
+                self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
+            except KeyError:
+                warnings.warn(
+                    f"Dataset 'kappa_{self.input_method}' absent from the HDF5 file."
+                )
+            else:
+                self.input_exists = True
+
+        # Load dataset of DeepMass predictions
         if self.pred_filepath is not None:
             self.file_pred = h5py.File(self.pred_filepath, 'r') # Keep file open
             self.ds_kappa_pred = self.file_pred['kappa_deepmass']
@@ -183,6 +200,8 @@ class HDF5BatchLoader:
         if self.close_after_batch:
             self._open_and_get_dataset()
         kappa_true = self.ds_kappa_true[self.sorted_batch_idx]
+        if self.input_exists:
+            kappa_inp = self.ds_kappa_inp[self.sorted_batch_idx]
         if self.pred_filepath is not None:
             kappa_pred = self.ds_kappa_pred[self.sorted_batch_idx]
         if self.close_after_batch:
@@ -191,6 +210,8 @@ class HDF5BatchLoader:
         # Re-order the batch
         self.reversed_sort_idx = np.argsort(sort_idx)
         kappa_true = kappa_true[self.reversed_sort_idx]
+        if self.input_exists:
+            kappa_inp = kappa_inp[self.reversed_sort_idx]
         if self.pred_filepath is not None:
             kappa_pred = kappa_pred[self.reversed_sort_idx]
 
@@ -203,10 +224,20 @@ class HDF5BatchLoader:
                 self._beg_idx_x, self._end_idx_x,
                 self._beg_idx_y, self._end_idx_y
             )
+            if self.input_exists:
+                kappa_inp = wlutils.crop_arr(
+                    kappa_inp,
+                    self._beg_idx_x, self._end_idx_x,
+                    self._beg_idx_y, self._end_idx_y
+                )
 
         out_dict = {
             "kappa_true": kappa_true + self.offset
         }
+        if self.input_exists:
+            out_dict.update({
+                "kappa_inp": kappa_inp + self.offset
+            })
         if self.pred_filepath is not None:
             assert kappa_pred.shape == kappa_true.shape
             out_dict.update({
@@ -303,12 +334,11 @@ class HDF5BatchLoader:
         self.close()
 
 
-class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
+class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
 
     def __init__(
-            self, *args, input_method=None, recompute_inputs=False,
-            std_gaussianfilter=None, powerspectrum_1d=None, step_size=None, niter=1,
-            **kwargs
+            self, *args, std_gaussianfilter=None, powerspectrum_1d=None,
+            step_size=None, niter=1, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -320,20 +350,17 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
         nimgs : int
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
-        input_method: str
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
-            If set to 'ks' or 'wiener', the implementations from
-            `pycs.astro.wl.mass_mapping` will be used. If set to 'wiener_pgd, the
-            implementation from `iterativemm.PGDMassMapping` will be used. Default is None.
-        pred_filepath : str, optional
-            Path to the HDF5 dataset containing predictions. Only required for
-            order-2 moment networks.
         batch_size : int, optional
             Number of images per batch. Default is None.
         std_noise : numpy.ndarray, optional
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
+        input_method: str, optional
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
+            If set to 'ks' or 'wiener', the implementations from
+            `pycs.astro.wl.mass_mapping` will be used. If set to 'wiener_pgd, the
+            implementation from `iterativemm.PGDMassMapping` will be used. Default is None.
         offset: float, optional
             Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
@@ -352,9 +379,6 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1),
             for training purpose. Default is False.
-        recompute_inputs: bool, optional
-            If True, compute inputs (KS or Wiener solution) from the groud truth convergence maps,
-            even if the corresponding dataset already exists in the HDF5 file. Default is False.
         std_gaussianfilter: float, optional
             If `input_method` is set to 'ks', standard deviation of the smoothing filter.
             Default is None.
@@ -379,14 +403,11 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             Keyword arguments for
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
-        self.input_method = input_method
-        self.recompute_inputs = recompute_inputs
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
         self.step_size = step_size
         self.niter = niter
 
-        self.ds_kappa_inp = None
         self.sheardata = None # For Wiener filtering
 
         super().__init__(*args, **kwargs)
@@ -396,7 +417,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 
     def _initialize_wiener(self):
         """Initialize the parameters for iterative Wiener filtering."""
-        if self.input_method == 'wiener' and self.recompute_inputs:
+        if self.input_method == 'wiener' and not self.input_exists:
             # Register data into a `csmm.shear_data` object
             self.sheardata = csmm.shear_data()
             self.sheardata.mask = self.mask.astype(int)
@@ -407,90 +428,61 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
             self.massmap.init_massmap(self.nx, self.ny)
 
 
-    def _open_and_get_dataset(self):
-
-        super()._open_and_get_dataset()
-
-        if self.input_method is not None and not self.recompute_inputs:
-            try:
-                self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
-            except KeyError:
-                warnings.warn(
-                    f"Dataset 'kappa_{self.input_method}' absent from the HDF5 file. "
-                    f"The {self.input_method} solution will be computed for each new batch."
-                )
-                self.recompute_inputs = True
-
-
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
 
         out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
 
-        if self.input_method is not None and not self.recompute_inputs:
-            kappa_inp = self.ds_kappa_inp[self.sorted_batch_idx]
-            kappa_inp = kappa_inp[self.reversed_sort_idx]
-            if self.output_shape is not None:
-                kappa_inp = wlutils.crop_arr(
-                    kappa_inp,
-                    self._beg_idx_x, self._end_idx_x,
-                    self._beg_idx_y, self._end_idx_y
+        # Generate noisy shear maps
+        kappa_true = out_dict["kappa_true"] - self.offset
+        gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
+        gamma1_noisy, gamma2_noisy, _ = wlutils.get_masked_and_noisy_shear(
+            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+        )
+        out_dict.update({
+            "gamma1": gamma1,
+            "gamma2": gamma2,
+            "gamma1_noisy": gamma1_noisy,
+            "gamma2_noisy": gamma2_noisy
+        })
+
+        # Compute KS solution if required
+        if self.input_method is not None and not self.input_exists:
+            if self.input_method == 'ks':
+                if self.verbose:
+                    print("\tCompute Kaiser-Squires solution")
+                kappa_inp = wlutils.ksfilter(
+                    gamma1_noisy, gamma2_noisy, get_bounds=False,
+                    std_gaussianfilter=self.std_gaussianfilter
                 )
+            # Compute Wiener solution if required
+            elif self.input_method == 'wiener':
+                if self.verbose:
+                    print("\tCompute Wiener solution")
+                self.sheardata.g1 = gamma1_noisy
+                self.sheardata.g2 = gamma2_noisy
+                kappa_inp, _ = self.massmap.prox_wiener_filtering(
+                    self.sheardata, self.powerspectrum_1d, niter=self.niter,
+                    **self.kwargs_wiener
+                )
+            elif self.input_method == 'wiener_pgd':
+                nx, ny = kappa_true.shape[-2:]
+                assert nx == ny
+                imgsize = nx
+                prox_wiener = wlpgd.ProximalWiener(
+                    imgsize, self.powerspectrum_1d, self.step_size
+                )
+                wiener_pdg = wlpgd.PGDMassMapping(
+                    std_noise=self.std_noise, step_size=self.step_size,
+                    niter=self.niter, backward=prox_wiener, mask=self.mask,
+                    verbose=self.verbose
+                )
+                kappa_inp = wiener_pdg(gamma1_noisy + 1j* gamma2_noisy)
+            else:
+                raise ValueError
 
-        else:
-            # Generate noisy shear maps
-            kappa_true = out_dict["kappa_true"] - self.offset
-            gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
-            gamma1_noisy, gamma2_noisy, _ = wlutils.get_masked_and_noisy_shear(
-                gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
-            )
-            out_dict.update({
-                "gamma1": gamma1,
-                "gamma2": gamma2,
-                "gamma1_noisy": gamma1_noisy,
-                "gamma2_noisy": gamma2_noisy
-            })
-
-            # Compute KS solution if required
-            if self.input_method is not None:
-                if self.input_method == 'ks':
-                    if self.verbose:
-                        print("\tCompute Kaiser-Squires solution")
-                    kappa_inp = wlutils.ksfilter(
-                        gamma1_noisy, gamma2_noisy, get_bounds=False,
-                        std_gaussianfilter=self.std_gaussianfilter
-                    )
-                # Compute Wiener solution if required
-                elif self.input_method == 'wiener':
-                    if self.verbose:
-                        print("\tCompute Wiener solution")
-                    self.sheardata.g1 = gamma1_noisy
-                    self.sheardata.g2 = gamma2_noisy
-                    kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                        self.sheardata, self.powerspectrum_1d, niter=self.niter,
-                        **self.kwargs_wiener
-                    )
-                elif self.input_method == 'wiener_pgd':
-                    nx, ny = kappa_true.shape[-2:]
-                    assert nx == ny
-                    imgsize = nx
-                    prox_wiener = wlpgd.ProximalWiener(
-                        imgsize, self.powerspectrum_1d, self.step_size
-                    )
-                    wiener_pdg = wlpgd.PGDMassMapping(
-                        std_noise=self.std_noise, step_size=self.step_size,
-                        niter=self.niter, backward=prox_wiener, mask=self.mask,
-                        verbose=self.verbose
-                    )
-                    kappa_inp = wiener_pdg(gamma1_noisy + 1j* gamma2_noisy)
-                else:
-                    raise ValueError
-
-        try:
             out_dict.update({
                 "kappa_inp": kappa_inp + self.offset
             })
-        except NameError: # Name 'kappa_inp' is not defined
-            pass
 
         return out_dict, end_idx
 
@@ -498,7 +490,7 @@ class BaseHDF5BatchLoaderDeepMass(HDF5BatchLoader):
 class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
-            self, *args, scale, **kwargs
+            self, *args, scale=0., **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -510,17 +502,20 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         nimgs : int
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
-        scale : float
-            Standard deviation of the white noise.
+        scale : float, optional
+            Standard deviation of the white noise. Default is 0. (no noise)
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
         batch_size : int, optional
             Number of images per batch. Default is None.
-        std_noise : numpy.ndarray, optional
-            Array of noise standard deviation. Default is None.
-        mask : numpy.ndarray, optional
-            Array of masked data. Default is None.
+        input_method: str, optional
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
+            If provided, then the target is the residual between the ground truth
+            convergence map and the reconstructed image using the provided method. If none
+            is provided, then the target is the ground truth convergence map. In any case,
+            the input is the target corrupted with a white Gaussian noise of standard deviation
+            given by `scale`. Default is None.
         offset: float, optional
             Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
@@ -559,6 +554,9 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
         out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
 
+        if self.input_exists:
+            kappa_inp = out_dict["kappa_inp"]
+            out_dict["kappa_true"] -= kappa_inp # Residual
         kappa_true = out_dict["kappa_true"]
         if self.verbose:
             print("Generate white Gaussian noise")
@@ -591,7 +589,7 @@ class MomentNetworkMixin:
         return kappa_inp, target
 
 
-class HDF5BatchLoaderDeepMass(MomentNetworkMixin, BaseHDF5BatchLoaderDeepMass):
+class HDF5BatchLoaderDeepMass(MomentNetworkMixin, HDF5BatchLoader):
     """Batch loader for training DeepMass."""
 
 class HDF5BatchLoaderDenoiser(MomentNetworkMixin, BaseHDF5BatchLoaderDenoiser):

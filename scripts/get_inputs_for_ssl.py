@@ -84,7 +84,7 @@ def main(
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
     # False in order input convergence maps `kappa_inp` to be stored in the
     # same order as the targets `kappa_true`.
-    data_loader = wlbl.BaseHDF5BatchLoaderDeepMass(
+    data_loader = wlbl.HDF5BatchLoaderGammaKappa(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, sort_by_filename_ori=False,
         input_method=input_wlmethod, recompute_inputs=True,
