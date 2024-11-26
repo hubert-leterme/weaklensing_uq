@@ -67,7 +67,7 @@ python create_augmented_dataset.py path/to/destination/file.hdf5 --idx-lp 2 --ni
 ### Training DeepMass
 
 ```bash
-python train_deepmass.py path/to/augmented/dataset.hdf5 --input-wlmethod wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
+python train.py path/to/augmented/dataset.hdf5 --input-method wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
 ```
 
 ## Jupyter notebook

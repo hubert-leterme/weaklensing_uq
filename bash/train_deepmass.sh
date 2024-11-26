@@ -18,7 +18,7 @@ fi
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python scripts/train_deepmass.py $path_to_augmented_dataset \
+python scripts/train.py $path_to_augmented_dataset \
   --input-method $2 \
   -lr $3 --lr-scheduler \
   --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${current_date} \

@@ -16,7 +16,7 @@ fi
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python scripts/train_deepmass.py $path_to_augmented_dataset \
+python scripts/train.py $path_to_augmented_dataset \
   --input-method $2 \
   --moment-order 2 \
   --path-to-pred-dataset $3 \
