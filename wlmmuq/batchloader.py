@@ -570,7 +570,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
 class MomentNetworkMixin:
 
-    def __init__(self, order, *args, **kwargs):
+    def __init__(self, *args, order=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.order = order # Must be equal to 1 or 2
         self.list_of_outputs = None
