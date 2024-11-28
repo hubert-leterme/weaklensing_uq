@@ -161,12 +161,12 @@ class ShowIntermediateMaps(Callback):
         if (i+1) % self.showevery == 0:
             plt.figure(figsize=self.figsize)
             plt.subplot(121)
-            self._show(kappa, title='Forward')
+            self._show(kappa, title=f'Iteration {i+1} (forward)')
 
     def on_backward_end(self, i, kappa):
         if (i+1) % self.showevery == 0:
             plt.subplot(122)
-            self._show(kappa, title='Backward')
+            self._show(kappa, title=f'Iteration {i+1} (backward)')
             plt.show()
 
 
