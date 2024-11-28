@@ -197,32 +197,23 @@ class RMSE(Callback):
         self.rmse_forward = []
         self.rmse_backward = []
 
-
     def _rmse(self, kappa, stat_list):
         out = wlutils.rmse(
             kappa, self.kappa_true, mask=self.mask
         )
         stat_list.append(out)
 
-
-    def on_forward_end(self, _, kappa):
-        self._rmse(kappa, self.rmse_forward)
-
-
     def on_backward_end(self, _, kappa):
         self._rmse(kappa, self.rmse_backward)
 
-
-    def on_predict_begin(self, _):
+    def on_predict_begin(self, kappa):
         self._reset()
-
+        self._rmse(kappa, self.rmse_backward)
 
     def on_predict_end(self, _):
-        self.rmse_forward = np.stack(self.rmse_forward)
         self.rmse_backward = np.stack(self.rmse_backward)
         if self.path_to_saved_stats is not None:
-            rmse = np.stack([self.rmse_forward, self.rmse_backward])
-            np.save(self.path_to_saved_stats, rmse)
+            np.save(self.path_to_saved_stats, self.rmse_backward)
 
 
 class ProximalWiener:
