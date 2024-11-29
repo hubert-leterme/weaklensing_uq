@@ -160,6 +160,14 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
+        "--scale-range", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Train over a range of noise standard deviations, uniformly drawn "
+            "between `0` and `SCALE_DENOISER` for each input image."
+        )
+    )
+    parser.add_argument(
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
