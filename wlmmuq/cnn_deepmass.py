@@ -1,5 +1,6 @@
 """
 Modified version of the 'cnn_keras.py' module from DeepMass
+https://github.com/NiallJeffrey/DeepMass
 
 """
 
@@ -41,7 +42,7 @@ class SimpleModel:
     A CNN class that creates a simple denoiser
     """
 
-    def __init__(self, map_size, learning_rate):
+    def __init__(self, map_size, learning_rate, loss='mse'):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
@@ -49,6 +50,7 @@ class SimpleModel:
         """
         self.map_size = map_size
         self.learning_rate = learning_rate
+        self.loss = loss
 
     def model(self):
         input_img = Input(shape=(self.map_size, self.map_size, 1))
@@ -69,9 +71,9 @@ class SimpleModel:
         simple.summary()
 
         if self.learning_rate is None:
-            simple.compile(optimizer='adam', loss='mse')
+            simple.compile(optimizer='adam', loss=self.loss)
         else:
-            simple.compile(optimizer=Adam(lr=self.learning_rate), loss='mse')
+            simple.compile(optimizer=Adam(lr=self.learning_rate), loss=self.loss)
 
         return simple
 
@@ -81,7 +83,7 @@ class UnetlikeBaseline:
     A CNN class that creates a denoising Unet
     """
 
-    def __init__(self, map_size, learning_rate, channels=[1,1], dropout_val=None):
+    def __init__(self, map_size, learning_rate, channels=[1,1], dropout_val=None, loss='mse'):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
@@ -91,6 +93,7 @@ class UnetlikeBaseline:
         self.learning_rate = learning_rate
         self.dropout_val = dropout_val
         self.channels = channels
+        self.loss = loss
 
         if dropout_val is not None:
             print('using dropout: ' + str(dropout_val))
@@ -146,8 +149,8 @@ class UnetlikeBaseline:
         unet.summary()
 
         if self.learning_rate is None:
-            unet.compile(optimizer='adam', loss='mse')
+            unet.compile(optimizer='adam', loss=self.loss)
         else:
-            unet.compile(optimizer=Adam(lr=self.learning_rate), loss='mse')
+            unet.compile(optimizer=Adam(lr=self.learning_rate), loss=self.loss)
 
         return unet
