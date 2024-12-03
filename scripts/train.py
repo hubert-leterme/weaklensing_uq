@@ -7,9 +7,9 @@ import threading
 
 import numpy as np
 from tensorflow import data, keras
-from deepmass import cnn_keras as cnn
 
 import wlmmuq.batchloader as wlbl
+import wlmmuq.cnn_deepmass as cnn
 
 SCALE_DENOISER = 7e-2
 MOMENT_ORDER = 1
@@ -21,6 +21,7 @@ NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
+LOSS = 'mse'
 OFFSET = 0.5 # As in DeepMass
 
 # Monkey-patch Adam (to avoid `ValueError: Argument(s) not recognized: {'lr': 1e-05}`)
@@ -39,7 +40,7 @@ def main(
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
-        lr_scheduler=False, offset=OFFSET, checkpoint_dir=None, save_freq=None,
+        lr_scheduler=False, loss=LOSS, offset=OFFSET, checkpoint_dir=None, save_freq=None,
         backup_dir=None, path_to_csv_log=None, path_to_tensorboard_log=None,
         seed=None, verbose=False, **kwargs
 ):
@@ -72,7 +73,9 @@ def main(
     )
 
     # Initialize model
-    cnn_instance = cnn.UnetlikeBaseline(map_size=imgsize, learning_rate=learning_rate)
+    cnn_instance = cnn.UnetlikeBaseline(
+        map_size=imgsize, learning_rate=learning_rate, loss=loss
+    )
     cnn_model = cnn_instance.model()
 
     # Define the checkpoint callback
@@ -246,6 +249,13 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Drop the learning rate by a factor 10 three times during training"
+        )
+    )
+    parser.add_argument(
+        "--loss", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            f"Training loss function. Default = {LOSS}"
         )
     )
     parser.add_argument(

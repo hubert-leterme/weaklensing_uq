@@ -10,8 +10,8 @@ stats_dir=/ceph/chercheurs/leterme231/stats
 current_date=$(date +"%Y%m%d_%H%M%S")
 
 # Check if correct number of arguments are provided
-if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 <GPU_ID> <SCALE> <LEARNING_RATE>"
+if [ "$#" -ne 4 ]; then
+  echo "Usage: $0 <GPU_ID> <SCALE> <LEARNING_RATE> <LOSS>"
   echo "Example: $0 0 7e-2 1e-4"
   exit 1
 fi
@@ -24,6 +24,7 @@ export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
   --denoiser --scale-denoiser $2 --scale-range \
   -lr $3 --lr-scheduler \
+  --loss $4 \
   --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date} \
   --save-freq $save_freq \
   --backup-dir $backup_dir/denoiser_${scale_dir}_${current_date} \
