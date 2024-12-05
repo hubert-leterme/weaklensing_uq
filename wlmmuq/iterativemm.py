@@ -77,18 +77,31 @@ class PGDMassMapping:
             # intermediate array is set to 0.
             resgamma[..., ~self.mask] = 0.
 
-            # Gradient-descent step
-            # The convergence is real-valued, therefore the gradient is also real-valued
-            kappa += self.step_size * wlutils.get_convergence_from_shear(
+            # Compute the negative-gradient, projected onto the subspace of real-valued
+            # arrays orthogonal to the kernel of the Kaiser-Squires operator
+            neg_grad = wlutils.get_convergence_from_shear(
                 resgamma, return_complex=True
             ).real
+            neg_grad -= np.mean(neg_grad, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+
+            # Gradient-descent step
+            # The convergence is real-valued, therefore the gradient is also real-valued
+            kappa += self.step_size * neg_grad
+
             for callback in callbacks:
                 callback.on_forward_end(i, kappa)
 
             #########################################################################
             # Backward step
             #########################################################################
+
+            # Backward operator (e.g., deep denoiser for PnP)
             kappa = self.backward(kappa)
+
+            # Projection onto the subspace orthogonal to the kernel of the
+            # Kaiser-Squires operator
+            kappa -= np.mean(kappa, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+
             for callback in callbacks:
                 callback.on_backward_end(i, kappa)
 
