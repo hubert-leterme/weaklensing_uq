@@ -12,20 +12,24 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -ne 4 ]; then
   echo "Usage: $0 <GPU_ID> <SCALE> <LEARNING_RATE> <LOSS>"
-  echo "Example: $0 0 7e-2 1e-4"
+  echo "Example: $0 0 7e-2 1e-4 mse"
   exit 1
 fi
 
-scale_formatted=$(printf "%.2e" "$2")
+scale=$2
+lr=$3
+loss=$4
+
+scale_formatted=$(printf "%.2e" "$scale")
 scale_dir=$(echo "$scale_formatted" | sed 's/[.-]/_/g')
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
-  --denoiser --scale-denoiser $2 --scale-range \
-  -lr $3 --lr-scheduler \
-  --loss $4 \
+  --denoiser --scale-denoiser $scale --scale-range \
+  -lr $lr --lr-scheduler \
+  --loss $loss \
   --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date} \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${scale_dir}_${current_date} \
-  --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${current_date}_pe.csv --seed 42 -v
+  --backup-dir $backup_dir/denoiser_${scale_dir}_${loss}_${current_date} \
+  --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${loss}_${current_date}_pe.csv --seed 42 -v
