@@ -29,7 +29,7 @@ python scripts/train.py $path_to_augmented_dataset \
   --denoiser --scale-denoiser $scale --scale-range \
   -lr $lr --lr-scheduler \
   --loss $loss \
-  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${current_date} \
+  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${loss}_${current_date} \
   --save-freq $save_freq \
   --backup-dir $backup_dir/denoiser_${scale_dir}_${loss}_${current_date} \
   --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${loss}_${current_date}_pe.csv --seed 42 -v
