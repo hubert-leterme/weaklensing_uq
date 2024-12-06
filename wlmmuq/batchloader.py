@@ -515,12 +515,8 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         batch_size : int, optional
             Number of images per batch. Default is None.
         input_method: str, optional
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
-            If provided, then the target is the residual between the ground truth
-            convergence map and the reconstructed image using the provided method. If none
-            is provided, then the target is the ground truth convergence map. In any case,
-            the input is the target corrupted with a white Gaussian noise of standard deviation
-            given by `scale`. Default is None.
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            registered in the HDF5 dataset. Default is None.
         offset: float, optional
             Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
@@ -559,10 +555,6 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
 
         out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
-
-        if self.input_exists:
-            kappa_inp = out_dict["kappa_inp"]
-            out_dict["kappa_true"] -= kappa_inp # Residual
         kappa_true = out_dict["kappa_true"]
 
         if self.verbose:
