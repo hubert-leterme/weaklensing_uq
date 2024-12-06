@@ -14,7 +14,7 @@ path_to_output_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/$4
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python scripts/predict_for_moment_network.py \
+python scripts/predict.py \
   $path_to_trained_model $path_to_augmented_dataset $path_to_output_dataset \
   --input-method $2 \
   --seed 42 -v
