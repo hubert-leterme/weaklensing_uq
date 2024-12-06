@@ -5,7 +5,7 @@ import numpy as np
 
 import wlmmuq.batchloader as wlbl
 
-SCALE_DENOISER = 7e-2
+SCALE_DENOISER = 1.4e-1
 MOMENT_ORDER = 1
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset

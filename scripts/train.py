@@ -13,7 +13,7 @@ import wlmmuq.cnn_deepmass as wlcnn
 import wlmmuq.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
-SCALE_DENOISER = 7e-2
+SCALE_DENOISER = 1.4e-1
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
@@ -166,14 +166,15 @@ if __name__ == "__main__":
         "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Generate noisy convergence maps instead of KS- or Wiener-estimations."
+            "Reconstruct the original convergence map from an input corrupted "
+            "by a white Gaussian noise."
         )
     )
     parser.add_argument(
         "--scale-denoiser", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Noise standard deviation, if option `--denoiser` is used. "
+            "Noise standard deviation, if flag `--denoiser` is used. "
             f"Default = '{SCALE_DENOISER}'"
         )
     )
