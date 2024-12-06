@@ -7,7 +7,6 @@ from tensorflow import keras, data
 
 import wlmmuq.batchloader as wlbl
 
-SCALE_DENOISER = 1.4e-1
 NIMGS = 72000
 IMGSIZE = 304
 NIMGS_ITER = 1024
@@ -17,9 +16,9 @@ IDX_DATASET = 'kappa_pred'
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
-        denoiser=False, scale_denoiser=SCALE_DENOISER,
-        nimgs=NIMGS, imgsize=IMGSIZE, nimgs_iter=NIMGS_ITER, batch_size=BATCH_SIZE,
-        offset=OFFSET, idx_dataset=IDX_DATASET, seed=None, verbose=False, **kwargs
+        denoiser=False, nimgs=NIMGS, imgsize=IMGSIZE, nimgs_iter=NIMGS_ITER,
+        batch_size=BATCH_SIZE, offset=OFFSET, idx_dataset=IDX_DATASET,
+        seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -32,7 +31,6 @@ def main(
         batch_loader = wlbl.HDF5BatchLoader
     else:
         batch_loader = wlbl.BaseHDF5BatchLoaderDenoiser
-        kwargs.update({'scale': scale_denoiser})
 
     # *** CAUTION ***
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
@@ -103,18 +101,19 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--scale-denoiser", type=float,
+        "--scale", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Noise standard deviation, if flag `--denoiser` is used. "
-            f"Default = '{SCALE_DENOISER}'"
+            "Noise standard deviation for the denoiser. "
+            "Must be provided if the `--denoiser` flag is used."
         )
     )
     parser.add_argument(
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
+            "Weak lensing method used as input for DeepMass "
+            "('ks', 'wiener' or 'wiener_pgd'). "
             "Must be provided unless the `--denoiser` flag is used."
         )
     )
