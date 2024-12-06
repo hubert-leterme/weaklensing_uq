@@ -7,18 +7,19 @@ from tensorflow import keras, data
 
 import wlmmuq.batchloader as wlbl
 
-INPUT_METHOD = 'wiener'
+SCALE_DENOISER = 1.4e-1
 NIMGS = 72000
 IMGSIZE = 304
 NIMGS_ITER = 1024
 BATCH_SIZE = 32
 OFFSET = 0.5
+IDX_DATASET = 'kappa_pred'
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
-        input_method=INPUT_METHOD,
+        denoiser=False, scale_denoiser=SCALE_DENOISER,
         nimgs=NIMGS, imgsize=IMGSIZE, nimgs_iter=NIMGS_ITER, batch_size=BATCH_SIZE,
-        offset=OFFSET, seed=None, verbose=False, **kwargs
+        offset=OFFSET, idx_dataset=IDX_DATASET, seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -27,12 +28,18 @@ def main(
     if verbose:
         print("Initialize batch generator")
 
+    if not denoiser:
+        batch_loader = wlbl.HDF5BatchLoader
+    else:
+        batch_loader = wlbl.BaseHDF5BatchLoaderDenoiser
+        kwargs.update({'scale': scale_denoiser})
+
     # *** CAUTION ***
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
     # False in order input convergence maps `kappa_inp` to be stored in the
     # same order as the targets `kappa_true`.
-    data_loader = wlbl.HDF5BatchLoader(
-        path_to_augmented_dataset, input_method=input_method,
+    data_gen = batch_loader(
+        path_to_augmented_dataset,
         nimgs=nimgs, batch_size=batch_size,
         sort_by_filename_ori=False, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp'],
@@ -45,7 +52,6 @@ def main(
         cnn_model.summary()
 
     with h5py.File(path_to_output_dataset, 'w') as file:
-        idx_dataset = "kappa_deepmass"
         try:
             del file[idx_dataset]
         except KeyError:
@@ -63,15 +69,15 @@ def main(
         while end_idx < nimgs:
             beg_idx = end_idx
             end_idx = min(beg_idx + nimgs_iter, nimgs)
-            ds = data_loader.to_tf_dataset(
+            ds = data_gen.to_tf_dataset(
                 min_idx=beg_idx, max_idx=end_idx, raise_stop_iteration=True
             ).prefetch(data.AUTOTUNE)
             print(f"Processing images {beg_idx} to {end_idx}")
-            kappa_deepmass = cnn_model.predict(
+            kappa_pred = cnn_model.predict(
                 ds, steps=(end_idx - beg_idx) // batch_size
             )
-            kappa_deepmass -= offset # Remove offset before saving
-            file[idx_dataset][beg_idx:end_idx] = kappa_deepmass[..., 0]
+            kappa_pred -= offset # Remove offset before saving
+            file[idx_dataset][beg_idx:end_idx] = kappa_pred[..., 0]
 
 
 if __name__ == "__main__":
@@ -89,11 +95,27 @@ if __name__ == "__main__":
         help="Path to the output dataset to be created (HDF5 file)"
     )
     parser.add_argument(
+        "--denoiser", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Reconstruct the original convergence map from an input corrupted "
+            "by a white Gaussian noise."
+        )
+    )
+    parser.add_argument(
+        "--scale-denoiser", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Noise standard deviation, if flag `--denoiser` is used. "
+            f"Default = '{SCALE_DENOISER}'"
+        )
+    )
+    parser.add_argument(
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
-            f"Default = '{INPUT_METHOD}'"
+            "Must be provided unless the `--denoiser` flag is used."
         )
     )
     parser.add_argument(
