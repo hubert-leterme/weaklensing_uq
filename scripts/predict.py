@@ -9,15 +9,14 @@ import wlmmuq.batchloader as wlbl
 
 NIMGS = 72000
 IMGSIZE = 304
-NIMGS_ITER = 1024
-BATCH_SIZE = 32
+NIMGS_ITER = 256
 OFFSET = 0.5
 IDX_DATASET = 'kappa_pred'
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
         denoiser=False, nimgs=NIMGS, imgsize=IMGSIZE, nimgs_iter=NIMGS_ITER,
-        batch_size=BATCH_SIZE, offset=OFFSET, idx_dataset=IDX_DATASET,
+        offset=OFFSET, idx_dataset=IDX_DATASET,
         seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
@@ -38,10 +37,9 @@ def main(
     # same order as the targets `kappa_true`.
     data_gen = batch_loader(
         path_to_augmented_dataset,
-        nimgs=nimgs, batch_size=batch_size,
-        sort_by_filename_ori=False, shuffle=False,
+        nimgs=nimgs, sort_by_filename_ori=False, shuffle=False,
         output_shape=imgsize, list_of_outputs=['kappa_inp'],
-        offset=offset, newaxis=True, **kwargs
+        **kwargs
     )
 
     # Load trained model
@@ -67,15 +65,16 @@ def main(
         while end_idx < nimgs:
             beg_idx = end_idx
             end_idx = min(beg_idx + nimgs_iter, nimgs)
-            ds = data_gen.to_tf_dataset(
-                min_idx=beg_idx, max_idx=end_idx, raise_stop_iteration=True
-            ).prefetch(data.AUTOTUNE)
-            print(f"Processing images {beg_idx} to {end_idx}")
-            kappa_pred = cnn_model.predict(
-                ds, steps=(end_idx - beg_idx) // batch_size
+            kappa_inp = data_gen.load_batch(
+                beg_idx=beg_idx, max_idx=end_idx, get_all_images=True
             )
-            kappa_pred -= offset # Remove offset before saving
-            file[idx_dataset][beg_idx:end_idx] = kappa_pred[..., 0]
+            print(f"Processing images {beg_idx} to {end_idx}")
+
+            kappa_inp = kappa_inp[..., np.newaxis] + offset
+            kappa_pred = cnn_model.predict(kappa_inp)
+            kappa_pred = kappa_pred[..., 0] - offset
+
+            file[idx_dataset][beg_idx:end_idx] = kappa_pred
 
 
 if __name__ == "__main__":
@@ -139,13 +138,6 @@ if __name__ == "__main__":
         help=(
             "Number of images per iteration, to be saved into the HDF5 file. "
             f"Default = {NIMGS_ITER}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Batch size. Default = {BATCH_SIZE}"
         )
     )
     parser.add_argument(
