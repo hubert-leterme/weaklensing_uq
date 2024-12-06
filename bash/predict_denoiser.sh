@@ -3,7 +3,7 @@
 # Check if correct number of arguments are provided
 if [ "$#" -ne 4 ]; then
   echo "Usage: $0 <GPU_ID> <SCALE> <TRAINED_MODEL> <OUTPUT_DATASET>"
-  echo "Example: $0 0 1.4e-1 denoiser_1_40e_01_20241118_183322/20.keras LP002_augmented_pred_denoiser_1_40e_01_20241118_183322.hdf5"
+  echo "Example: $0 0 1.4e-1 denoiser_1_40e_01_20241118_183322/pe/20.keras LP002_augmented_pred_denoiser_1_40e_01_20241118_183322.hdf5"
   exit 1
 fi
 
