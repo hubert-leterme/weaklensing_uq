@@ -1,6 +1,8 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow import keras
 
 import pycs.astro.wl.mass_mapping as csmm
 
@@ -254,3 +256,27 @@ class ProximalWiener:
         out = np.fft.ifft2(out)
 
         return out.real
+
+
+class PinballLoss(keras.losses.Loss):
+
+    def __init__(self, quantile=0.5, name="pinball_loss"):
+        """
+        Initialize the Pinball Loss.
+        :param quantile: The desired quantile (e.g., 0.5 for median).
+        :param name: Optional name for the loss instance.
+        """
+        super().__init__(name=name)
+        self.quantile = quantile
+
+
+    def call(self, y_true, y_pred):
+        """
+        Compute the Pinball Loss.
+        :param y_true: Ground truth values.
+        :param y_pred: Predicted values.
+        :return: Computed loss.
+        """
+        error = y_true - y_pred
+        loss = tf.maximum(self.quantile * error, (self.quantile - 1) * error)
+        return tf.reduce_mean(loss)

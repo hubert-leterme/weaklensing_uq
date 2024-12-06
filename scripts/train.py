@@ -9,7 +9,9 @@ import numpy as np
 from tensorflow import data, keras
 
 import wlmmuq.batchloader as wlbl
-import wlmmuq.cnn_deepmass as cnn
+import wlmmuq.cnn_deepmass as wlcnn
+import wlmmuq.iterativemm as wlpnp
+import wlmmuq.utils as wlutils
 
 SCALE_DENOISER = 7e-2
 MOMENT_ORDER = 1
@@ -23,6 +25,10 @@ BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
 LOSS = 'mse'
 OFFSET = 0.5 # As in DeepMass
+
+# For the pinball loss
+CONFIDENCE = 2. # Level of confidence (n-sigma)
+ERROR_RATE = wlutils.get_alpha_from_confidence(CONFIDENCE)
 
 # Monkey-patch Adam (to avoid `ValueError: Argument(s) not recognized: {'lr': 1e-05}`)
 _init_ = keras.optimizers.Adam.__init__
@@ -40,9 +46,10 @@ def main(
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
-        lr_scheduler=False, loss=LOSS, offset=OFFSET, checkpoint_dir=None, save_freq=None,
-        backup_dir=None, path_to_csv_log=None, path_to_tensorboard_log=None,
-        seed=None, verbose=False, **kwargs
+        lr_scheduler=False, loss=LOSS, error_rate=ERROR_RATE, quantile=None,
+        offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
+        path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
+        verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -73,7 +80,15 @@ def main(
     )
 
     # Initialize model
-    cnn_instance = cnn.UnetlikeBaseline(
+    if loss == 'pinball':
+        if quantile == 'lower':
+            quantile = error_rate / 2
+        elif quantile == 'upper':
+            quantile = 1 - error_rate / 2
+        else:
+            raise ValueError
+        loss = wlpnp.PinballLoss(quantile=quantile)
+    cnn_instance = wlcnn.UnetlikeBaseline(
         map_size=imgsize, learning_rate=learning_rate, loss=loss
     )
     cnn_model = cnn_instance.model()
@@ -255,7 +270,21 @@ if __name__ == "__main__":
         "--loss", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Training loss function. Default = {LOSS}"
+            f"Training loss function, e.g., 'mse', 'mae', or 'pinball'. Default = {LOSS}"
+        )
+    )
+    parser.add_argument(
+        "-e", "--error-rate", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            f"Error rate for the pinball loss (UQ). Default = {ERROR_RATE:.1%}"
+        )
+    )
+    parser.add_argument(
+        "-q", "--quantile", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "One of: 'lower' (error_rate / 2) or 'upper' (error_rate / 2). Default = None"
         )
     )
     parser.add_argument(
