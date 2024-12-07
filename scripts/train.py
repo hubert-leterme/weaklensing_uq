@@ -96,8 +96,10 @@ def main(
     if checkpoint_dir is not None:
         if moment_order == 1:
             output_type = "pe" # Point estimate
-        else:
+        elif moment_order == 2:
             output_type = "var" # Variance
+        else:
+            raise ValueError
         filepath = os.path.join(
             checkpoint_dir, output_type,
             f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
