@@ -13,7 +13,6 @@ import wlmmuq.cnn_deepmass as wlcnn
 import wlmmuq.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
-SCALE_DENOISER = 1.4e-1
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
@@ -42,7 +41,7 @@ keras.optimizers.Adam.__init__ = new_init
 
 
 def main(
-        path_to_augmented_dataset, denoiser=False, scale_denoiser=SCALE_DENOISER,
+        path_to_augmented_dataset, denoiser=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
@@ -58,7 +57,6 @@ def main(
     # Initialize batch generators for training and validation
     if denoiser:
         batch_loader = wlbl.HDF5BatchLoaderDenoiser
-        kwargs.update(scale=scale_denoiser)
     else:
         batch_loader = wlbl.HDF5BatchLoaderDeepMass
 
@@ -171,11 +169,10 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--scale-denoiser", type=float,
+        "--scale", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Noise standard deviation, if flag `--denoiser` is used. "
-            f"Default = '{SCALE_DENOISER}'"
+            "Noise standard deviation, if flag `--denoiser` is used."
         )
     )
     parser.add_argument(
@@ -183,7 +180,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Train over a range of noise standard deviations, uniformly drawn "
-            "between `0` and `SCALE_DENOISER` for each input image."
+            "between `0` and `SCALE` for each input image."
         )
     )
     parser.add_argument(

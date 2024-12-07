@@ -5,7 +5,6 @@ import numpy as np
 
 import wlmmuq.batchloader as wlbl
 
-SCALE_DENOISER = 1.4e-1
 MOMENT_ORDER = 1
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
@@ -15,8 +14,7 @@ OFFSET = 0.5
 OUTPUT_DIR = '.'
 
 def main(
-        path_to_augmented_dataset, denoiser=False, scale_denoiser=SCALE_DENOISER,
-        moment_order=MOMENT_ORDER,
+        path_to_augmented_dataset, denoiser=False, moment_order=MOMENT_ORDER,
         path_to_pred_dataset=None, imgsize=IMGSIZE, nimgs=NIMGS_TRAIN,
         batch_size=BATCH_SIZE, keep_unsorted=None,
         offset=OFFSET, output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
@@ -28,7 +26,6 @@ def main(
     # Initialize batch generators
     if denoiser:
         batch_loader = wlbl.HDF5BatchLoaderDenoiser
-        kwargs.update(scale=scale_denoiser)
     else:
         batch_loader = wlbl.HDF5BatchLoaderDeepMass
 
@@ -69,11 +66,10 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--scale-denoiser", type=float,
+        "--scale", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Noise standard deviation, if option `--denoiser` is used. "
-            f"Default = '{SCALE_DENOISER}'"
+            "Noise standard deviation, if option `--denoiser` is used."
         )
     )
     parser.add_argument(

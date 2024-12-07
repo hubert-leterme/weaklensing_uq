@@ -26,7 +26,7 @@ scale_dir=$(echo "$scale_formatted" | sed 's/[.-]/_/g')
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
-  --denoiser --scale-denoiser $scale --scale-range \
+  --denoiser --scale $scale --scale-range \
   -lr $lr --lr-scheduler \
   --loss pinball -q $quantile \
   --checkpoint-dir $checkpoint_dir/uqdenoiser_${quantile}_${scale_dir}_${current_date} \
