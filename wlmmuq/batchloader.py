@@ -122,10 +122,10 @@ class HDF5BatchLoader:
             else:
                 self.input_exists = True
 
-        # Load dataset of DeepMass predictions
+        # Load dataset of predictions (for order-2 moment networks)
         if self.pred_filepath is not None:
             self.file_pred = h5py.File(self.pred_filepath, 'r') # Keep file open
-            self.ds_kappa_pred = self.file_pred['kappa_deepmass']
+            self.ds_kappa_pred = self.file_pred['kappa_pred']
 
 
     def _initialize_dataset(self):
