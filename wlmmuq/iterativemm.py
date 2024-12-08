@@ -8,6 +8,10 @@ import pycs.astro.wl.mass_mapping as csmm
 
 from . import utils as wlutils
 
+############################################################################
+# PGD mass mapping
+############################################################################
+
 class PGDMassMapping:
     """
     Class for iterative proximal gradient descent (or forward-backward)
@@ -15,7 +19,8 @@ class PGDMassMapping:
 
     """
     def __init__(
-            self, std_noise, step_size, backward, niter, mask=None, verbose=False
+            self, std_noise, step_size, backward, niter, backward_uq=None,
+            mask=None, verbose=False
     ):
         """
         Parameters
@@ -34,15 +39,19 @@ class PGDMassMapping:
             Gaussian noise with zero mean and variance equal to step_size.
         niter: int
             Number of iterations.
+        backward_uq: callable, default = None
+            If provided, performs a specific forward-backward step after the last
+            iteration for uncertainty quantification. 
         mask: np.ndarray, shape = (nx, ny), default = None
             Mask to apply in case of missing data. In practice, the noise
             covariance matrix is set to infinity in the masked regions.
         verbose: bool, default=False
         
         """
-        self.std_noise = std_noise
+        self.var_noise = std_noise**2
         self.step_size = step_size
         self.backward = backward
+        self.backward_uq = backward_uq
         self.niter = niter
         if mask is not None:
             self.mask = mask
@@ -51,11 +60,35 @@ class PGDMassMapping:
         self.verbose = verbose
 
 
+    def forward(self, kappa, gamma):
+
+        resgamma = gamma - wlutils.get_shear_from_convergence(
+            kappa, return_complex=True
+        )
+        resgamma /= self.var_noise
+
+        # In masked pixels, the noise variance is assumed infinite, and therefore the
+        # intermediate array is set to 0.
+        resgamma[..., ~self.mask] = 0.
+
+        # Compute the negative-gradient, projected onto the subspace of real-valued
+        # arrays orthogonal to the kernel of the Kaiser-Squires operator
+        neg_grad = wlutils.get_convergence_from_shear(
+            resgamma, return_complex=True
+        ).real
+        neg_grad -= np.mean(neg_grad, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+
+        # Gradient-descent step
+        # The convergence is real-valued, therefore the gradient is also real-valued
+        kappa = kappa + self.step_size * neg_grad
+
+        return kappa
+
+
     def __call__(self, gamma, kappa0=None, callbacks=None):
 
         if callbacks is None:
             callbacks = []
-        var_noise = self.std_noise**2
         if kappa0 is not None:
             assert kappa0.shape == gamma.shape
             kappa = kappa0.copy() # Shape = ([nimgs], nx, ny)
@@ -67,39 +100,13 @@ class PGDMassMapping:
             if self.verbose:
                 print(f'Iteration {i+1}')
 
-            #########################################################################
             # Forward step
-            #########################################################################
-            resgamma = gamma - wlutils.get_shear_from_convergence(
-                kappa, return_complex=True
-            )
-            resgamma /= var_noise
-
-            # In masked pixels, the noise variance is assumed infinite, and therefore the
-            # intermediate array is set to 0.
-            resgamma[..., ~self.mask] = 0.
-
-            # Compute the negative-gradient, projected onto the subspace of real-valued
-            # arrays orthogonal to the kernel of the Kaiser-Squires operator
-            neg_grad = wlutils.get_convergence_from_shear(
-                resgamma, return_complex=True
-            ).real
-            neg_grad -= np.mean(neg_grad, axis=(-2, -1))[..., np.newaxis, np.newaxis]
-
-            # Gradient-descent step
-            # The convergence is real-valued, therefore the gradient is also real-valued
-            kappa += self.step_size * neg_grad
-
+            kappa = self.forward(kappa, gamma)
             for callback in callbacks:
                 callback.on_forward_end(i, kappa)
 
-            #########################################################################
             # Backward step
-            #########################################################################
-
-            # Backward operator (e.g., deep denoiser for PnP)
             kappa = self.backward(kappa)
-
             for callback in callbacks:
                 callback.on_backward_end(i, kappa)
 
@@ -108,6 +115,10 @@ class PGDMassMapping:
 
         return kappa
 
+
+############################################################################
+# Callbacks
+############################################################################
 
 class Callback:
 
@@ -199,13 +210,11 @@ class RMSE(Callback):
         self.mask = mask
         self.path_to_saved_stats = path_to_saved_stats
 
-        self.rmse_forward = None
         self.rmse_backward = None
         self._reset()
 
 
     def _reset(self):
-        self.rmse_forward = []
         self.rmse_backward = []
 
     def _rmse(self, kappa, stat_list):
@@ -226,6 +235,39 @@ class RMSE(Callback):
         if self.path_to_saved_stats is not None:
             np.save(self.path_to_saved_stats, self.rmse_backward)
 
+
+class UQ(Callback):
+
+    def __init__(
+            self, pgd_massmapping: PGDMassMapping, backward_uq,
+            gamma: np.ndarray
+    ):
+        """
+        Parameters
+        ----------
+        pgd_massmapping: PGDMassMapping instance
+        backward_uq: callable, default = None
+            Performs a specific forward-backward step after the last
+            PGD iteration for uncertainty quantification.
+        gamma: np.ndarray, shape = (nimgs, nx, ny)
+            Input noisy shear map
+        
+        """
+        self.pgd_massmapping = pgd_massmapping
+        self.backward_uq = backward_uq
+        self.gamma = gamma
+
+        self.kappa_uq = None
+
+    def on_predict_end(self, kappa):
+        kappa_uq = kappa.copy()
+        kappa_uq = self.pgd_massmapping.forward(kappa_uq, self.gamma)
+        self.kappa_uq = self.backward_uq(kappa)
+
+
+############################################################################
+# Backward operators
+############################################################################
 
 class ProximalWiener:
     r"""
@@ -254,26 +296,65 @@ class ProximalWiener:
         return out.real
 
 
-class KerasDenoiser:
+class BaseKerasDenoiser:
 
-    def __init__(self, model, offset=0., **kwargs):
+    def __init__(self, models, offset=0., offset_out=True, **kwargs):
 
-        self.model = model
+        self.models = models
         self.offset = offset
+        self.offset_out = offset_out
         self.kwargs = kwargs
 
 
     def __call__(self, inp):
 
-        inp = inp[..., np.newaxis] + self.offset 
-        out = self.model.predict(inp, **self.kwargs)
-        out = out[..., 0] - self.offset
+        list_of_outputs = []
+        inp = inp[..., np.newaxis] + self.offset
+        for model in self.models:
+            out = model.predict(inp, **self.kwargs)
+            out = out[..., 0]
+            if self.offset_out:
+                out -= self.offset
+            list_of_outputs.append(out)
+
+        return list_of_outputs
+
+
+class KerasDenoiser(BaseKerasDenoiser):
+
+    def __init__(self, model, **kwargs):
+        super().__init__([model], **kwargs)
+
+
+    def __call__(self, inp):
+
+        out = super().__call__(inp)[0]
 
         # Projection onto the subspace orthogonal to the kernel of the
         # Kaiser-Squires operator
         out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
         return out
+
+
+class KerasQuantileDenoiser(BaseKerasDenoiser):
+
+    def __init__(self, model_lower, model_upper, **kwargs):
+        super().__init__([model_lower, model_upper], **kwargs)
+
+
+class KerasDenoiserVar(BaseKerasDenoiser):
+
+    def __init__(self, model, **kwargs):
+        super().__init__([model], offset_out=False, **kwargs)
+
+    def __call__(self, inp):
+        return super().__call__(inp)[0]
+
+
+############################################################################
+# Loss functions for the denoiser
+############################################################################
 
 
 class PinballLoss(keras.losses.Loss):
