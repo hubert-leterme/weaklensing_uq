@@ -100,10 +100,6 @@ class PGDMassMapping:
             # Backward operator (e.g., deep denoiser for PnP)
             kappa = self.backward(kappa)
 
-            # Projection onto the subspace orthogonal to the kernel of the
-            # Kaiser-Squires operator
-            kappa -= np.mean(kappa, axis=(-2, -1))[..., np.newaxis, np.newaxis]
-
             for callback in callbacks:
                 callback.on_backward_end(i, kappa)
 
@@ -261,14 +257,22 @@ class ProximalWiener:
 class KerasDenoiser:
 
     def __init__(self, model, offset=0., **kwargs):
+
         self.model = model
         self.offset = offset
         self.kwargs = kwargs
 
+
     def __call__(self, inp):
+
         inp = inp[..., np.newaxis] + self.offset 
         out = self.model.predict(inp, **self.kwargs)
         out = out[..., 0] - self.offset
+
+        # Projection onto the subspace orthogonal to the kernel of the
+        # Kaiser-Squires operator
+        out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+
         return out
 
 
