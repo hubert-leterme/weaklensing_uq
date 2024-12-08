@@ -258,6 +258,20 @@ class ProximalWiener:
         return out.real
 
 
+class KerasDenoiser:
+
+    def __init__(self, model, offset=0., **kwargs):
+        self.model = model
+        self.offset = offset
+        self.kwargs = kwargs
+
+    def __call__(self, inp):
+        inp = inp[..., np.newaxis] + self.offset 
+        out = self.model.predict(inp, **self.kwargs)
+        out = out[..., 0] - self.offset
+        return out
+
+
 class PinballLoss(keras.losses.Loss):
 
     def __init__(
