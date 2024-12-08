@@ -277,7 +277,7 @@ if __name__ == "__main__":
         "-e", "--error-rate", type=float,
         default=argparse.SUPPRESS,
         help=(
-            f"Error rate for the pinball loss (UQ). Default = {ERROR_RATE:.1%}"
+            f"Error rate for the pinball loss (UQ). Default = {ERROR_RATE:.2e}"
         )
     )
     parser.add_argument(
