@@ -260,13 +260,16 @@ class ProximalWiener:
 
 class PinballLoss(keras.losses.Loss):
 
-    def __init__(self, quantile=0.5, name="pinball_loss"):
+    def __init__(
+            self, quantile=0.5, reduction=tf.keras.losses.Reduction.AUTO,
+            name="pinball_loss"
+    ):
         """
         Initialize the Pinball Loss.
         :param quantile: The desired quantile (e.g., 0.5 for median).
         :param name: Optional name for the loss instance.
         """
-        super().__init__(name=name)
+        super().__init__(reduction=reduction, name=name)
         self.quantile = quantile
 
 
@@ -280,3 +283,13 @@ class PinballLoss(keras.losses.Loss):
         error = y_true - y_pred
         loss = tf.maximum(self.quantile * error, (self.quantile - 1) * error)
         return tf.reduce_mean(loss)
+
+    def get_config(self):
+        """
+        Serialize the loss configuration for saving and loading.
+        """
+        config = super().get_config()
+        config.update({
+            "quantile": self.quantile,
+        })
+        return config
