@@ -256,6 +256,7 @@ class UQ(Callback):
         self.kappa_uq = None
 
     def on_predict_end(self, kappa):
+        print("Uncertainty quantification...")
         kappa_uq = kappa.copy()
         kappa_uq = self.pgd_massmapping.forward(kappa_uq, self.gamma)
         self.kappa_uq = self.backward_uq(kappa)
