@@ -19,7 +19,7 @@ class PGDMassMapping:
 
     """
     def __init__(
-            self, std_noise, step_size, backward, niter, backward_uq=None,
+            self, std_noise, step_size, backward, niter,
             mask=None, verbose=False
     ):
         """
@@ -39,9 +39,6 @@ class PGDMassMapping:
             Gaussian noise with zero mean and variance equal to step_size.
         niter: int
             Number of iterations.
-        backward_uq: callable, default = None
-            If provided, performs a specific forward-backward step after the last
-            iteration for uncertainty quantification. 
         mask: np.ndarray, shape = (nx, ny), default = None
             Mask to apply in case of missing data. In practice, the noise
             covariance matrix is set to infinity in the masked regions.
@@ -51,7 +48,6 @@ class PGDMassMapping:
         self.var_noise = std_noise**2
         self.step_size = step_size
         self.backward = backward
-        self.backward_uq = backward_uq
         self.niter = niter
         if mask is not None:
             self.mask = mask
