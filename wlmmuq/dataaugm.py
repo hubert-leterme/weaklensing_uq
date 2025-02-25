@@ -17,7 +17,7 @@ class Rotation:
 
     def _vmin_j(self, rows):
 
-        condition = (rows < self.rotated_imgsize_1)
+        condition = rows < self.rotated_imgsize_1
 
         out = np.zeros(rows.shape, dtype=int)
         out[condition] = self.rotated_imgsize_0 * (1 - rows[condition] / self.rotated_imgsize_1)
