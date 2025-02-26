@@ -103,7 +103,7 @@ class SimpleModel(BaseModel):
         return input_img, final
 
 
-class UnetlikeBaseline(BaseModel):
+class UNet(BaseModel):
     """
     A CNN class that creates a denoising Unet
     """
