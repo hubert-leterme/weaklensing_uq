@@ -37,7 +37,7 @@ class L2RegMAE(BaseL2RegLoss):
         return tf.reduce_mean(tf.abs(y_true - y_pred))
 
 
-class BaseModel(Model):
+class BaseModel:
 
     def __init__(self, map_size, learning_rate, loss='mse', l2_lambda=1e-4):
         """
@@ -51,8 +51,7 @@ class BaseModel(Model):
         self.loss = loss
         self.l2_lambda = l2_lambda
 
-        inputs, outputs = self._init_model()
-        super().__init__(inputs, outputs)
+        self.inputs, self.outputs = self._init_model()
 
 
     def _init_model(self):
@@ -60,7 +59,9 @@ class BaseModel(Model):
 
 
     def model(self):
-        self.summary()
+
+        out = Model(self.inputs, self.outputs)
+        out.summary()
 
         if self.loss in ('mse', 'mae'):
             loss_fun = self.loss
@@ -72,11 +73,11 @@ class BaseModel(Model):
             raise ValueError
 
         if self.learning_rate is None:
-            self.compile(optimizer='adam', loss=loss_fun)
+            out.compile(optimizer='adam', loss=loss_fun)
         else:
-            self.compile(optimizer=Adam(lr=self.learning_rate), loss=loss_fun)
+            out.compile(optimizer=Adam(lr=self.learning_rate), loss=loss_fun)
 
-        return self
+        return out
 
 
 class SimpleModel(BaseModel):
@@ -198,11 +199,10 @@ class UNet(BaseModel):
         output = Conv2D(self.channels[1], 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
-            output = MeanCentering(output)
+            output = Lambda(_mean_centering)(output)
 
         return input_img, output
 
 
 def _mean_centering(tensor):
     return tensor - tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
-MeanCentering = Lambda(_mean_centering)
