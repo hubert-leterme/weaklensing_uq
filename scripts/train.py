@@ -26,10 +26,6 @@ LOSS = 'mse'
 L2_LAMBDA = 1e-4
 OFFSET = 0.5 # As in DeepMass
 
-# For the pinball loss
-CONFIDENCE = 2. # Level of confidence (n-sigma)
-ERROR_RATE = wlutils.get_alpha_from_confidence(CONFIDENCE)
-
 # Monkey-patch Adam (to avoid `ValueError: Argument(s) not recognized: {'lr': 1e-05}`)
 _init_ = keras.optimizers.Adam.__init__
 
@@ -48,7 +44,6 @@ def main(
         no_bias=False,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
         lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
-        error_rate=ERROR_RATE, quantile=None,
         offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
@@ -81,14 +76,6 @@ def main(
     )
 
     # Initialize model
-    if loss == 'pinball':
-        if quantile == 'lower':
-            quantile = error_rate / 2
-        elif quantile == 'upper':
-            quantile = 1 - error_rate / 2
-        else:
-            raise ValueError
-        loss = wlpnp.PinballLoss(quantile=quantile)
     cnn_instance = wlcnn.UnetlikeBaseline(
         map_size=imgsize, learning_rate=learning_rate, loss=loss,
         l2_lambda=l2_lambda,
@@ -300,20 +287,6 @@ if __name__ == "__main__":
         help=(
             "Regularization parameter for 'l2reg_mse' or 'l2reg_mae'. "
             f"Default = {L2_LAMBDA}"
-        )
-    )
-    parser.add_argument(
-        "-e", "--error-rate", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Error rate for the pinball loss (UQ). Default = {ERROR_RATE:.2e}"
-        )
-    )
-    parser.add_argument(
-        "-q", "--quantile", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "One of: 'lower' (error_rate / 2) or 'upper' (error_rate / 2). Default = None"
         )
     )
     parser.add_argument(

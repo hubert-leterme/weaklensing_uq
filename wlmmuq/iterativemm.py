@@ -1,8 +1,6 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow import keras
 
 import pycs.astro.wl.mass_mapping as csmm
 
@@ -334,12 +332,6 @@ class KerasDenoiser(BaseKerasDenoiser):
         return out
 
 
-class KerasQuantileDenoiser(BaseKerasDenoiser):
-
-    def __init__(self, model_lower, model_upper, **kwargs):
-        super().__init__([model_lower, model_upper], **kwargs)
-
-
 class KerasDenoiserVar(BaseKerasDenoiser):
 
     def __init__(self, model, **kwargs):
@@ -347,45 +339,3 @@ class KerasDenoiserVar(BaseKerasDenoiser):
 
     def __call__(self, inp):
         return super().__call__(inp)[0]
-
-
-############################################################################
-# Loss functions for the denoiser
-############################################################################
-
-
-class PinballLoss(keras.losses.Loss):
-
-    def __init__(
-            self, quantile=0.5, reduction=tf.keras.losses.Reduction.AUTO,
-            name="pinball_loss"
-    ):
-        """
-        Initialize the Pinball Loss.
-        :param quantile: The desired quantile (e.g., 0.5 for median).
-        :param name: Optional name for the loss instance.
-        """
-        super().__init__(reduction=reduction, name=name)
-        self.quantile = quantile
-
-
-    def call(self, y_true, y_pred):
-        """
-        Compute the Pinball Loss.
-        :param y_true: Ground truth values.
-        :param y_pred: Predicted values.
-        :return: Computed loss.
-        """
-        error = y_true - y_pred
-        loss = tf.maximum(self.quantile * error, (self.quantile - 1) * error)
-        return tf.reduce_mean(loss)
-
-    def get_config(self):
-        """
-        Serialize the loss configuration for saving and loading.
-        """
-        config = super().get_config()
-        config.update({
-            "quantile": self.quantile,
-        })
-        return config
