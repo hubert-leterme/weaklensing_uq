@@ -26,6 +26,10 @@ class BaseL2RegLoss:
     def _data_fidelity(self, y_true, y_pred):
         raise NotImplementedError
 
+    def get_config(self):
+        # Avoids "TypeError: Cannot serialize object [...]"
+        return {"l2_lambda": self.l2_lambda}
+
 
 class L2RegMSE(BaseL2RegLoss):
     def _data_fidelity(self, y_true, y_pred):
