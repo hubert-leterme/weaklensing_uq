@@ -7,35 +7,10 @@ https://github.com/NiallJeffrey/DeepMass
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.keras.layers import Input, Dropout, Conv2D, MaxPooling2D, UpSampling2D, add, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Lambda
 from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.optimizers import Adam
-
-
-
-# Make batch generator
-def BatchGenerator(noisy_array, clean_array, gen_batch_size=32, sample_weights=False):
-
-    if sample_weights==False:
-        while True:
-            index = np.random.randint(0, noisy_array.shape[0], gen_batch_size)
-            yield (noisy_array[index], clean_array[index])
-    else:
-        while True:
-            index = np.random.randint(0, noisy_array.shape[0], gen_batch_size)
-            yield (noisy_array[index], clean_array[index], np.array([1./np.var(clean_array[i]) for i in index]))
-
-
-class LossHistory(Callback):
-    def on_train_begin(self, logs={}):
-        self.losses = []
-        self.val_losses = []
-
-    def on_batch_end(self, batch, logs={}):
-        self.losses.append(logs.get('loss'))
-        self.val_losses.append(logs.get('val_loss'))
 
 
 class BaseL2RegLoss:
