@@ -29,12 +29,12 @@ class BaseL2RegLoss:
 
 class L2RegMSE(BaseL2RegLoss):
     def _data_fidelity(self, y_true, y_pred):
-        return tf.reduce_mean(keras.losses.mean_squared_error(y_true, y_pred))
+        return keras.losses.MeanSquaredError()(y_true, y_pred)
 
 
 class L2RegMAE(BaseL2RegLoss):
     def _data_fidelity(self, y_true, y_pred):
-        return tf.reduce_mean(tf.abs(y_true - y_pred))
+        return keras.losses.MeanAbsoluteError()(y_true, y_pred)
 
 
 class BaseModel:
