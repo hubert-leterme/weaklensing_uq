@@ -27,7 +27,7 @@ stats_dir=/ceph/chercheurs/leterme231/stats
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
-  --denoiser --scale $scale \
+  --denoiser --scale $scale --scale-range \
   --moment-order 2 \
   --path-to-pred-dataset $path_to_pred_dataset \
   -lr $lr --lr-scheduler \
