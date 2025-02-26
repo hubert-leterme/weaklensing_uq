@@ -51,7 +51,8 @@ class BaseModel(Model):
         self.loss = loss
         self.l2_lambda = l2_lambda
 
-        self._init_model()
+        inputs, outputs = self._init_model()
+        super().__init__(inputs, outputs)
 
 
     def _init_model(self):
@@ -99,7 +100,7 @@ class SimpleModel(BaseModel):
 
         final = Conv2D(1, (3, 3), activation='sigmoid', padding='same', kernel_initializer='he_normal')(x)
 
-        super().__init__(input_img, final)
+        return input_img, final
 
 
 class UnetlikeBaseline(BaseModel):
@@ -199,7 +200,7 @@ class UnetlikeBaseline(BaseModel):
         if self.mean_centering:
             output = MeanCentering(output)
 
-        super().__init__(input_img, output)
+        return input_img, output
 
 
 def _mean_centering(tensor):
