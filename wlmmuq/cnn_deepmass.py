@@ -29,7 +29,11 @@ class BaseL2RegLoss:
 
     def get_config(self):
         # Avoids "TypeError: Cannot serialize object [...]"
-        return {"l2_lambda": self.l2_lambda}
+        config = {
+            "l2_lambda": self.l2_lambda,
+            "offset": self.offset
+        }
+        return config
 
 
 class L2RegMSE(BaseL2RegLoss):
