@@ -15,12 +15,13 @@ from tensorflow.keras.optimizers import Adam
 
 class BaseL2RegLoss:
 
-    def __init__(self, l2_lambda=1e-4):
+    def __init__(self, l2_lambda=1e-4, offset=0.):
         self.l2_lambda = l2_lambda
+        self.offset = offset
 
     def __call__(self, y_true, y_pred):
         df = self._data_fidelity(y_true, y_pred)
-        l2_output = tf.reduce_mean(tf.square(y_pred))  # L2 norm of the prediction
+        l2_output = tf.reduce_mean(tf.square(y_pred - self.offset))
         return df + self.l2_lambda * l2_output
 
     def _data_fidelity(self, y_true, y_pred):
@@ -43,17 +44,22 @@ class L2RegMAE(BaseL2RegLoss):
 
 class BaseModel:
 
-    def __init__(self, map_size, learning_rate, loss='mse', l2_lambda=1e-4):
+    def __init__(
+            self, map_size, learning_rate, loss='mse', l2_lambda=1e-4, offset=0.
+    ):
         """
         Initialization
         :param map_size: size of square image (there are map_size**2 pixels)
         :param learning_rate: learning rate for the optimizer
         :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
+        :param l2_lambda: regularization parameter
+        :param offset: mean value of the convergence maps. Default = 0.
         """
         self.map_size = map_size
         self.learning_rate = learning_rate
         self.loss = loss
         self.l2_lambda = l2_lambda
+        self.offset = offset
 
         self.inputs, self.outputs = self._init_model()
 
@@ -70,9 +76,9 @@ class BaseModel:
         if self.loss in ('mse', 'mae'):
             loss_fun = self.loss
         elif self.loss == 'l2reg_mse':
-            loss_fun = L2RegMSE(l2_lambda=self.l2_lambda)
+            loss_fun = L2RegMSE(l2_lambda=self.l2_lambda, offset=self.offset)
         elif self.loss == 'l2reg_mae':
-            loss_fun = L2RegMAE(l2_lambda=self.l2_lambda)
+            loss_fun = L2RegMAE(l2_lambda=self.l2_lambda, offset=self.offset)
         else:
             raise ValueError
 
@@ -114,12 +120,16 @@ class UNet(BaseModel):
     """
 
     def __init__(
-            self, *args, channels=[1,1], mean_centering=False, use_bias=True, **kwargs
+            self, *args, channels=[1, 1], mean_centering=False,
+            use_bias=True, **kwargs
     ):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
         :param learning_rate: learning rate for the optimizer
+        :param channels: number of input and output channels. Default = [1, 1]
+        :param mean_centering: whether to apply mean centering at the output.
+            Default = False
         """
         self.channels = channels
         self.mean_centering = mean_centering
@@ -203,7 +213,7 @@ class UNet(BaseModel):
         output = Conv2D(self.channels[1], 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
-            output = Lambda(_mean_centering)(output)
+            output = Lambda(_mean_centering)(output - self.offset) + self.offset
 
         return input_img, output
 

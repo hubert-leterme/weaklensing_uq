@@ -78,8 +78,8 @@ def main(
     # Initialize model
     cnn_instance = wlcnn.UNet(
         map_size=imgsize, learning_rate=learning_rate, loss=loss,
-        l2_lambda=l2_lambda,
-        mean_centering=mean_centering, use_bias=not no_bias
+        l2_lambda=l2_lambda, mean_centering=mean_centering,
+        offset=offset, use_bias=not no_bias
     )
     cnn_model = cnn_instance.model()
 
