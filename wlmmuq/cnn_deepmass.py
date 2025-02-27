@@ -49,6 +49,7 @@ class L2RegMAE(BaseL2RegLoss):
 class MeanCentering(Layer):
 
     def __init__(self, offset=0.):
+        super().__init__()
         self.offset = offset
 
     def call(self, tensor):
