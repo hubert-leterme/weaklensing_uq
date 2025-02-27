@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
-from tensorflow.keras.layers import concatenate, AveragePooling2D, Lambda
+from tensorflow.keras.layers import concatenate, AveragePooling2D, Layer
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
@@ -44,6 +44,26 @@ class L2RegMSE(BaseL2RegLoss):
 class L2RegMAE(BaseL2RegLoss):
     def _data_fidelity(self, y_true, y_pred):
         return tf.reduce_mean(tf.abs(y_true - y_pred))
+
+
+class MeanCentering(Layer):
+
+    def __init__(self, offset=0.):
+        self.offset = offset
+
+    def call(self, tensor):
+        tensor -= self.offset
+        tensor -= tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
+        tensor += self.offset
+        return tensor
+
+    def get_config(self):
+        # Avoids "TypeError: Cannot serialize object [...]"
+        config = super().get_config()
+        config.update({
+            "offset": self.offset
+        })
+        return config
 
 
 class BaseModel:
@@ -217,13 +237,6 @@ class UNet(BaseModel):
         output = Conv2D(self.channels[1], 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
-            output = Lambda(self._mean_centering)(output)
+            output = MeanCentering(self.offset)(output)
 
         return input_img, output
-
-
-    def _mean_centering(self, tensor):
-        tensor -= self.offset
-        tensor -= tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
-        tensor += self.offset
-        return tensor
