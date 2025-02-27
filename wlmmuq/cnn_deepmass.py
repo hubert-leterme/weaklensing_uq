@@ -213,10 +213,13 @@ class UNet(BaseModel):
         output = Conv2D(self.channels[1], 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
-            output = Lambda(_mean_centering)(output - self.offset) + self.offset
+            output = Lambda(self._mean_centering)(output)
 
         return input_img, output
 
 
-def _mean_centering(tensor):
-    return tensor - tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
+    def _mean_centering(self, tensor):
+        tensor -= self.offset
+        tensor -= tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
+        tensor += self.offset
+        return tensor
