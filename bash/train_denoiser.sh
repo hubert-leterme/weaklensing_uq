@@ -20,16 +20,13 @@ scale=$2
 lr=$3
 loss=$4
 
-scale_formatted=$(printf "%.2e" "$scale")
-scale_dir=$(echo "$scale_formatted" | sed 's/[.-]/_/g')
-
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
   --denoiser --scale $scale --scale-range \
   -lr $lr --lr-scheduler \
   --loss $loss \
-  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${loss}_${current_date} \
+  --checkpoint-dir $checkpoint_dir/denoiser_${scale}_${loss}_${current_date} \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${scale_dir}_${loss}_${current_date} \
-  --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${loss}_${current_date}_pe.csv --seed 42 -v
+  --backup-dir $backup_dir/denoiser_${scale}_${loss}_${current_date} \
+  --path-to-csv-log $stats_dir/log_denoiser_${scale}_${loss}_${current_date}_pe.csv --seed 42 -v

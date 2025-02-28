@@ -13,9 +13,6 @@ training_date=$4
 lr=$5
 save_freq=1
 
-scale_formatted=$(printf "%.2e" "$scale")
-scale_dir=$(echo "$scale_formatted" | sed 's/[.-]/_/g')
-
 # Set paths
 datadir=/ceph/chercheurs/leterme231/kappaTNG_augmented
 path_to_augmented_dataset=${datadir}/LP002_augmented.hdf5
@@ -31,8 +28,8 @@ python scripts/train.py $path_to_augmented_dataset \
   --moment-order 2 \
   --path-to-pred-dataset $path_to_pred_dataset \
   -lr $lr --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/denoiser_${scale_dir}_${training_date} \
+  --checkpoint-dir $checkpoint_dir/denoiser_${scale}_${training_date} \
   --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${scale_dir}_${training_date} \
-  --path-to-csv-log $stats_dir/log_denoiser_${scale_dir}_${training_date}_var.csv \
+  --backup-dir $backup_dir/denoiser_${scale}_${training_date} \
+  --path-to-csv-log $stats_dir/log_denoiser_${scale}_${training_date}_var.csv \
   --seed 42 -v
