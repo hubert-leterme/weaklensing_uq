@@ -3,14 +3,10 @@ Modified version of the 'cnn_keras.py' module from DeepMass
 https://github.com/NiallJeffrey/DeepMass
 
 """
-
-import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
-from tensorflow.keras.layers import concatenate, AveragePooling2D, Layer
-from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import concatenate, AveragePooling2D
 
 
 class BaseL2RegLoss(keras.losses.Loss):
@@ -47,7 +43,7 @@ class L2RegMAE(BaseL2RegLoss):
         return tf.reduce_mean(tf.abs(y_true - y_pred))
 
 
-class MeanCentering(Layer):
+class MeanCentering(keras.layers.Layer):
 
     def __init__(self, trainable=False, offset=0., **kwargs):
         super().__init__(trainable=trainable, **kwargs)
@@ -95,7 +91,7 @@ class BaseModel:
 
     def model(self):
 
-        out = Model(self.inputs, self.outputs)
+        out = keras.models.Model(self.inputs, self.outputs)
         out.summary()
 
         if self.loss in ('mse', 'mae'):
@@ -110,7 +106,10 @@ class BaseModel:
         if self.learning_rate is None:
             out.compile(optimizer='adam', loss=loss_fun)
         else:
-            out.compile(optimizer=Adam(lr=self.learning_rate), loss=loss_fun)
+            out.compile(
+                optimizer=keras.optimizers.Adam(lr=self.learning_rate),
+                loss=loss_fun
+            )
 
         return out
 
