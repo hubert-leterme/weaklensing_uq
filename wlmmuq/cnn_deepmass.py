@@ -48,8 +48,8 @@ class L2RegMAE(BaseL2RegLoss):
 
 class MeanCentering(Layer):
 
-    def __init__(self, offset=0.):
-        super().__init__()
+    def __init__(self, trainable=False, offset=0., **kwargs):
+        super().__init__(trainable=trainable, **kwargs)
         self.offset = offset
 
     def call(self, tensor):
@@ -59,7 +59,6 @@ class MeanCentering(Layer):
         return tensor
 
     def get_config(self):
-        # Avoids "TypeError: Cannot serialize object [...]"
         config = super().get_config()
         config.update({
             "offset": self.offset
