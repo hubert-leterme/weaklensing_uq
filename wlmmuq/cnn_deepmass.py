@@ -16,7 +16,7 @@ class BaseL2RegLoss(keras.losses.Loss):
         self.l2_lambda = l2_lambda
         self.offset = offset
 
-    def __call__(self, y_true, y_pred):
+    def call(self, y_true, y_pred):
         df = self._data_fidelity(y_true, y_pred)
         l2_output = tf.reduce_mean(tf.square(y_pred - self.offset))
         return df + self.l2_lambda * l2_output
