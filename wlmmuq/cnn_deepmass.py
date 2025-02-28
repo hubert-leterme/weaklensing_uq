@@ -13,9 +13,10 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
 
-class BaseL2RegLoss:
+class BaseL2RegLoss(keras.losses.Loss):
 
-    def __init__(self, l2_lambda=1e-4, offset=0.):
+    def __init__(self, l2_lambda=1e-4, offset=0., **kwargs):
+        super().__init__(**kwargs)
         self.l2_lambda = l2_lambda
         self.offset = offset
 
@@ -28,11 +29,11 @@ class BaseL2RegLoss:
         raise NotImplementedError
 
     def get_config(self):
-        # Avoids "TypeError: Cannot serialize object [...]"
-        config = {
+        config = super().get_config()
+        config.update({
             "l2_lambda": self.l2_lambda,
             "offset": self.offset
-        }
+        })
         return config
 
 
