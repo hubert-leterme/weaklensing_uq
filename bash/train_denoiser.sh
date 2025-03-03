@@ -10,20 +10,23 @@ stats_dir=/ceph/chercheurs/leterme231/stats
 current_date=$(date +"%Y%m%d_%H%M%S")
 
 # Check if correct number of arguments are provided
-if [ "$#" -ne 4 ]; then
-  echo "Usage: $0 <GPU_ID> <SCALE> <LEARNING_RATE> <LOSS>"
-  echo "Example: $0 0 1.4e-1 1e-4 mse"
+if [ "$#" -lt 4 ]; then
+  echo "Usage: $0 <GPU_ID> <SCALE> <LEARNING_RATE> <LOSS> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 1.4e-1 1e-4 mse [--use-std-noise] [--scale-range]"
   exit 1
 fi
 
 scale=$2
 lr=$3
-loss=$4
+loss=l2reg_$4
+
+# Collect all optional arguments (starting from the 5th argument)
+optional_args="${@:5}"
 
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
 python scripts/train.py $path_to_augmented_dataset \
-  --denoiser --scale $scale --scale-range \
+  --denoiser --scale $scale $optional_args \
   -lr $lr --lr-scheduler \
   --loss $loss \
   --checkpoint-dir $checkpoint_dir/denoiser_${scale}_${loss}_${current_date} \

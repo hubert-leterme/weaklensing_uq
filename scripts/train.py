@@ -10,7 +10,8 @@ from tensorflow import data, keras
 
 import wlmmuq.batchloader as wlbl
 import wlmmuq.cnn_deepmass as wlcnn
-import wlmmuq.iterativemm as wlpnp
+import wlmmuq.cosmos as wlcosmos
+import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
 
 MOMENT_ORDER = 1
@@ -38,7 +39,7 @@ keras.optimizers.Adam.__init__ = new_init
 
 
 def main(
-        path_to_augmented_dataset, denoiser=False,
+        path_to_augmented_dataset, denoiser=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, mean_centering=False,
         no_bias=False,
@@ -53,6 +54,16 @@ def main(
         np.random.seed(seed)
 
     # Initialize batch generators for training and validation
+    if use_std_noise:
+        cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
+        cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
+        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
+        shapedisp = data_dict["shapedisp"]
+        ngal = data_dict["ngal"]
+        mask = data_dict["mask"]
+        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
+        std_noise[~mask] = np.max(std_noise)
+        kwargs.update(std_noise=std_noise)
     if denoiser:
         batch_loader = wlbl.HDF5BatchLoaderDenoiser
     else:
@@ -160,6 +171,22 @@ if __name__ == "__main__":
         help=(
             "Reconstruct the original convergence map from an input corrupted "
             "by a white Gaussian noise."
+        )
+    )
+    parser.add_argument(
+        "--use-std-noise", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to apply a heteroscedastic noise to the input images "
+            "(denoiser only)."
+        )
+    )
+    parser.add_argument(
+        "--noise-whitening", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "If set to true, then the inputs are divided by the noise standard "
+            "deviation and the noise is whitened."
         )
     )
     parser.add_argument(

@@ -490,7 +490,8 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
 class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
-            self, *args, scale=0., scale_range=False, **kwargs
+            self, *args, std_noise=None, noise_whitening=False,
+            scale=0., scale_range=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -502,8 +503,14 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         nimgs : int
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
+        std_noise : numpy.ndarray, optional
+            Array of noise standard deviation. If none is given, a white noise
+            will be applied (identity). Default is None.
+        noise_whitening : bool, optional
+            If set to true, then the inputs are divided by std_noise and the
+            noise is whitened. Default is False.
         scale : float, optional
-            Standard deviation of the white noise, or upper bound of the uniform
+            Multiplicative factor for std_noise, or upper bound of the uniform
             distribution over which the scale is drawn, if `scale_range` is set to
             True. Default is 0 (no noise).
         scale_range: bool, optional
@@ -548,6 +555,8 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
         super().__init__(*args, **kwargs)
+        self.std_noise = std_noise
+        self.noise_whitening = noise_whitening
         self.scale = scale
         self.scale_range = scale_range
 
@@ -567,6 +576,11 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         else:
             scale = self.scale
         noise *= scale
+        if self.std_noise is not None:
+            if not self.noise_whitening:
+                noise *= self.std_noise
+            else:
+                kappa_true /= self.std_noise
 
         out_dict["kappa_inp"] = kappa_true + noise
 
