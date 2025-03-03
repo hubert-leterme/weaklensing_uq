@@ -144,18 +144,20 @@ class UNet(BaseModel):
     """
 
     def __init__(
-            self, *args, channels=[1, 1], mean_centering=False,
+            self, *args, in_channels=1, out_channels=1, mean_centering=False,
             use_bias=True, **kwargs
     ):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
         :param learning_rate: learning rate for the optimizer
-        :param channels: number of input and output channels. Default = [1, 1]
+        :param in_channels: number of input channels. Default = 1
+        :param out_channels: number of output channels. Default = 1
         :param mean_centering: whether to apply mean centering at the output.
             Default = False
         """
-        self.channels = channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.mean_centering = mean_centering
         self.use_bias = use_bias
         super().__init__(*args, **kwargs)
@@ -163,7 +165,7 @@ class UNet(BaseModel):
 
     def _init_model(self):
 
-        input_img = Input(shape=(self.map_size, self.map_size, self.channels[0]))
+        input_img = Input(shape=(self.map_size, self.map_size, self.in_channels))
 
         x1 = Conv2D(
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
@@ -234,7 +236,7 @@ class UNet(BaseModel):
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
             use_bias=self.use_bias
         )(merge7)
-        output = Conv2D(self.channels[1], 1, activation='sigmoid')(x7)
+        output = Conv2D(self.out_channels, 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
             output = MeanCentering(self.offset)(output)
