@@ -10,22 +10,19 @@ from . import utils as wlutils
 # PGD mass mapping
 ############################################################################
 
-class PGDMassMapping:
+class BasePGDMassMapping:
     """
-    Class for iterative proximal gradient descent (or forward-backward)
+    Base class for iterative proximal gradient descent (or forward-backward)
     algorithm, applied to the mass mapping problem.
 
     """
     def __init__(
-            self, std_noise, step_size, backward, niter,
-            mask=None, verbose=False
+            self, step_size, backward, niter, std_noise=None, mask=None,
+            verbose=False
     ):
         """
         Parameters
         ----------
-        std_noise: np.ndarray, shape = (nx, ny)
-            Array representing the noise standard deviation for each pixel
-            (diagonal elements of the noise covariance matrix).
         step_size: float
             The step size of the PGD algorithm. It should be smaller
             than 2*(std_min**2), where std_min denotes the smallest value of
@@ -37,45 +34,48 @@ class PGDMassMapping:
             Gaussian noise with zero mean and variance equal to step_size.
         niter: int
             Number of iterations.
+        std_noise: np.ndarray, shape = (nx, ny), default = None
+            Array representing the noise standard deviation for each pixel
+            (diagonal elements of the noise covariance matrix).
         mask: np.ndarray, shape = (nx, ny), default = None
-            Mask to apply in case of missing data. In practice, the noise
-            covariance matrix is set to infinity in the masked regions.
+            Mask to apply in case of missing data.
         verbose: bool, default=False
         
         """
-        self.var_noise = std_noise**2
         self.step_size = step_size
         self.backward = backward
         self.niter = niter
-        if mask is not None:
-            self.mask = mask
-        else:
-            self.mask = std_noise != 0
+        self.std_noise = std_noise
+        self.mask = mask
         self.verbose = verbose
 
 
     def forward(self, kappa, gamma):
+        # Gradient-descent step
+        kappa = kappa + self.step_size * self.neg_grad(kappa, gamma)
 
-        resgamma = gamma - wlutils.get_shear_from_convergence(
+        return kappa
+
+
+    def neg_grad(self, kappa, gamma):
+        raise NotImplementedError
+
+
+    def conv2shear_masked(self, kappa):
+        gamma = wlutils.get_shear_from_convergence(
             kappa, return_complex=True
         )
-        resgamma /= self.var_noise
+        if self.mask is not None:
+            gamma[..., ~self.mask] = 0
+        return gamma
 
-        # In masked pixels, the noise variance is assumed infinite, and therefore the
-        # intermediate array is set to 0.
-        resgamma[..., ~self.mask] = 0.
 
-        # Compute the negative-gradient, projected onto the subspace of real-valued
-        # arrays orthogonal to the kernel of the Kaiser-Squires operator
-        neg_grad = wlutils.get_convergence_from_shear(
-            resgamma, return_complex=True
-        ).real
-        neg_grad -= np.mean(neg_grad, axis=(-2, -1))[..., np.newaxis, np.newaxis]
-
-        # Gradient-descent step
-        # The convergence is real-valued, therefore the gradient is also real-valued
-        kappa = kappa + self.step_size * neg_grad
-
+    def shear2conv_masked(self, gamma):
+        if self.mask is not None:
+            gamma[..., ~self.mask] = 0
+        kappa = wlutils.get_convergence_from_shear(
+            gamma, return_complex=True
+        )
         return kappa
 
 
@@ -108,6 +108,68 @@ class PGDMassMapping:
             callback.on_predict_end(kappa)
 
         return kappa
+
+
+class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
+    """
+    FB algorithm with Bayesian data-fidelity term, without pre-conditioning.
+    In the PnP version, the denoiser is trained on images corrupted by white noise.
+    The step size self.step_size should be smaller than 2 sigma_min**2, where
+    sigma_min denotes the minimum standard deviation given by self.std_noise.
+    
+    """
+    def neg_grad(self, kappa, gamma):
+        resgamma = gamma - self.conv2shear_masked(kappa)
+        resgamma /= self.std_noise**2
+        out = self.shear2conv_masked(resgamma).real
+        return out
+
+
+class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
+    """
+    FB algorithm with Bayesian data-fidelity term, with pre-conditioning.
+    In the PnP version, the denoiser is trained on images corrupted by uncorrelated
+    noise with standard deviations given by self.std_noise.
+    The step size self.step_size should be smaller than 2 sigma_min**2 / sigma_max**2,
+    where sigma_min and sigma_max denote the minimum and maximum standard deviations
+    given by self.std_noise, respectively.
+    
+    """
+    def neg_grad(self, kappa, gamma):
+        out = super().neg_grad(kappa, gamma)
+        out *= self.std_noise**2 # Pre-conditioning
+        return out
+
+
+class BayesianPGDMassMappingPrecondWhitened(BayesianPGDMassMappingPrecond):
+    """
+    FB algorithm with Bayesian data-fidelity term, with pre-conditioning.
+    Here, the intermediate arrays are divided by self.std_noise.
+    In the PnP version, the denoiser is trained on images divided by self.std_noise,
+    and corrupted by white noise.
+    The step size self.step_size should be smaller than 2 sigma_min**2 / sigma_max**2,
+    where sigma_min and sigma_max denote the minimum and maximum standard deviations
+    given by self.std_noise, respectively.
+    This algorithm is mathematically equivalent to BayesianPGDMassMappingPrecond.
+
+    """
+    def neg_grad(self, kappa, gamma):
+        out = super().neg_grad(self.std_noise * kappa, gamma)
+        out /= self.std_noise
+        return out
+
+
+class L2PGDMassMapping(BasePGDMassMapping):
+    """
+    FB algorithm with L2 data-fidelity term. In the PnP version, the denoiser
+    is trained on images corrupted by uncorrelated noise with standard deviations
+    given by self.std_noise. The step size self.step_size should be smaller than 2.
+    
+    """
+    def neg_grad(self, kappa, gamma):
+        resgamma = gamma - self.conv2shear_masked(kappa)
+        out = self.shear2conv_masked(resgamma).real
+        return out
 
 
 ############################################################################
@@ -233,13 +295,13 @@ class RMSE(Callback):
 class UQ(Callback):
 
     def __init__(
-            self, pgd_massmapping: PGDMassMapping, backward_uq,
+            self, pgd_massmapping: BasePGDMassMapping, backward_uq,
             gamma: np.ndarray
     ):
         """
         Parameters
         ----------
-        pgd_massmapping: PGDMassMapping instance
+        pgd_massmapping: BasePGDMassMapping instance
         backward_uq: callable, default = None
             Performs a specific forward-backward step after the last
             PGD iteration for uncertainty quantification.
