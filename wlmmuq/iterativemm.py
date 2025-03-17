@@ -220,6 +220,33 @@ class L2PGDMassMapping(BasePGDMassMapping):
         return out
 
 
+class NoisewhiteningPGDMassMapping(BasePGDMassMapping):
+    r"""
+    FB algorithm with the following noise-whitening data-fidelity term:
+    $$
+    f(\kappa) := \frac12 \|\gamma - A\kappa\|_{\Sigma^{-1/2}}^2.
+    $$
+    In the PnP version, the denoiser is trained on images corrupted by white noise
+    with variance equal to self.step_size**2.
+    The step size self.step_size should be smaller than 2 sigma_min, where
+    sigma_min denotes the minimum standard deviation given by self.std_noise.
+
+    """
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
+        resgamma = gamma - self.conv2shear_masked(kappa)
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
+        resgamma /= self.std_noise
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname=r'$\Sigma^{-1/2}$-scaling', intarray=resgamma.real
+            )
+        out = self.shear2conv_masked(resgamma).real
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
+        return out
+
+
 ############################################################################
 # Callbacks
 ############################################################################
