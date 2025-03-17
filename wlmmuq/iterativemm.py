@@ -24,10 +24,7 @@ class BasePGDMassMapping:
         Parameters
         ----------
         step_size: float
-            The step size of the PGD algorithm. It should be smaller
-            than 2*(std_min**2), where std_min denotes the smallest value of
-            std_noise outside the mask. This is due to the convergence
-            result established by Combettes and Wajs (2005).
+            The step size of the PGD algorithm.
         backward: callable
             The proximal operator, or a trained denoiser for plug-and-play PGD.
             The denoiser should be trained on images corrupted by a white
@@ -111,9 +108,14 @@ class BasePGDMassMapping:
 
 
 class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
-    """
-    FB algorithm with Bayesian data-fidelity term, without pre-conditioning.
-    In the PnP version, the denoiser is trained on images corrupted by white noise.
+    r"""
+    FB algorithm with Bayesian data-fidelity term:
+    $$
+    f(\kappa) := \frac12 \|\gamma - A\kappa\|_{\Sigma^{-1}}^2,
+    $$
+    without pre-conditioning.
+    In the PnP version, the denoiser is trained on images corrupted by white noise
+    with variance equal to self.step_size.
     The step size self.step_size should be smaller than 2 sigma_min**2, where
     sigma_min denotes the minimum standard deviation given by self.std_noise.
     
@@ -126,10 +128,14 @@ class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
 
 
 class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
-    """
-    FB algorithm with Bayesian data-fidelity term, with pre-conditioning.
-    In the PnP version, the denoiser is trained on images corrupted by uncorrelated
-    noise with standard deviations given by self.std_noise.
+    r"""
+    FB algorithm with Bayesian data-fidelity term:
+    $$
+    f(\kappa) := \frac12 \|\gamma - A\kappa\|_{\Sigma^{-1}}^2,
+    $$
+    with pre-conditioning.
+    In the PnP version, the denoiser is trained on images corrupted by heteroscedastic
+    noise with variance equal to self.step_size * self.std_noise**2.
     The step size self.step_size should be smaller than 2 sigma_min**2 / sigma_max**2,
     where sigma_min and sigma_max denote the minimum and maximum standard deviations
     given by self.std_noise, respectively.
@@ -142,11 +148,15 @@ class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
 
 
 class BayesianPGDMassMappingPrecondWhitened(BayesianPGDMassMappingPrecond):
-    """
-    FB algorithm with Bayesian data-fidelity term, with pre-conditioning.
-    Here, the intermediate arrays are divided by self.std_noise.
+    r"""
+    FB algorithm with Bayesian data-fidelity term:
+    $$
+    f(\kappa) := \frac12 \|\gamma - A\kappa\|_{\Sigma^{-1}}^2,
+    $$
+    with pre-conditioning.
+    Moreover, the intermediate arrays are divided by self.std_noise.
     In the PnP version, the denoiser is trained on images divided by self.std_noise,
-    and corrupted by white noise.
+    and corrupted by white noise with variance equal to self.step_size.
     The step size self.step_size should be smaller than 2 sigma_min**2 / sigma_max**2,
     where sigma_min and sigma_max denote the minimum and maximum standard deviations
     given by self.std_noise, respectively.
@@ -160,10 +170,14 @@ class BayesianPGDMassMappingPrecondWhitened(BayesianPGDMassMappingPrecond):
 
 
 class L2PGDMassMapping(BasePGDMassMapping):
-    """
-    FB algorithm with L2 data-fidelity term. In the PnP version, the denoiser
-    is trained on images corrupted by uncorrelated noise with standard deviations
-    given by self.std_noise. The step size self.step_size should be smaller than 2.
+    r"""
+    FB algorithm with L2 data-fidelity term:
+    $$
+    f(\kappa) := \frac12 \|\gamma - A\kappa\|_2^2.
+    $$
+    In the PnP version, the denoiser is trained on images corrupted by heteroscedastic
+    noise with variance equal to self.step_size * self.self.std_noise**2.
+    The step size self.step_size should be smaller than 2.
     
     """
     def neg_grad(self, kappa, gamma):
