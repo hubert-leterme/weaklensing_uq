@@ -49,14 +49,19 @@ class BasePGDMassMapping:
 
     def forward(self, kappa, gamma, i=None, callbacks=None):
         # Gradient-descent step
-        kappa = kappa + self.step_size * self.neg_grad(
-            kappa, gamma, i=i, callbacks=callbacks
+        resgamma = gamma - self.conv2shear_masked(kappa)
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname='residual', intarray=resgamma.real
+            )
+        kappa = kappa + self.step_size * self.b_operator(
+            resgamma, i=i, callbacks=callbacks
         )
 
         return kappa
 
 
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
+    def b_operator(self, resgamma, i=None, callbacks=None):
         raise NotImplementedError
 
 
@@ -122,10 +127,7 @@ class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
     sigma_min denotes the minimum standard deviation given by self.std_noise.
     
     """
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
-        resgamma = gamma - self.conv2shear_masked(kappa)
-        for callback in callbacks:
-            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
+    def b_operator(self, resgamma, i=None, callbacks=None):
         resgamma /= self.std_noise**2
         for callback in callbacks:
             callback.on_debug_event(
@@ -151,8 +153,8 @@ class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
     given by self.std_noise, respectively.
     
     """
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
-        out = super().neg_grad(kappa, gamma, i=i, callbacks=callbacks)
+    def b_operator(self, resgamma, i=None, callbacks=None):
+        out = super().b_operator(resgamma, i=i, callbacks=callbacks)
         out *= self.std_noise**2 # Pre-conditioning
         for callback in callbacks:
             callback.on_debug_event(
@@ -172,10 +174,7 @@ class L2PGDMassMapping(BasePGDMassMapping):
     The step size self.step_size should be smaller than 2.
     
     """
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
-        resgamma = gamma - self.conv2shear_masked(kappa)
-        for callback in callbacks:
-            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
+    def b_operator(self, resgamma, i=None, callbacks=None):
         out = self.shear2conv_masked(resgamma).real
         for callback in callbacks:
             callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
@@ -194,10 +193,7 @@ class NoisewhiteningPGDMassMapping(BasePGDMassMapping):
     sigma_min denotes the minimum standard deviation given by self.std_noise.
 
     """
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
-        resgamma = gamma - self.conv2shear_masked(kappa)
-        for callback in callbacks:
-            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
+    def b_operator(self, resgamma, i=None, callbacks=None):
         resgamma /= self.std_noise
         for callback in callbacks:
             callback.on_debug_event(
