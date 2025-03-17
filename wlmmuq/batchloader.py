@@ -476,7 +476,7 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
                 prox_wiener = wlpgd.ProximalWiener(
                     imgsize, self.powerspectrum_1d, self.step_size
                 )
-                wiener_pdg = wlpgd.PGDMassMapping(
+                wiener_pdg = wlpgd.BayesianPGDMassMappingNoPrecond(
                     std_noise=self.std_noise, step_size=self.step_size,
                     niter=self.niter, backward=prox_wiener, mask=self.mask,
                     verbose=self.verbose
