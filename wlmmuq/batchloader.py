@@ -337,7 +337,7 @@ class HDF5BatchLoader:
 class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
 
     def __init__(
-            self, *args, std_gaussianfilter=None, powerspectrum_1d=None,
+            self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
             step_size=None, niter=1, **kwargs
     ):
         """
@@ -356,6 +356,9 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
+        inpainting: bool, optional
+            If True, then apply noise in masked regions of the shear. Otherwise, set masked
+            values to 0. Default is False.
         input_method: str, optional
             Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
             If set to 'ks' or 'wiener', the implementations from
@@ -403,6 +406,7 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
             Keyword arguments for
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
+        self.inpainting = inpainting
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
         self.step_size = step_size
@@ -436,7 +440,8 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
         kappa_true = out_dict["kappa_true"] - self.offset
         gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
         gamma1_noisy, gamma2_noisy, _ = wlutils.get_masked_and_noisy_shear(
-            gamma1, gamma2, std_noise=self.std_noise, mask=self.mask
+            gamma1, gamma2, std_noise=self.std_noise,
+            mask=self.mask, inpainting=self.inpainting
         )
         out_dict.update({
             "gamma1": gamma1,
@@ -582,6 +587,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
             else:
                 kappa_true /= self.std_noise
 
+        out_dict["kappa_true"] = kappa_true
         out_dict["kappa_inp"] = kappa_true + noise
 
         return out_dict, end_idx
