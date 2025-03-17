@@ -78,9 +78,9 @@ class BasePGDMassMapping:
             kappa = np.zeros(gamma.shape) # Shape = ([nimgs], nx, ny)
         for callback in callbacks:
             callback.on_predict_begin(kappa)
-        for i in range(self.niter):
+        for i in range(1, self.niter + 1):
             if self.verbose:
-                print(f'Iteration {i+1}')
+                print(f'Iteration {i}')
 
             # Forward step
             kappa = self.forward(kappa, gamma, i=i, callbacks=callbacks)
@@ -231,10 +231,10 @@ class SaveIntermediateMaps(Callback):
         self.saveevery = saveevery
 
     def _save(self, i, kappa, savedir):
-        if (i+1) % self.saveevery == 0:
+        if i % self.saveevery == 0:
             np.save(
                 os.path.join(
-                    self.savedir, savedir, f'kappa_{i+1}.npy'
+                    self.savedir, savedir, f'kappa_{i}.npy'
                 ), kappa
             )
 
@@ -267,15 +267,15 @@ class ShowIntermediateMaps(Callback):
         )
 
     def on_forward_end(self, i, kappa):
-        if (i+1) % self.showevery == 0:
+        if i % self.showevery == 0:
             plt.figure(figsize=self.figsize)
             plt.subplot(121)
-            self._show(kappa, title=f'Iteration {i+1} (forward)')
+            self._show(kappa, title=f'Iteration {i} (forward)')
 
     def on_backward_end(self, i, kappa):
-        if (i+1) % self.showevery == 0:
+        if i % self.showevery == 0:
             plt.subplot(122)
-            self._show(kappa, title=f'Iteration {i+1} (backward)')
+            self._show(kappa, title=f'Iteration {i} (backward)')
             plt.show()
 
     def on_debug_event(self, i, eventname, intarray):
