@@ -47,14 +47,16 @@ class BasePGDMassMapping:
         self.verbose = verbose
 
 
-    def forward(self, kappa, gamma):
+    def forward(self, kappa, gamma, i=None, callbacks=None):
         # Gradient-descent step
-        kappa = kappa + self.step_size * self.neg_grad(kappa, gamma)
+        kappa = kappa + self.step_size * self.neg_grad(
+            kappa, gamma, i=i, callbacks=callbacks
+        )
 
         return kappa
 
 
-    def neg_grad(self, kappa, gamma):
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
         raise NotImplementedError
 
 
@@ -92,7 +94,7 @@ class BasePGDMassMapping:
                 print(f'Iteration {i+1}')
 
             # Forward step
-            kappa = self.forward(kappa, gamma)
+            kappa = self.forward(kappa, gamma, i=i, callbacks=callbacks)
             for callback in callbacks:
                 callback.on_forward_end(i, kappa)
 
@@ -120,10 +122,18 @@ class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
     sigma_min denotes the minimum standard deviation given by self.std_noise.
     
     """
-    def neg_grad(self, kappa, gamma):
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
         resgamma = gamma - self.conv2shear_masked(kappa)
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
         resgamma /= self.std_noise**2
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname=r'$\Sigma^{-1}$-scaling', intarray=resgamma.real
+            )
         out = self.shear2conv_masked(resgamma).real
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
         return out
 
 
@@ -141,9 +151,13 @@ class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
     given by self.std_noise, respectively.
     
     """
-    def neg_grad(self, kappa, gamma):
-        out = super().neg_grad(kappa, gamma)
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
+        out = super().neg_grad(kappa, gamma, i=i, callbacks=callbacks)
         out *= self.std_noise**2 # Pre-conditioning
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname=r'$\Sigma$-scaling', intarray=out
+            )
         return out
 
 
@@ -163,9 +177,25 @@ class BayesianPGDMassMappingPrecondWhitened(BayesianPGDMassMappingPrecond):
     This algorithm is mathematically equivalent to BayesianPGDMassMappingPrecond.
 
     """
-    def neg_grad(self, kappa, gamma):
-        out = super().neg_grad(self.std_noise * kappa, gamma)
+    def __call__(self, gamma, kappa0=None, callbacks=None):
+        out = super().__call__(gamma, kappa0, callbacks)
+        out *= self.std_noise # Output rescaling
+        return out
+
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
+        kappa *= self.std_noise
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname=r'$\Sigma^{1/2}$-scaling', intarray=kappa
+            )
+        out = super().neg_grad(
+            kappa, gamma, i=i, callbacks=callbacks
+        )
         out /= self.std_noise
+        for callback in callbacks:
+            callback.on_debug_event(
+                i=i, eventname=r'$\Sigma^{-1/2}$-scaling', intarray=out
+            )
         return out
 
 
@@ -180,9 +210,13 @@ class L2PGDMassMapping(BasePGDMassMapping):
     The step size self.step_size should be smaller than 2.
     
     """
-    def neg_grad(self, kappa, gamma):
+    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
         resgamma = gamma - self.conv2shear_masked(kappa)
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='residual', intarray=resgamma.real)
         out = self.shear2conv_masked(resgamma).real
+        for callback in callbacks:
+            callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
         return out
 
 
@@ -202,6 +236,9 @@ class Callback:
         pass
 
     def on_predict_end(self, kappa):
+        pass
+
+    def on_debug_event(self, i, eventname, intarray):
         pass
 
 
@@ -235,10 +272,15 @@ class SaveIntermediateMaps(Callback):
 
 class ShowIntermediateMaps(Callback):
 
-    def __init__(self, idx, showevery=1, figsize=(8, 3), **kwargs):
+    def __init__(
+            self, idx, showevery=1, figsize=(8, 3), debug=False,
+            step_size=1., **kwargs
+    ):
         self.idx = idx
         self.showevery = showevery
         self.figsize = figsize
+        self.debug = debug
+        self.step_size = step_size
         self.kwargs = kwargs
 
     def _show(self, kappa, **kwargs):
@@ -259,6 +301,12 @@ class ShowIntermediateMaps(Callback):
         if (i+1) % self.showevery == 0:
             plt.subplot(122)
             self._show(kappa, title=f'Iteration {i+1} (backward)')
+            plt.show()
+
+    def on_debug_event(self, i, eventname, intarray):
+        if self.debug and i == 0:
+            plt.figure(figsize=(4, 3))
+            self._show(self.step_size * intarray, title=eventname)
             plt.show()
 
 
