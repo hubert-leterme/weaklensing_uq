@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: to be updated
+
 # Check if correct number of arguments are provided
 if [ "$#" -ne 5 ]; then
   echo "Usage: $0 <GPU_ID> <PRED_DATASET> <SCALE> <TRAINING_DATE> <LEARNING_RATE>"
