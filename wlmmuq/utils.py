@@ -88,7 +88,7 @@ def _get_shear_fromto_convergence(
 
 
 def get_shear_from_convergence(
-        kappa1, kappa2=None, complexconjugate=False, return_complex=False
+        kappa1, kappa2=None, mask=None, complexconjugate=False, return_complex=False
 ):
     """
     Parameters
@@ -96,6 +96,9 @@ def get_shear_from_convergence(
     kappa1, kappa2 (numpy.ndarray, shape=(nimgs, width, width), default=None for kappa2)
         Real and imaginary parts of the input shear maps. If kappa2 is None, then kappa1
         is assumed to be complex-valued.
+    mask (numpy.ndarray, shape=(width, width), default=None)
+        If not None, then the shear values outside the mask are set to 0 after having
+        applied the inverse Kaiser-Squires filter.
     complexconjugate (bool, default=False)   
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
     return_complex (bool, default=False)
@@ -103,14 +106,17 @@ def get_shear_from_convergence(
         two real-valued numpy arrays will be returned.
     
     """
-    return _get_shear_fromto_convergence(
+    gamma = _get_shear_fromto_convergence(
         ks93.ks93inv, kappa1, kappa2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
+    if mask is not None:
+        gamma[..., ~mask] = 0
+    return gamma
 
 
 def get_convergence_from_shear(
-        gamma1, gamma2=None, complexconjugate=False, return_complex=False
+        gamma1, gamma2=None, mask=None, complexconjugate=False, return_complex=False
 ):
     """
     Parameters
@@ -118,6 +124,9 @@ def get_convergence_from_shear(
     gamma1, gamma2 (numpy.ndarray, default=None for gamma2)
         Real and imaginary parts of the input shear maps. If gamma2 is None, then gamma1
         is assumed to be complex-valued.
+    mask (numpy.ndarray, shape=(width, width), default=None)
+        If not None, then the shear values outside the mask are set to 0 before applying
+        the Kaiser-Squires filter.
     complexconjugate (bool, default=éTrue)   
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
     return_complex (bool, default=False)
@@ -125,10 +134,15 @@ def get_convergence_from_shear(
         two real-valued numpy arrays will be returned.
     
     """
-    return _get_shear_fromto_convergence(
+    if mask is not None:
+        gamma1[..., ~mask] = 0
+        if gamma2 is not None:
+            gamma2[..., ~mask] = 0
+    kappa = _get_shear_fromto_convergence(
         ks93.ks93, gamma1, gamma2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
+    return kappa
 
 
 def get_std_noise(ngal, shapedisp, std_noise_mask):

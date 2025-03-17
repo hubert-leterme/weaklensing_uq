@@ -49,7 +49,9 @@ class BasePGDMassMapping:
 
     def forward(self, kappa, gamma, i=None, callbacks=None):
         # Gradient-descent step
-        resgamma = gamma - self.conv2shear_masked(kappa)
+        resgamma = gamma - wlutils.get_shear_from_convergence(
+            kappa, mask=self.mask, return_complex=True
+        )
         for callback in callbacks:
             callback.on_debug_event(
                 i=i, eventname='residual', intarray=resgamma.real
@@ -63,24 +65,6 @@ class BasePGDMassMapping:
 
     def b_operator(self, resgamma, i=None, callbacks=None):
         raise NotImplementedError
-
-
-    def conv2shear_masked(self, kappa):
-        gamma = wlutils.get_shear_from_convergence(
-            kappa, return_complex=True
-        )
-        if self.mask is not None:
-            gamma[..., ~self.mask] = 0
-        return gamma
-
-
-    def shear2conv_masked(self, gamma):
-        if self.mask is not None:
-            gamma[..., ~self.mask] = 0
-        kappa = wlutils.get_convergence_from_shear(
-            gamma, return_complex=True
-        )
-        return kappa
 
 
     def __call__(self, gamma, kappa0=None, callbacks=None):
@@ -133,7 +117,9 @@ class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
             callback.on_debug_event(
                 i=i, eventname=r'$\Sigma^{-1}$-scaling', intarray=resgamma.real
             )
-        out = self.shear2conv_masked(resgamma).real
+        out = wlutils.get_convergence_from_shear(
+            resgamma, mask=self.mask, return_complex=True
+        ).real
         for callback in callbacks:
             callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
         return out
@@ -175,7 +161,9 @@ class L2PGDMassMapping(BasePGDMassMapping):
     
     """
     def b_operator(self, resgamma, i=None, callbacks=None):
-        out = self.shear2conv_masked(resgamma).real
+        out = wlutils.get_convergence_from_shear(
+            resgamma, mask=self.mask, return_complex=True
+        ).real
         for callback in callbacks:
             callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
         return out
@@ -199,7 +187,9 @@ class NoisewhiteningPGDMassMapping(BasePGDMassMapping):
             callback.on_debug_event(
                 i=i, eventname=r'$\Sigma^{-1/2}$-scaling', intarray=resgamma.real
             )
-        out = self.shear2conv_masked(resgamma).real
+        out = wlutils.get_convergence_from_shear(
+            resgamma, mask=self.mask, return_complex=True
+        ).real
         for callback in callbacks:
             callback.on_debug_event(i=i, eventname='KS filtering', intarray=out)
         return out
