@@ -161,44 +161,6 @@ class BayesianPGDMassMappingPrecond(BayesianPGDMassMappingNoPrecond):
         return out
 
 
-class BayesianPGDMassMappingPrecondWhitened(BayesianPGDMassMappingPrecond):
-    r"""
-    FB algorithm with Bayesian data-fidelity term:
-    $$
-    f(\kappa) := \frac12 \|\gamma - A\kappa\|_{\Sigma^{-1}}^2,
-    $$
-    with pre-conditioning.
-    Moreover, the intermediate arrays are divided by self.std_noise.
-    In the PnP version, the denoiser is trained on images divided by self.std_noise,
-    and corrupted by white noise with variance equal to self.step_size.
-    The step size self.step_size should be smaller than 2 sigma_min**2 / sigma_max**2,
-    where sigma_min and sigma_max denote the minimum and maximum standard deviations
-    given by self.std_noise, respectively.
-    This algorithm is mathematically equivalent to BayesianPGDMassMappingPrecond.
-
-    """
-    def __call__(self, gamma, kappa0=None, callbacks=None):
-        out = super().__call__(gamma, kappa0, callbacks)
-        out *= self.std_noise # Output rescaling
-        return out
-
-    def neg_grad(self, kappa, gamma, i=None, callbacks=None):
-        kappa *= self.std_noise
-        for callback in callbacks:
-            callback.on_debug_event(
-                i=i, eventname=r'$\Sigma^{1/2}$-scaling', intarray=kappa
-            )
-        out = super().neg_grad(
-            kappa, gamma, i=i, callbacks=callbacks
-        )
-        out /= self.std_noise
-        for callback in callbacks:
-            callback.on_debug_event(
-                i=i, eventname=r'$\Sigma^{-1/2}$-scaling', intarray=out
-            )
-        return out
-
-
 class L2PGDMassMapping(BasePGDMassMapping):
     r"""
     FB algorithm with L2 data-fidelity term:
