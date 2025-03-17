@@ -496,7 +496,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
             self, *args, std_noise=None, noise_whitening=False,
-            scale=0., scale_range=False, **kwargs
+            scale=1., scale_inf=None, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -516,11 +516,12 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
             noise is whitened. Default is False.
         scale : float, optional
             Multiplicative factor for std_noise, or upper bound of the uniform
-            distribution over which the scale is drawn, if `scale_range` is set to
-            True. Default is 0 (no noise).
-        scale_range: bool, optional
-            If set to true, then the noise standard deviation will be drawn uniformly
-            between `0` and `scale` for each input image. Default is False.
+            distribution over which the scale is drawn, if `scale_inf` is provided.
+            Default is 1.
+        scale_inf: bool, optional
+            If provided, then the noise standard deviation will be drawn uniformly
+            between `scale_inf` and `scale` for each input image. Default is None
+            (one single noise level).
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -563,7 +564,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         self.std_noise = std_noise
         self.noise_whitening = noise_whitening
         self.scale = scale
-        self.scale_range = scale_range
+        self.scale_inf = scale_inf
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
@@ -574,9 +575,9 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         if self.verbose:
             print("Generate white Gaussian noise")
         noise = np.random.normal(size=kappa_true.shape)
-        if self.scale_range:
+        if self.scale_inf is not None:
             nimgs = kappa_true.shape[0]
-            scale = self.scale * np.random.rand(nimgs)
+            scale = np.random.uniform(self.scale_inf, self.scale, nimgs)
             scale = scale[:, np.newaxis, np.newaxis]
         else:
             scale = self.scale
