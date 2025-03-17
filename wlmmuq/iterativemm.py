@@ -287,11 +287,15 @@ class ShowIntermediateMaps(Callback):
 
 class RMSE(Callback):
 
-    def __init__(self, kappa_true, mask=None, path_to_saved_stats=None):
+    def __init__(
+            self, niter, kappa_true=None, mask=None, path_to_saved_stats=None
+    ):
         """
         Parameters
         ----------
-        kappa_true: np.ndarray, shape = (nimgs, nx, ny)
+        niter: int
+            Number of iterations.
+        kappa_true: np.ndarray, shape = (nimgs, nx, ny), default = None
             Ground truth against which to compute RMSE.
         mask: np.ndarray, shape = (nx, ny), default = None
             If specified, compute RMSE over the mask.
@@ -299,34 +303,41 @@ class RMSE(Callback):
             Path to the .npy file where the arrays of RMSE are saved.
         
         """
+        self.niter = niter
         self.kappa_true = kappa_true
         self.mask = mask
         self.path_to_saved_stats = path_to_saved_stats
-
         self.rmse_backward = None
-        self._reset()
 
+    def rmse(self, kappa):
+        return wlutils.rmse(kappa, self.kappa_true, mask=self.mask)
 
-    def _reset(self):
-        self.rmse_backward = []
-
-    def _rmse(self, kappa, stat_list):
-        out = wlutils.rmse(
-            kappa, self.kappa_true, mask=self.mask
-        )
-        stat_list.append(out)
-
-    def on_backward_end(self, _, kappa):
-        self._rmse(kappa, self.rmse_backward)
+    def on_backward_end(self, i, kappa):
+        self.rmse_backward[i] = self.rmse(kappa) # Shape = (nimgs,)
 
     def on_predict_begin(self, kappa):
-        self._reset()
-        self._rmse(kappa, self.rmse_backward)
+        assert self.kappa_true.shape == kappa.shape
+        nimgs = kappa.shape[0]
+        self.rmse_backward = np.zeros((self.niter + 1, nimgs))
+        self.rmse_backward[0] = self.rmse(kappa) # Shape = (nimgs,)
 
     def on_predict_end(self, _):
-        self.rmse_backward = np.stack(self.rmse_backward)
         if self.path_to_saved_stats is not None:
             np.save(self.path_to_saved_stats, self.rmse_backward)
+
+
+class RMSEMultibatch(RMSE):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.rmse_backward_batches = np.zeros((self.niter + 1, 0))
+
+    def on_predict_end(self, _):
+        self.rmse_backward_batches = np.concatenate(
+            [self.rmse_backward_batches, self.rmse_backward], axis=1
+        )
+        if self.path_to_saved_stats is not None:
+            np.save(self.path_to_saved_stats, self.rmse_backward_batches)
 
 
 class UQ(Callback):
