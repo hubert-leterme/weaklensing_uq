@@ -270,8 +270,8 @@ class HDF5BatchLoader:
             beg_idx=beg_idx, max_idx=max_idx, get_all_images=get_all_images
         )
         if self.newaxis:
-            for key in out_dict:
-                out_dict[key] = out_dict[key][..., np.newaxis]
+            out_dict = _add_newaxis(out_dict)
+
         out = self._prepare_output(out_dict)
         if return_end_idx:
             out = (out, end_idx)
@@ -303,21 +303,26 @@ class HDF5BatchLoader:
 
                 yield out
 
-        try:
-            tensor_shape = (None, *self.output_shape)
-        except TypeError:
-            tensor_shape = (None, self.output_shape, self.output_shape)
-
-        if self.newaxis:
-            tensor_shape += (1,)
-
-        output_signature = tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)
-        if self.noutputs > 1:
-            output_signature = self.noutputs * (output_signature,)
+        output_signature = self._get_output_signature()
 
         out = tf.data.Dataset.from_generator(
             generator, output_signature=output_signature
         )
+        return out
+
+
+    def _get_output_signature(self):
+
+        try:
+            tensor_shape = (None, *self.output_shape)
+        except TypeError:
+            tensor_shape = (None, self.output_shape, self.output_shape)
+        if self.newaxis:
+            tensor_shape += (1,)
+        out = tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)
+        if self.noutputs > 1:
+            out = self.noutputs * (out,)
+
         return out
 
 
@@ -332,6 +337,28 @@ class HDF5BatchLoader:
     def __del__(self):
         """Destructor to ensure the HDF5 file is closed when the object is deleted."""
         self.close()
+
+
+def _add_newaxis(arrdict):
+
+    if isinstance(arrdict, np.ndarray):
+        arrdict = arrdict[..., np.newaxis]
+    else:
+        convert_back_to_tuple = False
+        if isinstance(arrdict, dict):
+            enumobject = arrdict.items()
+        else:
+            enumobject = enumerate(arrdict)
+            if isinstance(arrdict, tuple):
+                # Convert to list to allow item assignment
+                arrdict = list(arrdict)
+                convert_back_to_tuple = True
+        for idx, subarrdict in enumobject:
+            arrdict[idx] = _add_newaxis(subarrdict)
+        if convert_back_to_tuple:
+            arrdict = tuple(arrdict)
+
+    return arrdict
 
 
 class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
@@ -496,7 +523,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
             self, *args, std_noise=None, noise_whitening=False,
-            scale=1., scale_inf=None, **kwargs
+            scale=1., scale_inf=None, scale_as_input=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -512,16 +539,21 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
             Array of noise standard deviation. If none is given, a white noise
             will be applied (identity). Default is None.
         noise_whitening : bool, optional
-            If set to true, then the inputs are divided by std_noise and the
+            If set to True, then the inputs are divided by std_noise and the
             noise is whitened. Default is False.
         scale : float, optional
             Multiplicative factor for std_noise, or upper bound of the uniform
             distribution over which the scale is drawn, if `scale_inf` is provided.
             Default is 1.
-        scale_inf: bool, optional
+        scale_inf: float, optional
             If provided, then the noise standard deviation will be drawn uniformly
             between `scale_inf` and `scale` for each input image. Default is None
             (one single noise level).
+        scale_as_input: bool, optional
+            If set to True, then the input is given by (kappa_inp, scale), where
+            kappa_inp denotes a batch of noisy images and scale denotes an array of
+            noise levels (standard deviations if std_noise is None), for each input
+            image. If set to False, then only kappa_inp is provided. Default is False.
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -565,6 +597,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         self.noise_whitening = noise_whitening
         self.scale = scale
         self.scale_inf = scale_inf
+        self.scale_as_input = scale_as_input
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
@@ -587,20 +620,43 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
                 noise *= self.std_noise
             else:
                 kappa_true /= self.std_noise
+        kappa_inp = kappa_true + noise
 
         out_dict["kappa_true"] = kappa_true
-        out_dict["kappa_inp"] = kappa_true + noise
+        if not self.scale_as_input:
+            out_dict["kappa_inp"] = kappa_inp
+        else:
+            out_dict["kappa_inp"] = (kappa_inp, scale)
 
         return out_dict, end_idx
+
+
+    def _get_output_signature(self):
+
+        out = super()._get_output_signature()
+        if self.scale_as_input:
+            # Inputs are given as (kappa_inp, scale)
+            tensor_shape_scale = (None, 1, 1)
+            if self.newaxis:
+                tensor_shape_scale += (1,)
+            tensorspec_scale = tf.TensorSpec(
+                shape=tensor_shape_scale, dtype=tf.float32
+            )
+            out = list(out) # Convert to list to allow item assignment
+            for idx, val in enumerate(self.list_of_outputs):
+                if val == 'kappa_inp':
+                    out[idx] = (out[idx], tensorspec_scale)
+            out = tuple(out)
+
+        return out
 
 
 class MomentNetworkMixin:
 
     def __init__(self, *args, order=1, **kwargs):
-        super().__init__(*args, **kwargs)
+        list_of_outputs = ["kappa_inp", "kappa_true"]
+        super().__init__(*args, list_of_outputs=list_of_outputs, **kwargs)
         self.order = order # Must be equal to 1 or 2
-        self.list_of_outputs = None
-        self.noutputs = 2 # Network's input and target
 
     def _prepare_output(self, out_dict):
         kappa_inp = out_dict["kappa_inp"]

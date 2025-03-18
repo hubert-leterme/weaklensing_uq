@@ -39,12 +39,11 @@ keras.optimizers.Adam.__init__ = new_init
 
 
 def main(
-        path_to_augmented_dataset, denoiser=False, use_std_noise=False,
+        path_to_augmented_dataset, denoiser=False, tweedie=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, mean_centering=False,
-        no_bias=False,
-        nepochs=NEPOCHS, batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
-        lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
+        no_bias=False, nepochs=NEPOCHS, batch_size=BATCH_SIZE,
+        learning_rate=LEARNING_RATE, lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
         offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
@@ -66,6 +65,8 @@ def main(
         kwargs.update(std_noise=std_noise)
     if denoiser:
         batch_loader = wlbl.HDF5BatchLoaderDenoiser
+        if tweedie:
+            kwargs.update(scale_as_input=True)
     else:
         batch_loader = wlbl.HDF5BatchLoaderDeepMass
 
@@ -87,7 +88,11 @@ def main(
     )
 
     # Initialize model
-    cnn_instance = wlcnn.UNet(
+    if not tweedie:
+        cnn_class = wlcnn.UNet
+    else:
+        cnn_class = wlcnn.UNetFromScore
+    cnn_instance = cnn_class(
         map_size=imgsize, learning_rate=learning_rate, loss=loss,
         l2_lambda=l2_lambda, mean_centering=mean_centering,
         offset=offset, use_bias=not no_bias
@@ -174,6 +179,13 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
+        "--tweedie", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use Tweedie's formula to constrain the deep denoiser."
+        )
+    )
+    parser.add_argument(
         "--use-std-noise", action='store_true',
         default=argparse.SUPPRESS,
         help=(
@@ -185,7 +197,7 @@ if __name__ == "__main__":
         "--noise-whitening", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "If set to true, then the inputs are divided by the noise standard "
+            "If set to True, then the inputs are divided by the noise standard "
             "deviation and the noise is whitened."
         )
     )

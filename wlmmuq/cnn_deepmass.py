@@ -6,7 +6,7 @@ https://github.com/NiallJeffrey/DeepMass
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
-from tensorflow.keras.layers import concatenate, AveragePooling2D
+from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
 
 class BaseL2RegLoss(keras.losses.Loss):
@@ -61,6 +61,15 @@ class MeanCentering(keras.layers.Layer):
             "offset": self.offset
         })
         return config
+
+
+class Square(keras.layers.Layer):
+
+    def __init__(self, trainable=False, **kwargs):
+        super().__init__(trainable=trainable, **kwargs)
+
+    def call(self, tensor):
+        return tf.square(tensor)
 
 
 class BaseModel:
@@ -121,11 +130,11 @@ class SimpleModel(BaseModel):
 
     def _init_model(self):
 
-        input_img = Input(shape=(self.map_size, self.map_size, 1))
+        inp = Input(shape=(self.map_size, self.map_size, 1))
 
         filters = 32
 
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(input_img)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(inp)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(x)
         x = BatchNormalization()(x)
 
@@ -135,7 +144,7 @@ class SimpleModel(BaseModel):
 
         final = Conv2D(1, (3, 3), activation='sigmoid', padding='same', kernel_initializer='he_normal')(x)
 
-        return input_img, final
+        return inp, final
 
 
 class UNet(BaseModel):
@@ -165,12 +174,12 @@ class UNet(BaseModel):
 
     def _init_model(self):
 
-        input_img = Input(shape=(self.map_size, self.map_size, self.in_channels))
+        inp = Input(shape=(self.map_size, self.map_size, self.in_channels))
 
         x1 = Conv2D(
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
             use_bias=self.use_bias
-        )(input_img)
+        )(inp)
         x1 = BatchNormalization(center=self.use_bias)(x1)
 
         pool1 = AveragePooling2D(pool_size=(2, 2))(x1)
@@ -236,9 +245,29 @@ class UNet(BaseModel):
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
             use_bias=self.use_bias
         )(merge7)
-        output = Conv2D(self.out_channels, 1, activation='sigmoid')(x7)
+        out = Conv2D(self.out_channels, 1, activation='sigmoid')(x7)
 
         if self.mean_centering:
-            output = MeanCentering(self.offset)(output)
+            out = MeanCentering(self.offset)(out)
 
-        return input_img, output
+        return inp, out
+
+
+class UNetFromScore(UNet):
+    """
+    A U-Net model that incorporates a scalar multiplier named sigma,
+    such that the output is computed as: out = inp + sigma**2 * UNet(inp).
+    According to Tweedie's formula, assuming that:
+    - input images are corrupted by a Gaussian noise with standard deviation given by sigma;
+    - UNet computes the gradient of the log-prior PDF of the noisy images,
+    then UNetFromScore corresponds to an MMSE denoiser.
+
+    """
+    def _init_model(self):
+
+        inp, out = super()._init_model()
+        sigma = Input(shape=(1, 1, 1))
+        out = Multiply()([Square()(sigma), out])
+        out = Add()([inp, out])
+
+        return (inp, sigma), out

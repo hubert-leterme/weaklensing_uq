@@ -12,7 +12,7 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -lt 3 ]; then
   echo "Usage: $0 <GPU_ID> <SCALE> <LOSS> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 1.0e-1 mse [--scale-inf 0.5e-1] [--use-std-noise]"
+  echo "Example: $0 0 1.0e-1 mse [--scale-inf 0.5e-1] [--tweedie] [--use-std-noise]"
   exit 1
 fi
 
