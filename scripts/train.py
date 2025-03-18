@@ -206,17 +206,17 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Multiplicative factor for the noise level if the flag `--use-std-noise` "
-            "if used, or noise standard deviation otherwise. If `scale_inf` is provided, "
+            "if used, or noise standard deviation otherwise. If `scale_min` is provided, "
             "upper bound of the uniform distribution over which the actual scale is drawn. "
             "Only useful if the flag `--denoiser` is used."
         )
     )
     parser.add_argument(
-        "--scale-inf", type=float,
+        "--scale-min", type=float,
         default=argparse.SUPPRESS,
         help=(
             "If provided, then the scale for the noise standard deviation will be drawn "
-            "uniformly between `scale_inf` and `scale` for each input image."
+            "uniformly between `scale_min` and `scale` for each input image."
         )
     )
     parser.add_argument(
