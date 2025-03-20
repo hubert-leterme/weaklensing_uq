@@ -444,7 +444,7 @@ class KerasDenoiser(BaseKerasDenoiser):
 
         # Projection onto the subspace orthogonal to the kernel of the
         # Kaiser-Squires operator
-        #out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+        out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
         return out
 
