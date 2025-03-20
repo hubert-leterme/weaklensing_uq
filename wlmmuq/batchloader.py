@@ -522,8 +522,8 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
 class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
-            self, *args, std_noise=None, noise_whitening=False,
-            scale=1., scale_min=None, scale_as_input=False, **kwargs
+            self, *args, std_noise=None, scale=1., scale_min=None,
+            scale_as_input=False, score_matching=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -538,9 +538,6 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         std_noise : numpy.ndarray, optional
             Array of noise standard deviation. If none is given, a white noise
             will be applied (identity). Default is None.
-        noise_whitening : bool, optional
-            If set to True, then the inputs are divided by std_noise and the
-            noise is whitened. Default is False.
         scale : float, optional
             Multiplicative factor for std_noise, or upper bound of the uniform
             distribution over which the scale is drawn, if `scale_min` is provided.
@@ -554,6 +551,12 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
             kappa_inp denotes a batch of noisy images and scale denotes an array of
             noise levels (standard deviations if std_noise is None), for each input
             image. If set to False, then only kappa_inp is provided. Default is False.
+        score_matching: bool, optional
+            If set to True, then the loss function is the MSE between the output of the
+            network and Sigma^{-1}(kappa_true - kappa_inp), where Sigma denotes the
+            noise covariance matrix. Then, according to Tweedie's formula, the network
+            is trained to predict the score, i.e., the gradient of the log-probability
+            density function of the noisy images. Default is False.
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -594,13 +597,13 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         """
         super().__init__(*args, **kwargs)
         self.std_noise = std_noise
-        self.noise_whitening = noise_whitening
         self.scale_max = scale
         if scale_min is not None:
             self.scale_min = scale_min
         else:
             self.scale_min = scale
         self.scale_as_input = scale_as_input
+        self.score_matching = score_matching
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
@@ -610,17 +613,23 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
         if self.verbose:
             print("Generate white Gaussian noise")
-        noise = np.random.normal(size=kappa_true.shape)
+
+        # Get the noise standard deviation
         nimgs = kappa_true.shape[0]
         scale = np.random.uniform(self.scale_min, self.scale_max, nimgs)
-        scale = scale[:, np.newaxis, np.newaxis]
-        noise *= scale
+        std_noise = scale[:, np.newaxis, np.newaxis]
         if self.std_noise is not None:
-            if not self.noise_whitening:
-                noise *= self.std_noise
-            else:
-                kappa_true /= self.std_noise
+            std_noise *= self.std_noise
+
+        # Generate noise realizations
+        noise = std_noise * np.random.normal(size=kappa_true.shape)
+
+        # Get noisy kappa maps
         kappa_inp = kappa_true + noise
+
+        # Get ground truth for the loss function
+        if self.score_matching:
+            kappa_true = (kappa_true - kappa_inp) / std_noise
 
         out_dict["kappa_true"] = kappa_true
         if not self.scale_as_input:

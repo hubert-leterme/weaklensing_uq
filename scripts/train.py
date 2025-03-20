@@ -194,14 +194,6 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--noise-whitening", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "If set to True, then the inputs are divided by the noise standard "
-            "deviation and the noise is whitened."
-        )
-    )
-    parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
         help=(
@@ -217,6 +209,13 @@ if __name__ == "__main__":
         help=(
             "If provided, then the scale for the noise standard deviation will be drawn "
             "uniformly between `scale_min` and `scale` for each input image."
+        )
+    )
+    parser.add_argument(
+        "--score-matching", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Train the network to predict the score (Tweedie's formula)."
         )
     )
     parser.add_argument(
