@@ -629,7 +629,7 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
         # Get ground truth for the loss function
         if self.score_matching:
-            kappa_true = (kappa_true - kappa_inp) / std_noise
+            kappa_true = (kappa_true - kappa_inp) / std_noise**2
 
         out_dict["kappa_true"] = kappa_true
         if not self.scale_as_input:
