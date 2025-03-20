@@ -403,9 +403,12 @@ class ProximalWiener:
 
 class BaseKerasDenoiser:
 
-    def __init__(self, models, offset=0., offset_out=True, **kwargs):
-
+    def __init__(
+            self, models, sigma: float=None,
+            offset=0., offset_out=True, **kwargs
+    ):
         self.models = models
+        self.sigma = sigma
         self.offset = offset
         self.offset_out = offset_out
         self.kwargs = kwargs
@@ -415,6 +418,10 @@ class BaseKerasDenoiser:
 
         list_of_outputs = []
         inp = inp[..., np.newaxis] + self.offset
+        if self.sigma is not None: # For models taking the noise level as input
+            nimgs = inp.shape[0]
+            sigma = self.sigma * np.ones((nimgs, 1, 1, 1))
+            inp = (inp, sigma)
         for model in self.models:
             out = model.predict(inp, **self.kwargs)
             out = out[..., 0]
@@ -437,7 +444,7 @@ class KerasDenoiser(BaseKerasDenoiser):
 
         # Projection onto the subspace orthogonal to the kernel of the
         # Kaiser-Squires operator
-        out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+        #out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
         return out
 
