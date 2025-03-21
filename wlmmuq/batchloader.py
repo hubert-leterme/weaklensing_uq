@@ -623,7 +623,8 @@ class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
         # Get the noise standard deviation
         nimgs = kappa_true.shape[0]
         scale = np.random.uniform(self.scale_min, self.scale_max, nimgs)
-        std_noise = scale[:, np.newaxis, np.newaxis]
+        scale = scale[:, np.newaxis, np.newaxis]
+        std_noise = scale.copy()
         if self.std_noise is not None:
             std_noise *= self.std_noise
 
