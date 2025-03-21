@@ -64,10 +64,6 @@ class MeanCentering(keras.layers.Layer):
 
 
 class Square(keras.layers.Layer):
-
-    def __init__(self, trainable=False, **kwargs):
-        super().__init__(trainable=trainable, **kwargs)
-
     def call(self, tensor):
         return tf.square(tensor)
 
@@ -265,9 +261,10 @@ class UNetFromScore(UNet):
     """
     def _init_model(self):
 
-        inp, out = super()._init_model()
+        inp, score = super()._init_model()
         sigma = Input(shape=(1, 1, 1))
-        out = Multiply()([Square()(sigma), out])
-        out = Add()([inp, out])
+        var = Square()(sigma)
+        minusnoise = Multiply()([var, score])
+        out = Add()([inp, minusnoise])
 
         return (inp, sigma), out
