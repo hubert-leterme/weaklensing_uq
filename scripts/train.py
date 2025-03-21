@@ -42,8 +42,8 @@ keras.optimizers.Adam.__init__ = new_init
 def main(
         path_to_augmented_dataset, denoiser=False, tweedie=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
-        nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, mean_centering=False,
-        no_bias=False, nepochs=NEPOCHS, batch_size=BATCH_SIZE,
+        nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
+        mean_centering=False, no_bias=False, nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
         offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
@@ -78,7 +78,8 @@ def main(
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
-        offset=offset, newaxis=True, **kwargs
+        offset=offset, newaxis=True,
+        nreal_per_img=nreal_per_img, **kwargs
     )
     val_gen = batch_loader(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
@@ -156,7 +157,7 @@ def main(
     # Fit model
     cnn_model.fit(
         train_set_prefetched, epochs=nepochs,
-        steps_per_epoch=nimgs_train // batch_size,
+        steps_per_epoch=nreal_per_img * nimgs_train // batch_size,
         validation_data=val_set_prefetched,
         validation_steps=nimgs_val // batch_size,
         callbacks=callbacks
