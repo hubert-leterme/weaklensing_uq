@@ -19,6 +19,7 @@ FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
+NREAL_PER_IMG = 1
 NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
@@ -267,6 +268,14 @@ if __name__ == "__main__":
         help=(
             "Number of images in the validation set. "
             f"Default = {NIMGS_VAL}"
+        )
+    )
+    parser.add_argument(
+        "--nreal-per-img", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of noise realizations per image. "
+            f"Default = {NREAL_PER_IMG}"
         )
     )
     parser.add_argument(
