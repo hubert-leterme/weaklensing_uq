@@ -15,7 +15,7 @@ class HDF5BatchLoader:
             offset=0., beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
-            verbose=False, **kwargs
+            nreal_per_img=1, verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -63,6 +63,7 @@ class HDF5BatchLoader:
             If None, returns a dictionary of outputs. Default is None.
         close_after_batch: bool, optional
             Default is False.
+        nreal_per_img: int, optional
         verbose : bool, optional
             If True, print progress messages. Default is False.
         **kwargs
@@ -85,6 +86,7 @@ class HDF5BatchLoader:
         self.kwargs_wiener = kwargs
         self.list_of_outputs = list_of_outputs
         self.close_after_batch = close_after_batch
+        self.nreal_per_img = nreal_per_img
         self.verbose = verbose
 
         self.idx = None  # Will hold the shuffled indices
@@ -95,6 +97,7 @@ class HDF5BatchLoader:
         self.ds_kappa_pred = None
         self.input_exists = False
         self.current_idx = 0  # To track the batch number
+        self.current_real = 0 # Useful when self.nreal_per_img > 1
 
         self.sorted_batch_idx = None # Sorted indices for a given batch
         self.reversed_sort_idx = None
@@ -286,20 +289,23 @@ class HDF5BatchLoader:
             max_idx = self.nimgs
 
         def generator():
-            end_idx = min_idx
-            while end_idx < max_idx:
+            beg_idx = min_idx
+            while beg_idx < max_idx:
                 # Load the next batch of data
-                beg_idx = end_idx
                 out, end_idx = self.load_batch(
                     beg_idx, max_idx=max_idx, return_end_idx=True, **kwargs
                 )
+                self.current_real += 1
+                if self.current_real == self.nreal_per_img:
+                    beg_idx = end_idx # Update beg_idx
+                    self.current_real = 0 # Reset current realization
 
-                # Handle generator looping (to avoid StopIteration error)
-                # Reset generator and reshuffle indices if needed
-                if end_idx == max_idx and not raise_stop_iteration:
-                    end_idx = 0
-                    if self.shuffle:
-                        np.random.shuffle(self.idx)
+                    # Handle generator looping (to avoid StopIteration error)
+                    # Reset generator and reshuffle indices if needed
+                    if end_idx == max_idx and not raise_stop_iteration:
+                        end_idx = 0
+                        if self.shuffle:
+                            np.random.shuffle(self.idx)
 
                 yield out
 
