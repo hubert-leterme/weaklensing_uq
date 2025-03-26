@@ -404,10 +404,11 @@ class ProximalWiener:
 class BaseKerasDenoiser:
 
     def __init__(
-            self, models, sigma: float=None,
+            self, models, tweedie=False, sigma: float=None,
             offset=0., offset_out=True, **kwargs
     ):
         self.models = models
+        self.tweedie = tweedie
         self.sigma = sigma
         self.offset = offset
         self.offset_out = offset_out
@@ -418,7 +419,7 @@ class BaseKerasDenoiser:
 
         list_of_outputs = []
         inp = inp[..., np.newaxis] + self.offset
-        if self.sigma is not None: # For models taking the noise level as input
+        if self.tweedie: # For models taking the noise level as input
             nimgs = inp.shape[0]
             sigma = self.sigma * np.ones((nimgs, 1, 1, 1))
             inp = (inp, sigma)
@@ -446,6 +447,15 @@ class KerasDenoiser(BaseKerasDenoiser):
         # Kaiser-Squires operator
         out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
+        return out
+
+
+class KerasDenoiserScoreMatching(KerasDenoiser):
+
+    def __call__(self, inp):
+        out = super().__call__(inp) # Score estimation
+        out *= self.sigma**2
+        out += inp
         return out
 
 
