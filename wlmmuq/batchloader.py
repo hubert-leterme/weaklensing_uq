@@ -304,8 +304,8 @@ class HDF5BatchLoader:
 
                     # Handle generator looping (to avoid StopIteration error)
                     # Reset generator and reshuffle indices if needed
-                    if end_idx == max_idx and not raise_stop_iteration:
-                        end_idx = 0
+                    if beg_idx == max_idx and not raise_stop_iteration:
+                        beg_idx = min_idx
                         if self.shuffle:
                             np.random.shuffle(self.idx)
 
