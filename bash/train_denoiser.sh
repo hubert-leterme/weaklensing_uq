@@ -11,22 +11,20 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 3 ]; then
-  echo "Usage: $0 <GPU_ID> <SCALE> <LOSS> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 1.0e-1 mse [--scale-min 0.5e-1] [--tweedie] [--use-std-noise]"
+  echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
   exit 1
 fi
 
-scale=$2
-loss=l2reg_$3
 optional_args="${@:4}"
 
 # Process optional arguments: remove leading '--' or '-'
 optional_args_cleaned=$(echo "$optional_args" | sed 's/--//g' | sed 's/ /_/g')
 
-name_denoiser="denoiser_${scale}_${loss}_${optional_args_cleaned}_${current_date}"
+name_denoiser="denoiser_${optional_args_cleaned}_${current_date}"
 
 # Command to execute
-cmd="python scripts/train.py ${path_to_augmented_dataset} --denoiser --scale ${scale} ${optional_args} -lr 1e-4 --lr-scheduler --loss $loss --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v"
+cmd="python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} -lr 1e-4 --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v"
 
 # Print the command for tracking
 echo "Running the following command:"
