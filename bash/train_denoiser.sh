@@ -10,13 +10,13 @@ stats_dir=/ceph/chercheurs/leterme231/stats
 current_date=$(date +"%Y%m%d_%H%M%S")
 
 # Check if correct number of arguments are provided
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
   echo "Example: $0 0 [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
   exit 1
 fi
 
-optional_args="${@:4}"
+optional_args="${@:2}"
 
 # Process optional arguments: remove leading '--' or '-'
 optional_args_cleaned=$(echo "$optional_args" | sed 's/--//g' | sed 's/ /_/g')
