@@ -435,8 +435,9 @@ class BaseKerasDenoiser:
 
 class KerasDenoiser(BaseKerasDenoiser):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, meancentering=True, **kwargs):
         super().__init__([model], **kwargs)
+        self.meancentering = meancentering
 
 
     def __call__(self, inp):
@@ -445,7 +446,8 @@ class KerasDenoiser(BaseKerasDenoiser):
 
         # Projection onto the subspace orthogonal to the kernel of the
         # Kaiser-Squires operator
-        out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+        if self.meancentering:
+            out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
         return out
 
