@@ -7,6 +7,8 @@ import pycs.astro.wl.mass_mapping as csmm
 from . import iterativemm as wlpgd
 from . import utils as wlutils
 
+SCALE = 1.
+
 class HDF5BatchLoader:
 
     def __init__(
@@ -528,7 +530,7 @@ class HDF5BatchLoaderGammaKappa(HDF5BatchLoader):
 class BaseHDF5BatchLoaderDenoiser(HDF5BatchLoader):
 
     def __init__(
-            self, *args, std_noise=None, scale=1., scale_min=None,
+            self, *args, std_noise=None, scale=SCALE, scale_min=None,
             scale_as_input=False, score_matching=False, **kwargs
     ):
         """

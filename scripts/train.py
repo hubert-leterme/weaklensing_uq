@@ -202,7 +202,7 @@ if __name__ == "__main__":
             "Multiplicative factor for the noise level if the flag `--use-std-noise` "
             "if used, or noise standard deviation otherwise. If `scale_min` is provided, "
             "upper bound of the uniform distribution over which the actual scale is drawn. "
-            "Only useful if the flag `--denoiser` is used."
+            f"Only useful if the flag `--denoiser` is used. Default = {wlbl.SCALE}"
         )
     )
     parser.add_argument(
