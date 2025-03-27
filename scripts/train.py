@@ -28,19 +28,10 @@ LOSS = 'mse'
 L2_LAMBDA = 1e-4
 OFFSET = 0.5 # As in DeepMass
 
-# Monkey-patch Adam (to avoid `ValueError: Argument(s) not recognized: {'lr': 1e-05}`)
-_init_ = keras.optimizers.Adam.__init__
-
-def new_init(self, *args, **kwargs):
-    if 'lr' in kwargs:
-        kwargs['learning_rate'] = kwargs.pop('lr')
-    _init_(self, *args, **kwargs)
-
-keras.optimizers.Adam.__init__ = new_init
-
 
 def main(
-        path_to_augmented_dataset, denoiser=False, tweedie=False, use_std_noise=False,
+        path_to_augmented_dataset, path_to_pretrained_model=None,
+        denoiser=False, tweedie=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         mean_centering=False, no_bias=False, nepochs=NEPOCHS, batch_size=BATCH_SIZE,
@@ -90,16 +81,26 @@ def main(
     )
 
     # Initialize model
-    if not tweedie:
-        cnn_class = wlcnn.UNet
+    if path_to_pretrained_model is None:
+        if not tweedie:
+            cnn_class = wlcnn.UNet
+        else:
+            cnn_class = wlcnn.UNetFromScore
+        cnn_model = cnn_class(
+            map_size=imgsize, mean_centering=mean_centering,
+            offset=offset, use_bias=not no_bias
+        )
     else:
-        cnn_class = wlcnn.UNetFromScore
-    cnn_instance = cnn_class(
-        map_size=imgsize, learning_rate=learning_rate, loss=loss,
-        l2_lambda=l2_lambda, mean_centering=mean_centering,
-        offset=offset, use_bias=not no_bias
+        cnn_model = keras.models.load_model(path_to_pretrained_model, compile=False)
+
+    if verbose:
+        cnn_model.summary()
+
+    # Compile model
+    wlcnn.compile_kerasmodel(
+        cnn_model, loss=loss, l2_lambda=l2_lambda, offset=offset,
+        learning_rate=learning_rate
     )
-    cnn_model = cnn_instance.model()
 
     # Define the checkpoint callback
     callbacks = []
@@ -171,6 +172,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_augmented_dataset", type=str,
         help="Path to the augmented dataset (HDF5 file)"
+    )
+    parser.add_argument(
+        "-m", "--path-to-pretrained-model", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the pretrained model. If none is given, then the model is "
+            "initialized and trained from scratch. If provided, then arguments "
+            "`--tweedie`, `--mean-centering` and `--no-bias` are ineffective; "
+            "moreover, `--imgsize` must be compatible with the provided model. "
+            "Default = None"
+        )
     )
     parser.add_argument(
         "--denoiser", action='store_true',
