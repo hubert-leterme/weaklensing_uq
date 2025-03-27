@@ -8,10 +8,12 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
+LOSS = 'mse'
+L2_LAMBDA = 1e-4
 
 class BaseL2RegLoss(keras.losses.Loss):
 
-    def __init__(self, l2_lambda=1e-4, offset=0., **kwargs):
+    def __init__(self, l2_lambda=L2_LAMBDA, offset=0., **kwargs):
         super().__init__(**kwargs)
         self.l2_lambda = l2_lambda
         self.offset = offset
@@ -68,55 +70,25 @@ class Square(keras.layers.Layer):
         return tf.square(tensor)
 
 
-class BaseModel:
+class BaseModel(keras.models.Model):
 
-    def __init__(
-            self, map_size, learning_rate, loss='mse', l2_lambda=1e-4, offset=0.
-    ):
+    def __init__(self, map_size, offset=0.):
         """
         Initialization
         :param map_size: size of square image (there are map_size**2 pixels)
         :param learning_rate: learning rate for the optimizer
         :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
         :param l2_lambda: regularization parameter
-        :param offset: mean value of the convergence maps. Default = 0.
+        :param offset: mean value of the convergence maps (for mean centering).
+            Default = 0.
         """
         self.map_size = map_size
-        self.learning_rate = learning_rate
-        self.loss = loss
-        self.l2_lambda = l2_lambda
         self.offset = offset
-
         self.inputs, self.outputs = self._init_model()
-
+        super().__init__(self.inputs, self.outputs)
 
     def _init_model(self):
         raise NotImplementedError
-
-
-    def model(self):
-
-        out = keras.models.Model(self.inputs, self.outputs)
-        out.summary()
-
-        if self.loss in ('mse', 'mae'):
-            loss_fun = self.loss
-        elif self.loss == 'l2reg_mse':
-            loss_fun = L2RegMSE(l2_lambda=self.l2_lambda, offset=self.offset)
-        elif self.loss == 'l2reg_mae':
-            loss_fun = L2RegMAE(l2_lambda=self.l2_lambda, offset=self.offset)
-        else:
-            raise ValueError
-
-        if self.learning_rate is None:
-            out.compile(optimizer='adam', loss=loss_fun)
-        else:
-            out.compile(
-                optimizer=keras.optimizers.Adam(lr=self.learning_rate),
-                loss=loss_fun
-            )
-
-        return out
 
 
 class SimpleModel(BaseModel):
@@ -268,3 +240,23 @@ class UNetFromScore(UNet):
         out = Add()([inp, minusnoise])
 
         return (inp, sigma), out
+
+
+def compile_kerasmodel(model, loss=LOSS, learning_rate=None, **kwargs):
+
+    if loss in ('mse', 'mae'):
+        loss_fun = loss
+    elif loss == 'l2reg_mse':
+        loss_fun = L2RegMSE(**kwargs)
+    elif loss == 'l2reg_mae':
+        loss_fun = L2RegMAE(**kwargs)
+    else:
+        raise ValueError
+
+    if learning_rate is None:
+        model.compile(optimizer='adam', loss=loss_fun)
+    else:
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+            loss=loss_fun
+        )
