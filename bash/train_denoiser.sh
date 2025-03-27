@@ -2,6 +2,7 @@
 
 # Set paths
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
+path_to_models=/ceph/chercheurs/leterme231/models
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
 backup_dir=/ceph/chercheurs/leterme231/backups
@@ -12,19 +13,26 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
+  echo "Example: $0 0 [-m <filename>.keras] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
   exit 1
 fi
 
 optional_args="${@:2}"
 
-# Process optional arguments: remove leading '--' or '-'
-optional_args_cleaned=$(echo "$optional_args" | sed 's/--//g' | sed 's/ /_/g')
+# Set name of the denoiser
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-m / /g' | sed 's/--//g' | sed 's/ /_/g' | sed 's/\.keras//g')
+name_denoiser=$(echo "denoiser_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
-name_denoiser="denoiser_${optional_args_cleaned}_${current_date}"
+# Check if argument `-m <model_filename>` is provided and
+# update optional arguments with full path to model
+if [[ $optional_args == *"-m "* ]]; then
+  model_filename=$(echo "$optional_args" | xargs | grep -oP '\-m \K[^\s]+' | xargs)
+  optional_args=$(echo "$optional_args" | sed "s/-m $model_filename//g" | xargs)
+  optional_args="-m ${path_to_models}/${model_filename} ${optional_args}"
+fi
 
 # Command to execute
-cmd="python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} -lr 1e-4 --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v"
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} -lr 1e-4 --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
