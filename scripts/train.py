@@ -8,7 +8,7 @@ import threading
 import numpy as np
 from tensorflow import data, keras
 
-import wlmmuq.batchloader as wlbl
+import wlmmuq.batchloader.tensorflow as wlbl
 import wlmmuq.cnn_deepmass as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng

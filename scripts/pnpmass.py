@@ -4,7 +4,7 @@ import random
 import numpy as np
 from tensorflow import keras
 
-import wlmmuq.batchloader as wlbl
+import wlmmuq.batchloader.tensorflow as wlbl
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils

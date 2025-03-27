@@ -3,7 +3,7 @@ import argparse
 import random
 import numpy as np
 
-import wlmmuq.batchloader as wlbl
+import wlmmuq.batchloader.tensorflow as wlbl
 
 MOMENT_ORDER = 1
 IMGSIZE = 304

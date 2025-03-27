@@ -7,8 +7,8 @@ try:
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from . import iterativemm as wlpgd
-from . import utils as wlutils
+from .. import iterativemm as wlpgd
+from .. import utils as wlutils
 
 SCALE = 1.
 
