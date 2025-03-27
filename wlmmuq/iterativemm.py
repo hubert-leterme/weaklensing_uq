@@ -1,8 +1,12 @@
 import os
+import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pycs.astro.wl.mass_mapping as csmm
+try:
+    import pycs.astro.wl.mass_mapping as csmm
+except ImportError:
+    warnings.warn("Module `pycs` not found.")
 
 from . import utils as wlutils
 
