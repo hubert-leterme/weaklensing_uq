@@ -211,12 +211,9 @@ class HDF5BatchLoader:
                 return out
             transforms.append(crop)
 
-        # Add new axis for channel dimension
-        if self.newaxis:
-            transforms.append(self._add_newaxis_arr)
-
         if transform is not None:
             transforms.append(transform)
+        transforms.append(self._convert_to_tensor) # Identity by default
 
         transform = _pipe(*transforms)
 
@@ -232,7 +229,20 @@ class HDF5BatchLoader:
             "kappa_inp": kappa_inp,
             "kappa_pred": kappa_pred
         }
+        out_dict = self._postprocess(out_dict, idx)
 
+        # Add new axis for channel dimension
+        if self.newaxis:
+            out_dict = self._add_newaxis(out_dict)
+
+        return out_dict
+
+
+    def _convert_to_tensor(self, arr):
+        return arr # By default, no conversion
+
+
+    def _postprocess(self, out_dict, _):
         return out_dict
 
 
@@ -251,7 +261,9 @@ class HDF5BatchLoader:
 
     def _add_newaxis(self, arrdict):
 
-        if isinstance(arrdict, np.ndarray):
+        if arrdict is None:
+            pass
+        elif isinstance(arrdict, np.ndarray):
             arrdict = self._add_newaxis_arr(arrdict)
         else:
             convert_back_to_tuple = False
@@ -435,9 +447,8 @@ class GammaKappaMixin:
             self.massmap.init_massmap(self.nx, self.ny)
 
 
-    def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
-
-        out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
+    def _postprocess(self, out_dict, idx):
+        out_dict = super()._postprocess(out_dict, idx)
 
         # Generate noisy shear maps
         kappa_true = out_dict["kappa_true"] - self.offset
@@ -492,7 +503,7 @@ class GammaKappaMixin:
                 "kappa_inp": kappa_inp + self.offset
             })
 
-        return out_dict, end_idx
+            return out_dict
 
 
 class DenoiserMixin:
@@ -582,24 +593,30 @@ class DenoiserMixin:
         self.score_matching = score_matching
 
 
-    def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
+    def _postprocess(self, out_dict, idx):
 
-        out_dict, end_idx = super()._load_batch_dict(beg_idx, max_idx, get_all_images)
+        out_dict = super()._postprocess(out_dict, idx)
         kappa_true = out_dict["kappa_true"]
 
         if self.verbose:
             print("Generate white Gaussian noise")
 
         # Get the noise standard deviation
-        nimgs = kappa_true.shape[0]
-        scale = np.random.uniform(self.scale_min, self.scale_max, nimgs)
-        scale = scale[:, np.newaxis, np.newaxis]
+        if isinstance(idx, int):
+            size = (1, 1)
+        else:
+            size = (len(idx), 1, 1)
+        scale = np.random.uniform(
+            self.scale_min, self.scale_max, size=size
+        ) # Shape = ([nimgs], 1, 1)
         std_noise = scale.copy()
         if self.std_noise is not None:
-            std_noise *= self.std_noise
+            std_noise *= self.std_noise # Shape = ([nimgs], nx, ny)
 
         # Generate noise realizations
         noise = std_noise * np.random.normal(size=kappa_true.shape)
+        noise = self._convert_to_tensor(noise)
+        scale = self._convert_to_tensor(scale)
 
         # Get noisy kappa maps
         kappa_inp = kappa_true + noise
@@ -614,7 +631,7 @@ class DenoiserMixin:
         else:
             out_dict["kappa_inp"] = (kappa_inp, scale)
 
-        return out_dict, end_idx
+        return out_dict
 
 
 class MomentNetworkMixin:
