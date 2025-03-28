@@ -8,8 +8,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
-LOSS = 'mse'
-L2_LAMBDA = 1e-4
+from . import LOSS, L2_LAMBDA
 
 class BaseL2RegLoss(keras.losses.Loss):
 
@@ -47,8 +46,8 @@ class L2RegMAE(BaseL2RegLoss):
 
 class MeanCentering(keras.layers.Layer):
 
-    def __init__(self, trainable=False, offset=0., **kwargs):
-        super().__init__(trainable=trainable, **kwargs)
+    def __init__(self, offset=0., **kwargs):
+        super().__init__(**kwargs)
         self.offset = offset
 
     def call(self, tensor):
@@ -74,20 +73,17 @@ class BaseModel(keras.models.Model):
 
     def __init__(self, map_size, offset=0.):
         """
-        Initialization
+        Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
-        :param learning_rate: learning rate for the optimizer
-        :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
-        :param l2_lambda: regularization parameter
         :param offset: mean value of the convergence maps (for mean centering).
             Default = 0.
         """
         self.map_size = map_size
         self.offset = offset
-        self.inputs, self.outputs = self._init_model()
-        super().__init__(self.inputs, self.outputs)
+        kwargs = self._init_model()
+        super().__init__(**kwargs)
 
-    def _init_model(self):
+    def _init_model(self) -> dict:
         raise NotImplementedError
 
 
@@ -96,7 +92,7 @@ class SimpleModel(BaseModel):
     A CNN class that creates a simple denoiser
     """
 
-    def _init_model(self):
+    def _init_model(self) -> dict:
 
         inp = Input(shape=(self.map_size, self.map_size, 1))
 
@@ -112,7 +108,9 @@ class SimpleModel(BaseModel):
 
         final = Conv2D(1, (3, 3), activation='sigmoid', padding='same', kernel_initializer='he_normal')(x)
 
-        return inp, final
+        out_dict = {'inputs': inp, 'outputs': final}
+
+        return out_dict
 
 
 class UNet(BaseModel):
@@ -127,11 +125,16 @@ class UNet(BaseModel):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
-        :param learning_rate: learning rate for the optimizer
+        :param offset: mean value of the convergence maps (for mean centering).
+            Default = 0.
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
         :param mean_centering: whether to apply mean centering at the output.
             Default = False
+        :param use_bias: whether to use bias in the convolutional and batch
+            normalization layers. Default = True
+        :param sigmoid_activation: whether to apply a sigmoid activation function
+            at the output. Default = True
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -144,7 +147,7 @@ class UNet(BaseModel):
         super().__init__(*args, **kwargs)
 
 
-    def _init_model(self):
+    def _init_model(self) -> dict:
 
         inp = Input(shape=(self.map_size, self.map_size, self.in_channels))
 
@@ -224,7 +227,9 @@ class UNet(BaseModel):
         if self.mean_centering:
             out = MeanCentering(self.offset)(out)
 
-        return inp, out
+        out_dict = {'inputs': inp, 'outputs': out}
+
+        return out_dict
 
 
     def _postprocess(self, inp, out):
@@ -252,7 +257,14 @@ class UNetFromScore(UNet):
 
 
 def compile_kerasmodel(model, loss=LOSS, learning_rate=None, **kwargs):
-
+    """
+    :param model: keras model
+    :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
+    :param learning_rate: learning rate for the optimizer
+    :param l2_lambda: regularization parameter
+    :param offset: mean value of the convergence maps (for mean centering).
+        Default = 0.
+    """
     if loss in ('mse', 'mae'):
         loss_fun = loss
     elif loss == 'l2reg_mse':
