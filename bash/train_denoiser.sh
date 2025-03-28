@@ -13,20 +13,20 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 [-m <filename>.keras] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
+  echo "Example: $0 0 [-m <filename>] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
   exit 1
 fi
 
 optional_args="${@:2}"
 
 # Set name of the denoiser
-optional_args_cleaned=$(echo "$optional_args" | sed 's/--//g' | sed 's/ /_/g')
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-m / /g' | sed 's/--//g' | sed 's/ /_/g' | sed 's/\.keras//g')
 name_denoiser=$(echo "denoiser_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
 # Check if argument `-m <model_filename>` is provided and
 # update optional arguments with full path to model
-if [[ $optional_args == *"-m"* ]]; then
-  model_filename=$(echo "$optional_args" | xargs | grep -oP '\-m \K[^\s]+')
+if [[ $optional_args == *"-m "* ]]; then
+  model_filename=$(echo "$optional_args" | xargs | grep -oP '\-m \K[^\s]+' | xargs)
   optional_args=$(echo "$optional_args" | sed "s/-m $model_filename//g" | xargs)
   optional_args="-m ${path_to_models}/${model_filename} ${optional_args}"
 fi

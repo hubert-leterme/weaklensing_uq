@@ -2,10 +2,13 @@ import warnings
 import numpy as np
 import h5py
 import tensorflow as tf
-import pycs.astro.wl.mass_mapping as csmm
+try:
+    import pycs.astro.wl.mass_mapping as csmm
+except ImportError:
+    warnings.warn("Module `pycs` not found.")
 
-from . import iterativemm as wlpgd
-from . import utils as wlutils
+from .. import iterativemm as wlpgd
+from .. import utils as wlutils
 
 SCALE = 1.
 

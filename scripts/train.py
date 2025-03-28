@@ -8,7 +8,7 @@ import threading
 import numpy as np
 from tensorflow import data, keras
 
-import wlmmuq.batchloader as wlbl
+import wlmmuq.batchloader.tensorflow as wlbl
 import wlmmuq.cnn_deepmass as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
@@ -34,7 +34,8 @@ def main(
         denoiser=False, tweedie=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
-        mean_centering=False, no_bias=False, nepochs=NEPOCHS, batch_size=BATCH_SIZE,
+        mean_centering=False, no_bias=False, nosigm=False,
+        nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
         offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
@@ -86,9 +87,10 @@ def main(
             cnn_class = wlcnn.UNet
         else:
             cnn_class = wlcnn.UNetFromScore
+            nosigm = True # Disable sigmoid activation
         cnn_model = cnn_class(
             map_size=imgsize, mean_centering=mean_centering,
-            offset=offset, use_bias=not no_bias
+            offset=offset, use_bias=not no_bias, sigmoid_activation=not nosigm
         )
     else:
         cnn_model = keras.models.load_model(path_to_pretrained_model, compile=False)
@@ -304,6 +306,15 @@ if __name__ == "__main__":
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers."
+        )
+    )
+    parser.add_argument(
+        "--nosigm", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Do not use sigmoid activation function in the output layer. This argument "
+            "is not effective if the flag `--tweedie` is activated (in which case the "
+            "sigmoid activation is automatically disabled)."
         )
     )
     parser.add_argument(
