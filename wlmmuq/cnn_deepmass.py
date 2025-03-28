@@ -122,7 +122,7 @@ class UNet(BaseModel):
 
     def __init__(
             self, *args, in_channels=1, out_channels=1, mean_centering=False,
-            use_bias=True, **kwargs
+            use_bias=True, sigmoid_activation=True, **kwargs
     ):
         """
         Initialisation
@@ -137,6 +137,10 @@ class UNet(BaseModel):
         self.out_channels = out_channels
         self.mean_centering = mean_centering
         self.use_bias = use_bias
+        if sigmoid_activation:
+            self.activation = 'sigmoid'
+        else:
+            self.activation = None
         super().__init__(*args, **kwargs)
 
 
@@ -213,12 +217,18 @@ class UNet(BaseModel):
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
             use_bias=self.use_bias
         )(merge7)
-        out = Conv2D(self.out_channels, 1, activation='sigmoid')(x7)
+        out = Conv2D(self.out_channels, 1, activation=self.activation)(x7)
+
+        inp, out = self._postprocess(inp, out)
 
         if self.mean_centering:
             out = MeanCentering(self.offset)(out)
 
         return inp, out
+
+
+    def _postprocess(self, inp, out):
+        return inp, out # Identity in the base class
 
 
 class UNetFromScore(UNet):
@@ -231,12 +241,11 @@ class UNetFromScore(UNet):
     then UNetFromScore corresponds to an MMSE denoiser.
 
     """
-    def _init_model(self):
-
-        inp, score = super()._init_model()
+    def _postprocess(self, inp, out):
+        # Argument out estimates the score of the log-prior PDF of the noisy images
         sigma = Input(shape=(1, 1, 1))
         var = Square()(sigma)
-        minusnoise = Multiply()([var, score])
+        minusnoise = Multiply()([var, out])
         out = Add()([inp, minusnoise])
 
         return (inp, sigma), out
