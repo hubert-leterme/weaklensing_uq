@@ -66,10 +66,10 @@ class UNet(nn.Module):
 
 
 class UNetRes(nn.Module):
-    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=4, act_mode='R', downsample_mode='strideconv', upsample_mode='convtranspose'):
+    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=4, act_mode='R', downsample_mode='strideconv', upsample_mode='convtranspose', bias=True):
         super(UNetRes, self).__init__()
 
-        self.m_head = B.conv(in_nc, nc[0], bias=False, mode='C')
+        self.m_head = B.conv(in_nc, nc[0], bias=bias, mode='C')
 
         # downsample
         if downsample_mode == 'avgpool':
@@ -81,11 +81,11 @@ class UNetRes(nn.Module):
         else:
             raise NotImplementedError('downsample mode [{:s}] is not found'.format(downsample_mode))
 
-        self.m_down1 = B.sequential(*[B.ResBlock(nc[0], nc[0], bias=False, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[0], nc[1], bias=False, mode='2'))
-        self.m_down2 = B.sequential(*[B.ResBlock(nc[1], nc[1], bias=False, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[1], nc[2], bias=False, mode='2'))
-        self.m_down3 = B.sequential(*[B.ResBlock(nc[2], nc[2], bias=False, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[2], nc[3], bias=False, mode='2'))
+        self.m_down1 = B.sequential(*[B.ResBlock(nc[0], nc[0], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[0], nc[1], bias=bias, mode='2'))
+        self.m_down2 = B.sequential(*[B.ResBlock(nc[1], nc[1], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[1], nc[2], bias=bias, mode='2'))
+        self.m_down3 = B.sequential(*[B.ResBlock(nc[2], nc[2], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)], downsample_block(nc[2], nc[3], bias=bias, mode='2'))
 
-        self.m_body  = B.sequential(*[B.ResBlock(nc[3], nc[3], bias=False, mode='C'+act_mode+'C') for _ in range(nb)])
+        self.m_body  = B.sequential(*[B.ResBlock(nc[3], nc[3], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)])
 
         # upsample
         if upsample_mode == 'upconv':
@@ -97,11 +97,11 @@ class UNetRes(nn.Module):
         else:
             raise NotImplementedError('upsample mode [{:s}] is not found'.format(upsample_mode))
 
-        self.m_up3 = B.sequential(upsample_block(nc[3], nc[2], bias=False, mode='2'), *[B.ResBlock(nc[2], nc[2], bias=False, mode='C'+act_mode+'C') for _ in range(nb)])
-        self.m_up2 = B.sequential(upsample_block(nc[2], nc[1], bias=False, mode='2'), *[B.ResBlock(nc[1], nc[1], bias=False, mode='C'+act_mode+'C') for _ in range(nb)])
-        self.m_up1 = B.sequential(upsample_block(nc[1], nc[0], bias=False, mode='2'), *[B.ResBlock(nc[0], nc[0], bias=False, mode='C'+act_mode+'C') for _ in range(nb)])
+        self.m_up3 = B.sequential(upsample_block(nc[3], nc[2], bias=bias, mode='2'), *[B.ResBlock(nc[2], nc[2], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)])
+        self.m_up2 = B.sequential(upsample_block(nc[2], nc[1], bias=bias, mode='2'), *[B.ResBlock(nc[1], nc[1], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)])
+        self.m_up1 = B.sequential(upsample_block(nc[1], nc[0], bias=bias, mode='2'), *[B.ResBlock(nc[0], nc[0], bias=bias, mode='C'+act_mode+'C') for _ in range(nb)])
 
-        self.m_tail = B.conv(nc[0], out_nc, bias=False, mode='C')
+        self.m_tail = B.conv(nc[0], out_nc, bias=bias, mode='C')
 
     def forward(self, x0):
         x1 = self.m_head(x0)
@@ -118,10 +118,10 @@ class UNetRes(nn.Module):
 
 
 class ResUNet(nn.Module):
-    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=4, act_mode='L', downsample_mode='strideconv', upsample_mode='convtranspose'):
+    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=4, act_mode='L', downsample_mode='strideconv', upsample_mode='convtranspose', bias=True):
         super(ResUNet, self).__init__()
 
-        self.m_head = B.conv(in_nc, nc[0], bias=False, mode='C')
+        self.m_head = B.conv(in_nc, nc[0], bias=bias, mode='C')
 
         # downsample
         if downsample_mode == 'avgpool':
@@ -133,11 +133,11 @@ class ResUNet(nn.Module):
         else:
             raise NotImplementedError('downsample mode [{:s}] is not found'.format(downsample_mode))
 
-        self.m_down1 = B.sequential(*[B.IMDBlock(nc[0], nc[0], bias=False, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[0], nc[1], bias=False, mode='2'))
-        self.m_down2 = B.sequential(*[B.IMDBlock(nc[1], nc[1], bias=False, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[1], nc[2], bias=False, mode='2'))
-        self.m_down3 = B.sequential(*[B.IMDBlock(nc[2], nc[2], bias=False, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[2], nc[3], bias=False, mode='2'))
+        self.m_down1 = B.sequential(*[B.IMDBlock(nc[0], nc[0], bias=bias, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[0], nc[1], bias=bias, mode='2'))
+        self.m_down2 = B.sequential(*[B.IMDBlock(nc[1], nc[1], bias=bias, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[1], nc[2], bias=bias, mode='2'))
+        self.m_down3 = B.sequential(*[B.IMDBlock(nc[2], nc[2], bias=bias, mode='C'+act_mode) for _ in range(nb)], downsample_block(nc[2], nc[3], bias=bias, mode='2'))
 
-        self.m_body  = B.sequential(*[B.IMDBlock(nc[3], nc[3], bias=False, mode='C'+act_mode) for _ in range(nb)])
+        self.m_body  = B.sequential(*[B.IMDBlock(nc[3], nc[3], bias=bias, mode='C'+act_mode) for _ in range(nb)])
 
         # upsample
         if upsample_mode == 'upconv':
@@ -149,11 +149,11 @@ class ResUNet(nn.Module):
         else:
             raise NotImplementedError('upsample mode [{:s}] is not found'.format(upsample_mode))
 
-        self.m_up3 = B.sequential(upsample_block(nc[3], nc[2], bias=False, mode='2'), *[B.IMDBlock(nc[2], nc[2], bias=False, mode='C'+act_mode) for _ in range(nb)])
-        self.m_up2 = B.sequential(upsample_block(nc[2], nc[1], bias=False, mode='2'), *[B.IMDBlock(nc[1], nc[1], bias=False, mode='C'+act_mode) for _ in range(nb)])
-        self.m_up1 = B.sequential(upsample_block(nc[1], nc[0], bias=False, mode='2'), *[B.IMDBlock(nc[0], nc[0], bias=False, mode='C'+act_mode) for _ in range(nb)])
+        self.m_up3 = B.sequential(upsample_block(nc[3], nc[2], bias=bias, mode='2'), *[B.IMDBlock(nc[2], nc[2], bias=bias, mode='C'+act_mode) for _ in range(nb)])
+        self.m_up2 = B.sequential(upsample_block(nc[2], nc[1], bias=bias, mode='2'), *[B.IMDBlock(nc[1], nc[1], bias=bias, mode='C'+act_mode) for _ in range(nb)])
+        self.m_up1 = B.sequential(upsample_block(nc[1], nc[0], bias=bias, mode='2'), *[B.IMDBlock(nc[0], nc[0], bias=bias, mode='C'+act_mode) for _ in range(nb)])
 
-        self.m_tail = B.conv(nc[0], out_nc, bias=False, mode='C')
+        self.m_tail = B.conv(nc[0], out_nc, bias=bias, mode='C')
 
     def forward(self, x):
         
@@ -189,7 +189,7 @@ class ResUNet(nn.Module):
 
 
 class UNetResSubP(nn.Module):
-    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=2, act_mode='R', downsample_mode='strideconv', upsample_mode='convtranspose'):
+    def __init__(self, in_nc=1, out_nc=1, nc=[64, 128, 256, 512], nb=2, act_mode='R', downsample_mode='strideconv', upsample_mode='convtranspose', bias=True):
         super(UNetResSubP, self).__init__()
         sf = 2
         self.m_ps_down = B.PixelUnShuffle(sf)
@@ -226,7 +226,7 @@ class UNetResSubP(nn.Module):
         self.m_up2 = B.sequential(upsample_block(nc[2], nc[1], mode='2'+act_mode), *[B.ResBlock(nc[1], nc[1], mode='C'+act_mode+'C') for _ in range(nb)])
         self.m_up1 = B.sequential(upsample_block(nc[1], nc[0], mode='2'+act_mode), *[B.ResBlock(nc[0], nc[0], mode='C'+act_mode+'C') for _ in range(nb)])
 
-        self.m_tail = B.conv(nc[0], out_nc*sf*sf, bias=False, mode='C')
+        self.m_tail = B.conv(nc[0], out_nc*sf*sf, bias=bias, mode='C')
 
     def forward(self, x0):
         x0_d = self.m_ps_down(x0)
