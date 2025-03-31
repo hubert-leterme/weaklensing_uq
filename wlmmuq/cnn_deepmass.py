@@ -87,6 +87,16 @@ class BaseModel(keras.models.Model):
         self.inputs, self.outputs = self._init_model()
         super().__init__(self.inputs, self.outputs)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "map_size": self.map_size,
+            "offset": self.offset,
+            "inputs": self.inputs,
+            "outputs": self.outputs
+        })
+        return config
+
     def _init_model(self):
         raise NotImplementedError
 
@@ -142,6 +152,18 @@ class UNet(BaseModel):
         else:
             self.activation = None
         super().__init__(*args, **kwargs)
+
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "in_channels": self.in_channels,
+            "out_channels": self.out_channels,
+            "mean_centering": self.mean_centering,
+            "use_bias": self.use_bias,
+            "activation": self.activation
+        })
+        return config
 
 
     def _init_model(self):
