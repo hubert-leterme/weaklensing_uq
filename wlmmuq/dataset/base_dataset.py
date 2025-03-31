@@ -515,7 +515,7 @@ class DenoiserMixin:
 
     def __init__(
             self, *args, std_noise=None, scale=SCALE, scale_min=None,
-            scale_as_input=False, score_matching=False, **kwargs
+            scale_as_input=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -543,12 +543,6 @@ class DenoiserMixin:
             kappa_inp denotes a batch of noisy images and scale denotes an array of
             noise levels (standard deviations if std_noise is None), for each input
             image. If set to False, then only kappa_inp is provided. Default is False.
-        score_matching: bool, optional
-            If set to True, then the loss function is the MSE between the output of the
-            network and Sigma^{-1}(kappa_true - kappa_inp), where Sigma denotes the
-            noise covariance matrix. Then, according to Tweedie's formula, the network
-            is trained to predict the score, i.e., the gradient of the log-probability
-            density function of the noisy images. Default is False.
         pred_filepath : str, optional
             Path to the HDF5 dataset containing predictions. Only required for
             order-2 moment networks.
@@ -595,7 +589,6 @@ class DenoiserMixin:
         else:
             self.scale_min = scale
         self.scale_as_input = scale_as_input
-        self.score_matching = score_matching
 
 
     def _postprocess(self, out_dict, idx):
@@ -625,10 +618,6 @@ class DenoiserMixin:
 
         # Get noisy kappa maps
         kappa_inp = kappa_true + noise
-
-        # Get ground truth for the loss function
-        if self.score_matching:
-            kappa_true = (kappa_true - kappa_inp) / std_noise**2
 
         out_dict["kappa_true"] = kappa_true
         if not self.scale_as_input:
