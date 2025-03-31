@@ -7,7 +7,7 @@ import numpy as np
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
-import wlmmuq.batchloader.tensorflow as wlbl
+import wlmmuq.dataset.tensorflow as wlbl
 
 INPUT_METHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -57,7 +57,7 @@ def main(
                 print("Estimate the power spectrum for Wiener filtering")
 
             # Load a set of convergence maps among the training set
-            train_gen_ps = wlbl.HDF5BatchLoader(
+            train_gen_ps = wlbl.HDF5Dataset(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
                 std_noise=std_noise, mask=mask, output_shape=imgsize,
                 list_of_outputs=['kappa_true']
@@ -84,7 +84,7 @@ def main(
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
     # False in order input convergence maps `kappa_inp` to be stored in the
     # same order as the targets `kappa_true`.
-    data_loader = wlbl.HDF5BatchLoaderGammaKappa(
+    data_loader = wlbl.HDF5DatasetGammaKappa(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, input_method=input_method,
         sort_by_filename_ori=False, shuffle=False, output_shape=imgsize,

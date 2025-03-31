@@ -2,7 +2,7 @@ import argparse
 import random
 import numpy as np
 import wlmmuq.utils as wlutils
-import wlmmuq.batchloader.tensorflow as wlbl
+import wlmmuq.dataset.tensorflow as wlbl
 
 IMGSIZE = 304
 NIMGS = 2048
@@ -17,7 +17,7 @@ def main(
         random.seed(seed)
         np.random.seed(seed)
 
-    data_loader = wlbl.HDF5BatchLoader(
+    data_loader = wlbl.HDF5Dataset(
         path_to_dataset, nimgs=nimgs, batch_size=batch_size,
         output_shape=imgsize, list_of_outputs=['kappa_true'],
         shuffle=True

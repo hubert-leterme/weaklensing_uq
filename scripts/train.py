@@ -8,7 +8,7 @@ import threading
 import numpy as np
 from tensorflow import data, keras
 
-import wlmmuq.batchloader as wlbl
+import wlmmuq.dataset as wlbl
 import wlmmuq.models.base_models as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
@@ -63,11 +63,11 @@ def main(
         model_module = wlbl.tensorflow
 
     if denoiser:
-        batch_loader = model_module.HDF5BatchLoaderDenoiser
+        batch_loader = model_module.HDF5DatasetDenoiser
         if tweedie:
             kwargs.update(scale_as_input=True)
     else:
-        batch_loader = model_module.HDF5BatchLoaderDeepMass
+        batch_loader = model_module.HDF5DatasetDeepMass
 
     if verbose:
         print("Initialize batch generators for training and validation")

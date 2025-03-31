@@ -10,7 +10,7 @@ from . import SCALE
 from .. import iterativemm as wlpgd
 from .. import utils as wlutils
 
-class HDF5BatchLoader:
+class HDF5Dataset:
 
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,

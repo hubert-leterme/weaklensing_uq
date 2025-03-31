@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 from tensorflow import keras, data
 
-import wlmmuq.batchloader.tensorflow as wlbl
+import wlmmuq.dataset.tensorflow as wlbl
 
 NIMGS = 72000
 IMGSIZE = 304
@@ -27,9 +27,9 @@ def main(
         print("Initialize batch generator")
 
     if not denoiser:
-        batch_loader = wlbl.HDF5BatchLoader
+        batch_loader = wlbl.HDF5Dataset
     else:
-        batch_loader = wlbl.BaseHDF5BatchLoaderDenoiser
+        batch_loader = wlbl.BaseHDF5DatasetDenoiser
 
     # *** CAUTION ***
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to

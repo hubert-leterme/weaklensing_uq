@@ -3,7 +3,7 @@ import argparse
 import random
 import numpy as np
 
-import wlmmuq.batchloader.tensorflow as wlbl
+import wlmmuq.dataset.tensorflow as wlbl
 
 MOMENT_ORDER = 1
 IMGSIZE = 304
@@ -25,9 +25,9 @@ def main(
 
     # Initialize batch generators
     if denoiser:
-        batch_loader = wlbl.HDF5BatchLoaderDenoiser
+        batch_loader = wlbl.HDF5DatasetDenoiser
     else:
-        batch_loader = wlbl.HDF5BatchLoaderDeepMass
+        batch_loader = wlbl.HDF5DatasetDeepMass
 
     # Check whether the dataset should be sorted by their original filenames
     if keep_unsorted is not None:

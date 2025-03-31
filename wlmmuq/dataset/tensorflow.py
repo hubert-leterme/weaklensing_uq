@@ -1,9 +1,9 @@
 import numpy as np
 import tensorflow as tf
 
-from . import batchloader as wlbl
+from . import base_dataset as wlbl
 
-class HDF5BatchLoader(wlbl.HDF5BatchLoader):
+class HDF5Dataset(wlbl.HDF5Dataset):
 
     def _add_newaxis_arr(self, arr):
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
@@ -59,10 +59,10 @@ class HDF5BatchLoader(wlbl.HDF5BatchLoader):
         return out
 
 
-class HDF5BatchLoaderGammaKappa(wlbl.GammaKappaMixin, HDF5BatchLoader):
+class HDF5DatasetGammaKappa(wlbl.GammaKappaMixin, HDF5Dataset):
     pass
 
-class BaseHDF5BatchLoaderDenoiser(wlbl.DenoiserMixin, HDF5BatchLoader):
+class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
 
     def _get_output_signature(self):
 
@@ -84,8 +84,8 @@ class BaseHDF5BatchLoaderDenoiser(wlbl.DenoiserMixin, HDF5BatchLoader):
         return out
 
 
-class HDF5BatchLoaderDeepMass(wlbl.MomentNetworkMixin, HDF5BatchLoader):
+class HDF5DatasetDeepMass(wlbl.MomentNetworkMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5BatchLoaderDenoiser(wlbl.MomentNetworkMixin, BaseHDF5BatchLoaderDenoiser):
+class HDF5DatasetDenoiser(wlbl.MomentNetworkMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""
