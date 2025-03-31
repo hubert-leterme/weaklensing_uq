@@ -164,17 +164,16 @@ class HDF5BatchLoader:
     def load_batch(
             self, beg_idx=0, max_idx=None, get_all_images=False, return_end_idx=False
     ):
-        out_dict, end_idx = self._load_batch_dict(
+        out, end_idx = self._load_batch_dict(
             beg_idx=beg_idx, max_idx=max_idx, get_all_images=get_all_images
         )
-        out = self._prepare_output(out_dict)
         if return_end_idx:
             out = (out, end_idx)
 
         return out
 
 
-    def _load_maps(self, idx, transform: callable = None) -> dict:
+    def _load_maps(self, idx, transform: callable = None):
 
         # TODO: use `with self.open():`
         if self.close_after_batch:
@@ -235,7 +234,9 @@ class HDF5BatchLoader:
         if self.newaxis:
             out_dict = self._add_newaxis(out_dict)
 
-        return out_dict
+        out = self._prepare_output(out_dict)
+
+        return out
 
 
     def _convert_to_tensor(self, arr):
@@ -642,6 +643,7 @@ class MomentNetworkMixin:
         self.order = order # Must be equal to 1 or 2
 
     def _prepare_output(self, out_dict):
+
         kappa_inp = out_dict["kappa_inp"]
         kappa_true = out_dict["kappa_true"]
 

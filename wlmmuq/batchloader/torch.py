@@ -10,9 +10,7 @@ class HDF5BatchLoader(wlbl.HDF5BatchLoader, data.Dataset):
 
     def __getitem__(self, idx):
         idx_file = self.idx[idx]
-        out_dict = self._load_maps(idx_file)
-        out = self._prepare_output(out_dict)
-        return out
+        return self._load_maps(idx_file)
 
     def _convert_to_tensor(self, arr):
         return torch.tensor(arr, dtype=torch.float32)
