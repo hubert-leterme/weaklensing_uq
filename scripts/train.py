@@ -9,10 +9,12 @@ import numpy as np
 from tensorflow import data, keras
 
 import wlmmuq.batchloader as wlbl
-import wlmmuq.cnn_deepmass as wlcnn
+import wlmmuq.models.base_models as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
+
+from wlmmuq.models import LOSS, L2_LAMBDA
 
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -24,13 +26,11 @@ NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
-LOSS = 'mse'
-L2_LAMBDA = 1e-4
 OFFSET = 0.5 # As in DeepMass
 
 
 def main(
-        path_to_augmented_dataset, path_to_pretrained_model=None,
+        path_to_augmented_dataset, use_dinv=False, path_to_pretrained_model=None,
         denoiser=False, tweedie=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -56,12 +56,18 @@ def main(
         std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
         std_noise[~mask] = np.max(std_noise)
         kwargs.update(std_noise=std_noise)
+
+    if use_dinv: # Use DeepInverse (PyTorch backend)
+        model_module = wlbl.torch
+    else: # Use Keras (TensorFlow backend)
+        model_module = wlbl.tensorflow
+
     if denoiser:
-        batch_loader = wlbl.HDF5BatchLoaderDenoiser
+        batch_loader = model_module.HDF5BatchLoaderDenoiser
         if tweedie:
             kwargs.update(scale_as_input=True)
     else:
-        batch_loader = wlbl.HDF5BatchLoaderDeepMass
+        batch_loader = model_module.HDF5BatchLoaderDeepMass
 
     if verbose:
         print("Initialize batch generators for training and validation")
@@ -173,6 +179,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_augmented_dataset", type=str,
         help="Path to the augmented dataset (HDF5 file)"
+    )
+    parser.add_argument(
+        "--use-dinv", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use DeepInverse for loading and training models. Default = False"
+        )
     )
     parser.add_argument(
         "-m", "--path-to-pretrained-model", type=str,
