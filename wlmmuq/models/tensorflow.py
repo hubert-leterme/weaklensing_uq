@@ -3,6 +3,8 @@ Modified version of the 'cnn_keras.py' module from DeepMass
 https://github.com/NiallJeffrey/DeepMass
 
 """
+import warnings
+
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
@@ -120,7 +122,7 @@ class UNet(BaseModel):
 
     def __init__(
             self, *args, in_channels=1, out_channels=1, mean_centering=False,
-            use_bias=True, sigmoid_activation=True, **kwargs
+            use_bias=True, sigmoid_activation=False, **kwargs
     ):
         """
         Initialisation
@@ -246,6 +248,11 @@ class UNetFromScore(UNet):
     then UNetFromScore corresponds to an MMSE denoiser.
 
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.sigmoid_activation:
+            warnings.warn("Sigmoid activation will lead to unexpected behavior")
+
     def _postprocess(self, inp, out):
         # Argument out estimates the score of the log-prior PDF of the noisy images
         sigma = Input(shape=(1, 1, 1))
