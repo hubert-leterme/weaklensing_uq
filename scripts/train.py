@@ -92,7 +92,7 @@ def main(
         if not tweedie:
             cnn_class = wlcnn.UNet
         else:
-            cnn_class = wlcnn.UNetFromScore
+            cnn_class = wlcnn.UNetScoreMatching
         cnn_model = cnn_class(
             map_size=imgsize, mean_centering=mean_centering,
             offset=offset, use_bias=not no_bias, sigmoid_activation=sigmoid_activation

@@ -260,14 +260,14 @@ class UNet(BaseModel):
         return inp, out # Identity in the base class
 
 
-class UNetFromScore(UNet):
+class UNetScoreMatching(UNet):
     """
     A U-Net model that incorporates a scalar multiplier named sigma,
     such that the output is computed as: out = inp + sigma**2 * UNet(inp).
     According to Tweedie's formula, assuming that:
     - input images are corrupted by a Gaussian noise with standard deviation given by sigma;
     - UNet computes the gradient of the log-prior PDF of the noisy images,
-    then UNetFromScore corresponds to an MMSE denoiser.
+    then UNetScoreMatching corresponds to an MMSE denoiser.
 
     """
     def __init__(self, *args, **kwargs):
