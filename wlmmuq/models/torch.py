@@ -46,7 +46,7 @@ class ScoreMatchingMixin:
         out = super().forward(inp) # Shape = (batch_size, 1, map_size, map_size)
         var = sigma**2 # Shape = (batch_size, 1, 1, 1)
         return inp + var * out
-    
+
 class UNetResScoreMatching(ScoreMatchingMixin, UNetRes):
     pass
 

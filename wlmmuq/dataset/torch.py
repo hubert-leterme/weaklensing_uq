@@ -18,6 +18,14 @@ class HDF5Dataset(wlbl.HDF5Dataset, data.Dataset):
     def _add_newaxis_arr(self, arr: torch.tensor) -> torch.tensor:
         return arr.unsqueeze(-3) # Shape = ([nimgs, ]1, H, W)
 
+    def to_torch_dataloader(self, **kwargs):
+        out = data.DataLoader(
+            self, batch_size=self.batch_size, num_workers=self.num_workers,
+            shuffle=self.shuffle, **kwargs
+        )
+        return out
+
+
 class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
     pass
 

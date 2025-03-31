@@ -18,7 +18,7 @@ class HDF5Dataset:
             offset=0., beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
-            nreal_per_img=1, verbose=False, **kwargs
+            nreal_per_img=1, num_workers=0, verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -67,6 +67,9 @@ class HDF5Dataset:
         close_after_batch: bool, optional
             Default is False.
         nreal_per_img: int, optional
+        num_workers: int, optional
+            Number of workers for parallel processing. Only work for PyTorch datasets.
+            Default is 0.
         verbose : bool, optional
             If True, print progress messages. Default is False.
         **kwargs
@@ -90,6 +93,7 @@ class HDF5Dataset:
         self.list_of_outputs = list_of_outputs
         self.close_after_batch = close_after_batch
         self.nreal_per_img = nreal_per_img
+        self.num_workers = num_workers
         self.verbose = verbose
 
         self.idx = None  # Will hold the shuffled indices
