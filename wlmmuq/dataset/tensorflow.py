@@ -9,7 +9,7 @@ class HDF5Dataset(wlbl.HDF5Dataset):
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
 
 
-    def to_tf_dataset(
+    def to_tf_dataloader(
             self, min_idx=0, max_idx=None, raise_stop_iteration=False, **kwargs
     ):
         if max_idx is None:
@@ -84,8 +84,12 @@ class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
         return out
 
 
-class HDF5DatasetDeepMass(wlbl.MomentNetworkMixin, HDF5Dataset):
+class MomentNetworkMixin(wlbl.MomentNetworkMixin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, mode='NC', **kwargs)
+
+class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5DatasetDenoiser(wlbl.MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""

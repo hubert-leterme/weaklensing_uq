@@ -1,14 +1,17 @@
 import warnings
 import numpy as np
 import h5py
+import torch
 try:
     import pycs.astro.wl.mass_mapping as csmm
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from . import SCALE
 from .. import iterativemm as wlpgd
 from .. import utils as wlutils
+
+SCALE = 1.
+NUM_WORKERS = 0
 
 class HDF5Dataset:
 
@@ -18,7 +21,7 @@ class HDF5Dataset:
             offset=0., beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
-            nreal_per_img=1, num_workers=0, verbose=False, **kwargs
+            nreal_per_img=1, num_workers=NUM_WORKERS, verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -268,7 +271,7 @@ class HDF5Dataset:
 
         if arrdict is None:
             pass
-        elif isinstance(arrdict, np.ndarray):
+        elif isinstance(arrdict, (np.ndarray, torch.Tensor)):
             arrdict = self._add_newaxis_arr(arrdict)
         else:
             convert_back_to_tuple = False
@@ -600,10 +603,10 @@ class DenoiserMixin:
             print("Generate white Gaussian noise")
 
         # Get the noise standard deviation
-        if isinstance(idx, int):
-            size = (1, 1)
-        else:
+        try:
             size = (len(idx), 1, 1)
+        except TypeError:
+            size = (1, 1)
         scale = np.random.uniform(
             self.scale_min, self.scale_max, size=size
         ) # Shape = ([nimgs], 1, 1)
@@ -630,29 +633,109 @@ class DenoiserMixin:
 
 class MomentNetworkMixin:
 
-    def __init__(self, *args, order=1, **kwargs):
-        list_of_outputs = ["kappa_inp", "kappa_true"]
-        super().__init__(*args, list_of_outputs=list_of_outputs, **kwargs)
-        self.order = order # Must be equal to 1 or 2
+    def __init__(self, *args, order=1, mode='NC', **kwargs):
+        """
+        Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
 
-    def _prepare_output(self, out_dict):
-
-        kappa_inp = out_dict["kappa_inp"]
-        kappa_true = out_dict["kappa_true"]
-
-        if self.order == 1:
-            target = kappa_true
-        elif self.order == 2:
-            kappa_pred = out_dict["kappa_pred"] # Estimates the posterior mean
-            target = (kappa_true - kappa_pred)**2
+        Parameters
+        ----------
+        hdf5_filepath : str
+            Path to the HDF5 dataset containing the simulated convergence maps.
+        nimgs : int
+            Number of images in the dataset. Indices from `beg_idx` to
+            `beg_idx + nimgs` are considered.
+        order : int, optional
+            Order of the moment network: 1 for standard posterior mean estimate,
+            2 for posterior variance. Default is 1.
+        mode : str, optional
+            Whether to yield tuples of noisy / clean images ('NC', used by Keras / TensorFlow),
+            or tuples of clean / noisy images ('CN', used by DeepInverse / PyTorch).
+            Default is 'NC'.
+        std_noise : numpy.ndarray, optional
+            Array of noise standard deviation. If none is given, a white noise
+            will be applied (identity). Default is None.
+        scale : float, optional
+            Multiplicative factor for std_noise, or upper bound of the uniform
+            distribution over which the scale is drawn, if `scale_min` is provided.
+            Default is 1.
+        scale_min: float, optional
+            If provided, then the noise standard deviation will be drawn uniformly
+            between `scale_min` and `scale` for each input image. Default is None
+            (one single noise level).
+        scale_as_input: bool, optional
+            If set to True, then the input is given by (kappa_inp, scale), where
+            kappa_inp denotes a batch of noisy images and scale denotes an array of
+            noise levels (standard deviations if std_noise is None), for each input
+            image. If set to False, then only kappa_inp is provided. Default is False.
+        pred_filepath : str, optional
+            Path to the HDF5 dataset containing predictions. Only required for
+            order-2 moment networks.
+        batch_size : int, optional
+            Number of images per batch. Default is None.
+        input_method: str, optional
+            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            registered in the HDF5 dataset. Default is None.
+        offset: float, optional
+            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
+        beg_idx : int, optional
+            First image index to consider (e.g., for split training-test sets). Default is 0.
+            CAUTION: To ensure independence between the training and test sets,
+            `sort_by_filename_ori` must be set to `True`. Moreover, the split position
+            must be chosen so that `filename_ori` values are different in the training and
+            test sets.
+        shuffle : bool, optional
+            Whether to shuffle the indices. Default is True.
+        output_shape : int or tuple, optional
+            Shape to crop the output images. Default is None.
+        sort_by_filename_ori: bool, optional
+            If True, sort `kappa` elements by ascending order of `filename_ori`.
+            Default is True.
+        newaxis: bool, optional
+            If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
+            or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
+        list_of_outputs: list of str, optional
+            List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
+            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
+            If None, returns a dictionary of outputs. Default is None.
+        close_after_batch: bool, optional
+            Default is False.
+        verbose : bool, optional
+            If True, print progress messages. Default is False.
+        **kwargs
+            Keyword arguments for
+            `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
+        """
+        if order == 1:
+            target = "kappa_true"
+        elif order == 2:
+            target = "sqdiff_true_pred"
         else:
             raise ValueError("Wrong value for argument `order`: must be equal to 1 or 2.")
 
-        return kappa_inp, target
+        if mode == 'NC':
+            list_of_outputs = ["kappa_inp", target]
+        elif mode == 'CN':
+            list_of_outputs = [target, "kappa_inp"]
+        else:
+            raise ValueError
+
+        super().__init__(*args, list_of_outputs=list_of_outputs, **kwargs)
+        self.order = order
+
+
+    def _postprocess(self, out_dict, idx):
+        out_dict = super()._postprocess(out_dict, idx)
+
+        kappa_true = out_dict["kappa_true"]
+        kappa_pred = out_dict["kappa_pred"] # Estimates the posterior mean
+        if kappa_pred is not None:
+            out_dict["sqdiff_true_pred"] = (kappa_true - kappa_pred)**2
+
+        return out_dict
 
 
 def _pipeline(inp, *transforms):
-    if transforms == []:
+    if len(transforms) == 0:
         out = inp
     else:
         out = _pipeline(inp, *transforms[:-1])

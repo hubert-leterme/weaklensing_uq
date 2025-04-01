@@ -1,7 +1,9 @@
 import os
 import warnings
+from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 try:
     import pycs.astro.wl.mass_mapping as csmm
@@ -348,7 +350,7 @@ class UQ(Callback):
 
     def __init__(
             self, pgd_massmapping: BasePGDMassMapping, backward_uq,
-            gamma: np.ndarray
+            gamma: Union[np.ndarray, torch.tensor]
     ):
         """
         Parameters

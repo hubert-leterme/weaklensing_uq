@@ -22,7 +22,7 @@ def main(
         output_shape=imgsize, list_of_outputs=['kappa_true'],
         shuffle=True
     )
-    data_gen = data_loader.to_tf_dataset(raise_stop_iteration=True)
+    data_gen = data_loader.to_tf_dataloader(raise_stop_iteration=True)
     data_gen = iter(data_gen)
 
     list_of_powerspectrum_1d = []

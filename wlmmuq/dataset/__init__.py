@@ -1,1 +1,2 @@
-SCALE = 1.
+from . import tensorflow, torch
+from .base_dataset import SCALE, NUM_WORKERS

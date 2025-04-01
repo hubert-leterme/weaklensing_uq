@@ -16,7 +16,7 @@ class HDF5Dataset(wlbl.HDF5Dataset, data.Dataset):
         return torch.tensor(arr, dtype=torch.float32)
 
     def _add_newaxis_arr(self, arr: torch.tensor) -> torch.tensor:
-        return arr.unsqueeze(-3) # Shape = ([nimgs, ]1, H, W)
+        return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nchannels, nx, ny)
 
     def to_torch_dataloader(self, **kwargs):
         out = data.DataLoader(
@@ -29,8 +29,27 @@ class HDF5Dataset(wlbl.HDF5Dataset, data.Dataset):
 class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
     pass
 
-class HDF5DatasetDeepMass(wlbl.MomentNetworkMixin, HDF5Dataset):
+
+class MomentNetworkMixin(wlbl.MomentNetworkMixin):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, mode='CN', **kwargs)
+
+    def _prepare_output(self, out_dict):
+        out = super()._prepare_output(out_dict)
+        if self.scale_as_input:
+            target, (kappa_inp, scale) = out
+            out = target, TensorList([kappa_inp, scale])
+        return out
+
+
+class TensorList(list):
+    def to(self, device):
+        return [t.to(device) for t in self]
+
+
+class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5DatasetDenoiser(wlbl.MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""

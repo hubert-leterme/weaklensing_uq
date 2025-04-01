@@ -1,2 +1,2 @@
-LOSS = 'mse'
-L2_LAMBDA = 1e-4
+from . import tensorflow, torch
+from .tensorflow import L2_LAMBDA

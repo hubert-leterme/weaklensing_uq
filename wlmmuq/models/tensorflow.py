@@ -10,7 +10,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
-from . import LOSS, L2_LAMBDA
+L2_LAMBDA = 1e-4
 
 class BaseL2RegLoss(keras.losses.Loss):
 
@@ -285,7 +285,14 @@ class UNetScoreMatching(UNet):
         return (inp, sigma), out
 
 
-def compile_kerasmodel(model, loss=LOSS, learning_rate=None, **kwargs):
+def load_model(path_to_pretrained_model):
+    return keras.models.load_model(path_to_pretrained_model, compile=False)
+
+def print_model(model):
+    model.summary()
+
+
+def compile_kerasmodel(model, loss, learning_rate=None, **kwargs):
     """
     :param model: keras model
     :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
