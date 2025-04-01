@@ -6,15 +6,17 @@ import cProfile
 import threading
 
 import numpy as np
-from tensorflow import data, keras
+import tensorflow as tf
+import torch
 
-import wlmmuq.dataset as wlbl
-import wlmmuq.models.base_models as wlcnn
+import wlmmuq.dataset as wlds
+import wlmmuq.models as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
 
-from wlmmuq.models import LOSS, L2_LAMBDA
+from wlmmuq.dataset import SCALE, NUM_WORKERS
+from wlmmuq.models import L2_LAMBDA
 
 MOMENT_ORDER = 1
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
@@ -25,18 +27,32 @@ NREAL_PER_IMG = 1
 NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
+LOSS = 'mse'
 LEARNING_RATE = 1e-4
+DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
+NDECAYS = 4 # Number of decays for the learning rate scheduler
+
 OFFSET = 0.5 # As in DeepMass
 
+MODEL_CLASSES = {
+    "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
+    "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
+    "torch.UNetRes": (wlcnn.torch.UNetRes, False),
+    "torch.ResUNet": (wlcnn.torch.ResUNet, False),
+    "torch.DRUNet": (wlcnn.torch.DRUNet, True),
+    "torch.UNetResScoreMatching": (wlcnn.torch.UNetResScoreMatching, True),
+    "torch.ResUNetScoreMatching": (wlcnn.torch.ResUNetScoreMatching, True)
+} # (model_class, scale_as_input)
 
 def main(
-        path_to_augmented_dataset, use_dinv=False, path_to_pretrained_model=None,
-        denoiser=False, tweedie=False, use_std_noise=False,
+        path_to_augmented_dataset, path_to_pretrained_model=None, backend=None,
+        arch=None, denoiser=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         mean_centering=False, no_bias=False, sigmoid_activation=False,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
-        learning_rate=LEARNING_RATE, lr_scheduler=False, loss=LOSS, l2_lambda=L2_LAMBDA,
+        learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
+        ndecays=NDECAYS, loss=LOSS, l2_lambda=L2_LAMBDA,
         offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
@@ -57,21 +73,32 @@ def main(
         std_noise[~mask] = np.max(std_noise)
         kwargs.update(std_noise=std_noise)
 
-    if use_dinv: # Use DeepInverse (PyTorch backend)
-        model_module = wlbl.torch
-    else: # Use Keras (TensorFlow backend)
-        model_module = wlbl.tensorflow
+    if arch is not None:
+        backend = arch.split(".")[0]
+        cnn_class, scale_as_input = MODEL_CLASSES[arch]
+        if scale_as_input:
+            kwargs.update(scale_as_input=scale_as_input)
+    else:
+        cnn_class = None
+        scale_as_input = False
+
+    if backend == 'tensorflow': # Use Keras (TensorFlow backend)
+        data_module = wlds.tensorflow
+        model_module = wlcnn.tensorflow
+    elif backend == 'torch': # Use DeepInverse (PyTorch backend)
+        data_module = wlds.torch
+        model_module = wlcnn.torch
+    else:
+        raise ValueError
 
     if denoiser:
-        batch_loader = model_module.HDF5DatasetDenoiser
-        if tweedie:
-            kwargs.update(scale_as_input=True)
+        dataset_class = data_module.HDF5DatasetDenoiser
     else:
-        batch_loader = model_module.HDF5DatasetDeepMass
+        dataset_class = data_module.HDF5DatasetDeepMass
 
     if verbose:
         print("Initialize batch generators for training and validation")
-    train_gen = batch_loader(
+    train_dataset = dataset_class(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
@@ -79,7 +106,7 @@ def main(
         offset=offset, newaxis=True,
         nreal_per_img=nreal_per_img, **kwargs
     )
-    val_gen = batch_loader(
+    val_dataset = dataset_class(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
@@ -89,89 +116,120 @@ def main(
 
     # Initialize model
     if path_to_pretrained_model is None:
-        if not tweedie:
-            cnn_class = wlcnn.UNet
-        else:
-            cnn_class = wlcnn.UNetScoreMatching
         cnn_model = cnn_class(
             map_size=imgsize, mean_centering=mean_centering,
             offset=offset, use_bias=not no_bias, sigmoid_activation=sigmoid_activation
         )
     else:
-        cnn_model = keras.models.load_model(path_to_pretrained_model, compile=False)
+        cnn_model = model_module.load_model(path_to_pretrained_model)
 
     if verbose:
-        cnn_model.summary()
+        model_module.print_model(cnn_model)
 
-    # Compile model
-    wlcnn.compile_kerasmodel(
-        cnn_model, loss=loss, l2_lambda=l2_lambda, offset=offset,
-        learning_rate=learning_rate
-    )
+    if backend == 'tensorflow':
 
-    # Define the checkpoint callback
-    callbacks = []
-    if checkpoint_dir is not None:
-        if moment_order == 1:
-            output_type = "pe" # Point estimate
-        elif moment_order == 2:
-            output_type = "var" # Variance
-        else:
-            raise ValueError
-        filepath = os.path.join(
-            checkpoint_dir, output_type,
-            f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
+        # Compile model
+        wlcnn.tensorflow.compile_kerasmodel(
+            cnn_model, loss=loss, l2_lambda=l2_lambda, offset=offset,
+            learning_rate=learning_rate
         )
-        checkpoint_callback = keras.callbacks.ModelCheckpoint(
-            filepath=filepath,
-            save_weights_only=False,
-            save_best_only=False,
-            save_freq=save_freq
-        )
-        callbacks.append(checkpoint_callback)
-    if backup_dir is not None:
-        backup_callback = keras.callbacks.BackupAndRestore(
-            backup_dir=os.path.join(backup_dir, output_type), save_freq="epoch"
-        )
-        callbacks.append(backup_callback)
-    if path_to_csv_log is not None:
-        csvlogger_callback = keras.callbacks.CSVLogger(
-            path_to_csv_log, append=True
-        )
-        callbacks.append(csvlogger_callback)
-    if path_to_tensorboard_log is not None:
-        tblogger_callback = keras.callbacks.TensorBoard(
-            log_dir=path_to_tensorboard_log
-        )
-        callbacks.append(tblogger_callback)
-    if lr_scheduler:
-        def schedule(epoch, lr):
-            drop_rate = 0.1
-            epochs_drop = nepochs // 4
-            if epoch % epochs_drop == 0 and epoch > 0:
-                return lr * drop_rate
+
+        # Define the checkpoint callback
+        callbacks = []
+        if checkpoint_dir is not None:
+            if moment_order == 1:
+                output_type = "pe" # Point estimate
+            elif moment_order == 2:
+                output_type = "var" # Variance
             else:
-                return lr
+                raise ValueError
+            filepath = os.path.join(
+                checkpoint_dir, output_type,
+                f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
+            )
+            checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+                filepath=filepath,
+                save_weights_only=False,
+                save_best_only=False,
+                save_freq=save_freq
+            )
+            callbacks.append(checkpoint_callback)
+        if backup_dir is not None:
+            backup_callback = tf.keras.callbacks.BackupAndRestore(
+                backup_dir=os.path.join(backup_dir, output_type), save_freq="epoch"
+            )
+            callbacks.append(backup_callback)
+        if path_to_csv_log is not None:
+            csvlogger_callback = tf.keras.callbacks.CSVLogger(
+                path_to_csv_log, append=True
+            )
+            callbacks.append(csvlogger_callback)
+        if path_to_tensorboard_log is not None:
+            tblogger_callback = tf.keras.callbacks.TensorBoard(
+                log_dir=path_to_tensorboard_log
+            )
+            callbacks.append(tblogger_callback)
+        if lr_scheduler:
+            def schedule(epoch, lr):
+                epochs_drop = nepochs // ndecays
+                if epoch % epochs_drop == 0 and epoch > 0:
+                    return lr * drop_rate
+                else:
+                    return lr
 
-        lrscheduler_callback = keras.callbacks.LearningRateScheduler(
-            schedule, verbose=verbose
+            lrscheduler_callback = tf.keras.callbacks.LearningRateScheduler(
+                schedule, verbose=verbose
+            )
+            callbacks.append(lrscheduler_callback)
+
+        # Prefetch datasets for efficiency
+        train_dataloader = train_dataset.to_tf_dataloader().prefetch(tf.data.AUTOTUNE)
+        val_dataloader = val_dataset.to_tf_dataloader().prefetch(tf.data.AUTOTUNE)
+
+        # Fit model
+        cnn_model.fit(
+            train_dataloader, epochs=nepochs,
+            steps_per_epoch=nreal_per_img * nimgs_train // batch_size,
+            validation_data=val_dataloader,
+            validation_steps=nimgs_val // batch_size,
+            callbacks=callbacks
         )
-        callbacks.append(lrscheduler_callback)
 
-    # Prefetch datasets for efficiency
-    train_set_prefetched = train_gen.to_tf_dataset().prefetch(data.AUTOTUNE)
-    val_set_prefetched = val_gen.to_tf_dataset().prefetch(data.AUTOTUNE)
+    elif backend == 'torch':
 
-    # Fit model
-    cnn_model.fit(
-        train_set_prefetched, epochs=nepochs,
-        steps_per_epoch=nreal_per_img * nimgs_train // batch_size,
-        validation_data=val_set_prefetched,
-        validation_steps=nimgs_val // batch_size,
-        callbacks=callbacks
-    )
-    train_gen.close()
-    val_gen.close()
+        loss_fun = wlcnn.torch.LOSS_DICT[loss]
+        optimizer = torch.optim.Adam(
+            cnn_model.parameters(), lr=learning_rate, weight_decay=1e-8
+        )
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=nepochs // ndecays, gamma=drop_rate
+        )
+        train_dataloader = train_dataset.to_torch_dataloader()
+        val_dataloader = val_dataset.to_torch_dataloader()
+
+        # device = dinv.utils.get_freer_gpu() if torch.cuda.is_available() else "cpu"
+        device = "cpu"
+        cnn_model.to(device)
+        trainer = wlcnn.torch.Trainer(
+            cnn_model,
+            device=device,
+            save_path=checkpoint_dir,
+            verbose=verbose,
+            scale_as_input=scale_as_input,
+            physics=None,
+            online_measurements=False,
+            epochs=nepochs,
+            scheduler=scheduler,
+            losses=loss_fun,
+            optimizer=optimizer,
+            show_progress_bar=True,
+            train_dataloader=train_dataloader,
+            eval_dataloader=val_dataloader,
+        )
+        trainer.train()
+
+    train_dataset.close()
+    val_dataset.close()
 
 
 if __name__ == "__main__":
@@ -181,21 +239,30 @@ if __name__ == "__main__":
         help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
-        "--use-dinv", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use DeepInverse for loading and training models. Default = False"
-        )
-    )
-    parser.add_argument(
         "-m", "--path-to-pretrained-model", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Path to the pretrained model. If none is given, then the model is "
             "initialized and trained from scratch. If provided, then arguments "
-            "`--tweedie`, `--mean-centering` and `--no-bias` are ineffective; "
+            "`--mean-centering` and `--no-bias` are ineffective; "
             "moreover, `--imgsize` must be compatible with the provided model. "
             "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--backend", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Deep learning framework used to train the model ('tensorflow' or 'torch'). "
+            "Only useful if `--path-to-pretrained-model` is provided. Default = None"
+        )
+    )
+    parser.add_argument(
+        "-a", "--arch", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Architecture of the model. Possible values are: "
+            f"{' | '.join(MODEL_CLASSES.keys())}. Default = None"
         )
     )
     parser.add_argument(
@@ -204,13 +271,6 @@ if __name__ == "__main__":
         help=(
             "Reconstruct the original convergence map from an input corrupted "
             "by a white Gaussian noise."
-        )
-    )
-    parser.add_argument(
-        "--tweedie", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use Tweedie's formula to constrain the deep denoiser."
         )
     )
     parser.add_argument(
@@ -228,7 +288,7 @@ if __name__ == "__main__":
             "Multiplicative factor for the noise level if the flag `--use-std-noise` "
             "if used, or noise standard deviation otherwise. If `scale_min` is provided, "
             "upper bound of the uniform distribution over which the actual scale is drawn. "
-            f"Only useful if the flag `--denoiser` is used. Default = {wlbl.SCALE}"
+            f"Only useful if the flag `--denoiser` is used. Default = {SCALE}"
         )
     )
     parser.add_argument(
@@ -339,6 +399,14 @@ if __name__ == "__main__":
         help=(
             "Batch size for training and validation. "
             f"Default = {BATCH_SIZE}"
+        )
+    )
+    parser.add_argument(
+        "-n", "--num-workers", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of workers for parallel processing. Only work for PyTorch datasets. "
+            f"Default = {NUM_WORKERS}"
         )
     )
     parser.add_argument(
