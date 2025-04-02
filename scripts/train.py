@@ -126,6 +126,15 @@ def main(
     if verbose:
         model_module.print_model(cnn_model)
 
+    if checkpoint_dir is not None:
+        if moment_order == 1:
+            output_type = "pe" # Point estimate
+        elif moment_order == 2:
+            output_type = "var" # Variance
+        else:
+            raise ValueError
+        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
+
     if backend == 'tensorflow':
 
         # Compile model
@@ -137,14 +146,8 @@ def main(
         # Define the checkpoint callback
         callbacks = []
         if checkpoint_dir is not None:
-            if moment_order == 1:
-                output_type = "pe" # Point estimate
-            elif moment_order == 2:
-                output_type = "var" # Variance
-            else:
-                raise ValueError
             filepath = os.path.join(
-                checkpoint_dir, output_type,
+                checkpoint_dir,
                 f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
             )
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
@@ -201,9 +204,12 @@ def main(
         optimizer = torch.optim.Adam(
             cnn_model.parameters(), lr=learning_rate, weight_decay=1e-8
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=nepochs // ndecays, gamma=drop_rate
-        )
+        if lr_scheduler:
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer, step_size=nepochs // ndecays, gamma=drop_rate
+            )
+        else:
+            scheduler = None
         train_dataloader = train_dataset.to_torch_dataloader()
         val_dataloader = val_dataset.to_torch_dataloader()
 
