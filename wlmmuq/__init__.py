@@ -32,3 +32,5 @@ else:
         CONFIG_DATA = yaml.safe_load(stream)
     if CONFIG_DATA['verbose']:
         print(f"Configuration file found in {configdir}")
+
+OFFSET = 0.

@@ -15,6 +15,7 @@ import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
 
+from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
@@ -31,8 +32,6 @@ LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
-
-OFFSET = 0.5 # As in DeepMass
 
 MODEL_CLASSES = {
     "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),

@@ -7,8 +7,8 @@ try:
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from .. import iterativemm as wlpgd
-from .. import utils as wlutils
+from .. import iterativemm, utils
+from .. import OFFSET
 
 SCALE = 1.
 NUM_WORKERS = 0
@@ -18,7 +18,7 @@ class HDF5Dataset:
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, input_method=None,
-            offset=0., beg_idx=0, shuffle=True, output_shape=None,
+            offset=OFFSET, beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, num_workers=NUM_WORKERS, verbose=False, **kwargs
@@ -207,7 +207,7 @@ class HDF5Dataset:
                 try:
                     assert arr.shape[-2:] == self.output_shape
                 except AssertionError:
-                    out = wlutils.crop_arr(
+                    out = utils.crop_arr(
                         arr,
                         self._beg_idx_x, self._end_idx_x,
                         self._beg_idx_y, self._end_idx_y
@@ -328,8 +328,8 @@ class HDF5Dataset:
             except TypeError:
                 nx_out = self.output_shape
                 ny_out = self.output_shape
-            self._beg_idx_x, self._end_idx_x = wlutils.get_beg_end_idx(nx, nx_out)
-            self._beg_idx_y, self._end_idx_y = wlutils.get_beg_end_idx(ny, ny_out)
+            self._beg_idx_x, self._end_idx_x = utils.get_beg_end_idx(nx, nx_out)
+            self._beg_idx_y, self._end_idx_y = utils.get_beg_end_idx(ny, ny_out)
             self.nx = nx_out
             self.ny = ny_out
         else:
@@ -460,8 +460,8 @@ class GammaKappaMixin:
 
         # Generate noisy shear maps
         kappa_true = out_dict["kappa_true"] - self.offset
-        gamma1, gamma2 = wlutils.get_shear_from_convergence(kappa_true)
-        gamma1_noisy, gamma2_noisy, _ = wlutils.get_masked_and_noisy_shear(
+        gamma1, gamma2 = utils.get_shear_from_convergence(kappa_true)
+        gamma1_noisy, gamma2_noisy, _ = utils.get_masked_and_noisy_shear(
             gamma1, gamma2, std_noise=self.std_noise,
             mask=self.mask, inpainting=self.inpainting
         )
@@ -477,7 +477,7 @@ class GammaKappaMixin:
             if self.input_method == 'ks':
                 if self.verbose:
                     print("\tCompute Kaiser-Squires solution")
-                kappa_inp = wlutils.ksfilter(
+                kappa_inp = utils.ksfilter(
                     gamma1_noisy, gamma2_noisy, get_bounds=False,
                     std_gaussianfilter=self.std_gaussianfilter
                 )
@@ -495,10 +495,10 @@ class GammaKappaMixin:
                 nx, ny = kappa_true.shape[-2:]
                 assert nx == ny
                 imgsize = nx
-                prox_wiener = wlpgd.ProximalWiener(
+                prox_wiener = iterativemm.ProximalWiener(
                     imgsize, self.powerspectrum_1d, self.step_size
                 )
-                wiener_pdg = wlpgd.BayesianPGDMassMappingNoPrecond(
+                wiener_pdg = iterativemm.BayesianPGDMassMappingNoPrecond(
                     std_noise=self.std_noise, step_size=self.step_size,
                     niter=self.niter, backward=prox_wiener, mask=self.mask,
                     verbose=self.verbose

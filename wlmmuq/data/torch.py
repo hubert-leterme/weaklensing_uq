@@ -1,9 +1,9 @@
 import torch
 from torch.utils import data
 
-from . import base_dataset as wlbl
+from . import base_dataset
 
-class HDF5Dataset(wlbl.HDF5Dataset, data.Dataset):
+class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
 
     def __len__(self):
         return self.nimgs
@@ -26,11 +26,11 @@ class HDF5Dataset(wlbl.HDF5Dataset, data.Dataset):
         return out
 
 
-class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
+class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
     pass
 
 
-class MomentNetworkMixin(wlbl.MomentNetworkMixin):
+class MomentNetworkMixin(base_dataset.MomentNetworkMixin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, mode='CN', **kwargs)

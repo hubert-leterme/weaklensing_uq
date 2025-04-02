@@ -10,7 +10,8 @@ try:
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from . import utils as wlutils
+from . import utils
+from . import OFFSET
 
 ############################################################################
 # PGD mass mapping
@@ -55,7 +56,7 @@ class BasePGDMassMapping:
 
     def forward(self, kappa, gamma, i=None, callbacks=None):
         # Gradient-descent step
-        resgamma = gamma - wlutils.get_shear_from_convergence(
+        resgamma = gamma - utils.get_shear_from_convergence(
             kappa, mask=self.mask, return_complex=True
         )
         for callback in callbacks:
@@ -123,7 +124,7 @@ class BayesianPGDMassMappingNoPrecond(BasePGDMassMapping):
             callback.on_debug_event(
                 i=i, eventname=r'$\Sigma^{-1}$-scaling', intarray=resgamma.real
             )
-        out = wlutils.get_convergence_from_shear(
+        out = utils.get_convergence_from_shear(
             resgamma, mask=self.mask, return_complex=True
         ).real
         for callback in callbacks:
@@ -167,7 +168,7 @@ class L2PGDMassMapping(BasePGDMassMapping):
     
     """
     def b_operator(self, resgamma, i=None, callbacks=None):
-        out = wlutils.get_convergence_from_shear(
+        out = utils.get_convergence_from_shear(
             resgamma, mask=self.mask, return_complex=True
         ).real
         for callback in callbacks:
@@ -193,7 +194,7 @@ class NoisewhiteningPGDMassMapping(BasePGDMassMapping):
             callback.on_debug_event(
                 i=i, eventname=r'$\Sigma^{-1/2}$-scaling', intarray=resgamma.real
             )
-        out = wlutils.get_convergence_from_shear(
+        out = utils.get_convergence_from_shear(
             resgamma, mask=self.mask, return_complex=True
         ).real
         for callback in callbacks:
@@ -266,7 +267,7 @@ class ShowIntermediateMaps(Callback):
 
     def _show(self, kappa, **kwargs):
         kwargs.update(**self.kwargs)
-        wlutils.skyshow(
+        utils.skyshow(
             kappa[self.idx],
             printxylabels=False, printxticks=False, printyticks=False,
             printcolorbar=True, **kwargs
@@ -316,7 +317,7 @@ class RMSE(Callback):
         self.rmse_backward = None
 
     def rmse(self, kappa):
-        return wlutils.rmse(kappa, self.kappa_true, mask=self.mask)
+        return utils.rmse(kappa, self.kappa_true, mask=self.mask)
 
     def on_backward_end(self, i, kappa):
         self.rmse_backward[i] = self.rmse(kappa) # Shape = (nimgs,)
@@ -411,7 +412,7 @@ class BaseKerasDenoiser:
 
     def __init__(
             self, models, tweedie=False, sigma: float=None,
-            offset=0., offset_out=True, **kwargs
+            offset=OFFSET, offset_out=True, **kwargs
     ):
         self.models = models
         self.tweedie = tweedie

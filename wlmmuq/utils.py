@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from lenspack.utils import bin2d
 
 from . import ks93
+from . import OFFSET
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -385,7 +386,7 @@ def mean_val(kappa_pred, mask=None):
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, offset=0., **kwargs
+        printxticks=True, printyticks=True, offset=OFFSET, **kwargs
 ):
     out = plt.imshow(img - offset, origin='lower', **kwargs)
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis

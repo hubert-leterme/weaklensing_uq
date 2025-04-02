@@ -2,6 +2,7 @@ import warnings
 import deepinv as dinv
 
 from .cszn_models import network_unet
+from .. import OFFSET
 
 LOSS_DICT = {
     'mse': dinv.loss.SupLoss(metric=dinv.metric.MSE()),
@@ -13,7 +14,7 @@ ACT_MODE = 'BR' # Activation mode: BatchNorm + ReLU
 class BaseModelMixin:
 
     def __init__(
-            self, map_size=None, offset=0., in_channels=1, out_channels=1,
+            self, map_size=None, offset=OFFSET, in_channels=1, out_channels=1,
             nc=NC, act_mode=ACT_MODE, mean_centering=False,
             use_bias=None, sigmoid_activation=False, **kwargs
     ):

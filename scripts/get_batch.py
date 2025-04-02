@@ -4,13 +4,13 @@ import random
 import numpy as np
 
 import wlmmuq.data.tensorflow as wlbl
+from wlmmuq import OFFSET
 
 MOMENT_ORDER = 1
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_PS = 256 # To compute the power spectrum
 BATCH_SIZE = 32
-OFFSET = 0.5
 OUTPUT_DIR = '.'
 
 def main(

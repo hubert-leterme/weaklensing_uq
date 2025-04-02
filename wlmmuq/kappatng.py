@@ -3,10 +3,8 @@ import random
 import numpy as np
 import h5py
 
+from . import utils, cosmos, dataaugm
 from . import CONFIG_DATA
-from . import utils as wlutils
-from . import cosmos as wlcosmos
-from . import dataaugm
 
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
@@ -81,7 +79,7 @@ class BaseKappaTNG:
 
     def _split_map(self, kappa):
 
-        return wlutils.patchify(
+        return utils.patchify(
             kappa, self.width, self.n_samples_per_side, inpsize=WIDTH_ORI,
             centermean=True
         )
@@ -257,14 +255,14 @@ def filter_by_redshifts(cat_cosmos_bright):
 def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
 
     openingangle = get_openingangle(imgsize)
-    data_cosmos = wlcosmos.get_data_from_cosmos(
+    data_cosmos = cosmos.get_data_from_cosmos(
         cat_cosmos, openingangle
     )
     ra_cosmos_median = data_cosmos['ra_cosmos_median']
     dec_cosmos_median = data_cosmos['dec_cosmos_median']
     extent = data_cosmos['extent']
     shapedisp = data_cosmos["shapedisp"]
-    ngal = wlutils.ngal_per_pixel(
+    ngal = utils.ngal_per_pixel(
         cat_cosmos['Ra'], cat_cosmos['Dec'],
         imgsize, extent
     )

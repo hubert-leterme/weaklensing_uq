@@ -10,11 +10,13 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
+from .. import OFFSET
+
 L2_LAMBDA = 1e-4
 
 class BaseL2RegLoss(keras.losses.Loss):
 
-    def __init__(self, l2_lambda=L2_LAMBDA, offset=0., **kwargs):
+    def __init__(self, l2_lambda=L2_LAMBDA, offset=OFFSET, **kwargs):
         super().__init__(**kwargs)
         self.l2_lambda = l2_lambda
         self.offset = offset
@@ -48,7 +50,7 @@ class L2RegMAE(BaseL2RegLoss):
 
 class MeanCentering(keras.layers.Layer):
 
-    def __init__(self, offset=0., **kwargs):
+    def __init__(self, offset=OFFSET, **kwargs):
         super().__init__(**kwargs)
         self.offset = offset
 
@@ -73,7 +75,7 @@ class Square(keras.layers.Layer):
 
 class BaseModel(keras.models.Model):
 
-    def __init__(self, map_size, offset=0.):
+    def __init__(self, map_size, offset=OFFSET):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)

@@ -10,6 +10,8 @@ import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
 import wlmmuq.iterativemm as wlpnp
 
+from wlmmuq import OFFSET
+
 DATA_FIDELITY = 'noisewhitening'
 STEP_SIZE = 1.4e-1
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset (discarded)
@@ -17,7 +19,6 @@ NIMGS_VAL = 1440 # Remaining 2 realizations
 IMGSIZE = 304
 BATCH_SIZE = 32
 NITER = 8
-OFFSET = 0.5 # As in DeepMass
 
 METHOD_DICT = {
     'bayesian_noprecond': wlpnp.BayesianPGDMassMappingNoPrecond,

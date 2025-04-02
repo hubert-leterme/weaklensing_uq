@@ -1,9 +1,9 @@
 import numpy as np
 import tensorflow as tf
 
-from . import base_dataset as wlbl
+from . import base_dataset
 
-class HDF5Dataset(wlbl.HDF5Dataset):
+class HDF5Dataset(base_dataset.HDF5Dataset):
 
     def _add_newaxis_arr(self, arr):
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
@@ -59,10 +59,10 @@ class HDF5Dataset(wlbl.HDF5Dataset):
         return out
 
 
-class HDF5DatasetGammaKappa(wlbl.GammaKappaMixin, HDF5Dataset):
+class HDF5DatasetGammaKappa(base_dataset.GammaKappaMixin, HDF5Dataset):
     pass
 
-class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
+class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
 
     def _get_output_signature(self):
 
@@ -84,7 +84,7 @@ class BaseHDF5DatasetDenoiser(wlbl.DenoiserMixin, HDF5Dataset):
         return out
 
 
-class MomentNetworkMixin(wlbl.MomentNetworkMixin):
+class MomentNetworkMixin(base_dataset.MomentNetworkMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, mode='NC', **kwargs)
 

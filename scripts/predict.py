@@ -6,11 +6,11 @@ import numpy as np
 from tensorflow import keras, data
 
 import wlmmuq.data.tensorflow as wlbl
+from wlmmuq import OFFSET
 
 NIMGS = 72000
 IMGSIZE = 304
 NIMGS_ITER = 256
-OFFSET = 0.5
 IDX_DATASET = 'kappa_pred'
 
 def main(
