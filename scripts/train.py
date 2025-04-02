@@ -213,7 +213,7 @@ def main(
         train_dataloader = train_dataset.to_torch_dataloader()
         val_dataloader = val_dataset.to_torch_dataloader()
 
-        device = dinv.utils.get_freer_gpu() if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:
             print(f"Send model to device: {device}")
         cnn_model.to(device)
