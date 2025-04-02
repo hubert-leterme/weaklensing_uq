@@ -89,9 +89,7 @@ class BaseModel(keras.models.Model):
         config = super().get_config()
         config.update({
             "map_size": self.map_size,
-            "offset": self.offset,
-            "inputs": self.inputs,
-            "outputs": self.outputs
+            "offset": self.offset
         })
         return config
 
