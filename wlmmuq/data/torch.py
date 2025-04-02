@@ -6,9 +6,10 @@ from . import base_dataset
 class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
 
     def __len__(self):
-        return self.nimgs
+        return self.nreal_per_img * self.nimgs
 
     def __getitem__(self, idx):
+        idx = idx // self.nreal_per_img
         idx_file = self.idx[idx]
         return self._load_maps(idx_file)
 
