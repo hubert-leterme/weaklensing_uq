@@ -272,7 +272,7 @@ class UNetScoreMatching(UNet):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.sigmoid_activation:
+        if self.activation == 'sigmoid':
             warnings.warn("Sigmoid activation will lead to unexpected behavior")
 
     def _postprocess(self, inp, out):
