@@ -48,7 +48,6 @@ def main(
         arch=None, denoiser=False, use_std_noise=False,
         moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
-        mean_centering=False, no_bias=False, sigmoid_activation=False,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, l2_lambda=L2_LAMBDA,
@@ -59,6 +58,17 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+
+    keys_model = [
+        'mean_centering', 'sigmoid_activation', 'pretrained'
+    ]
+    kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
+    try:
+        no_bias = kwargs.pop("no_bias")
+    except KeyError:
+        pass
+    else:
+        kwargs_model.update(use_bias=not no_bias)
 
     # Initialize batch generators for training and validation
     if use_std_noise:
@@ -116,11 +126,12 @@ def main(
     # Initialize model
     if path_to_pretrained_model is None:
         cnn_model = cnn_class(
-            map_size=imgsize, mean_centering=mean_centering,
-            offset=offset, use_bias=not no_bias, sigmoid_activation=sigmoid_activation
+            map_size=imgsize, offset=offset, **kwargs_model
         )
     else:
-        cnn_model = model_module.load_model(path_to_pretrained_model)
+        cnn_model = model_module.load_model(
+            path_to_pretrained_model, **kwargs_model
+        )
 
     if verbose:
         model_module.print_model(cnn_model)
@@ -269,6 +280,13 @@ if __name__ == "__main__":
         help=(
             "Architecture of the model. Possible values are: "
             f"{' | '.join(MODEL_CLASSES.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--pretrained", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to use a pretrained network. Not available for all architectures."
         )
     )
     parser.add_argument(

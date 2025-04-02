@@ -98,7 +98,7 @@ class Trainer(dinv.Trainer):
         return x, y, physics
 
 
-def load_model(path_to_pretrained_model):
+def load_model(path_to_pretrained_model, **kwargs):
     raise NotImplementedError
 
 def print_model(model):

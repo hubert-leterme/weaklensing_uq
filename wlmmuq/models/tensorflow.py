@@ -285,8 +285,10 @@ class UNetScoreMatching(UNet):
         return (inp, sigma), out
 
 
-def load_model(path_to_pretrained_model):
-    return keras.models.load_model(path_to_pretrained_model, compile=False)
+def load_model(path_to_pretrained_model, **kwargs):
+    return keras.models.load_model(
+        path_to_pretrained_model, compile=False, **kwargs
+    )
 
 def print_model(model):
     model.summary()
