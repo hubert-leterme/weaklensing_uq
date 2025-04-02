@@ -8,6 +8,7 @@ import threading
 import numpy as np
 import tensorflow as tf
 import torch
+import deepinv as dinv
 
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
@@ -212,8 +213,7 @@ def main(
         train_dataloader = train_dataset.to_torch_dataloader()
         val_dataloader = val_dataset.to_torch_dataloader()
 
-        # device = dinv.utils.get_freer_gpu() if torch.cuda.is_available() else "cpu"
-        device = "cpu"
+        device = dinv.utils.get_freer_gpu() if torch.cuda.is_available() else "cpu"
         cnn_model.to(device)
         trainer = wlcnn.torch.Trainer(
             cnn_model,
