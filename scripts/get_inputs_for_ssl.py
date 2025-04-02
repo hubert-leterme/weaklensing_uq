@@ -7,7 +7,7 @@ import numpy as np
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils
-import wlmmuq.dataset.tensorflow as wlbl
+import wlmmuq.data.tensorflow as wlbl
 
 INPUT_METHOD = "wiener"
 FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)

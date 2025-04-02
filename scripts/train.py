@@ -9,13 +9,13 @@ import numpy as np
 import tensorflow as tf
 import torch
 
-import wlmmuq.dataset as wlds
+import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
 
-from wlmmuq.dataset import SCALE, NUM_WORKERS
+from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
 MOMENT_ORDER = 1

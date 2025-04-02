@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 from tensorflow import keras, data
 
-import wlmmuq.dataset.tensorflow as wlbl
+import wlmmuq.data.tensorflow as wlbl
 
 NIMGS = 72000
 IMGSIZE = 304

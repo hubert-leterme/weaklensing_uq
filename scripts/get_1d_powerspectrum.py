@@ -2,7 +2,7 @@ import argparse
 import random
 import numpy as np
 import wlmmuq.utils as wlutils
-import wlmmuq.dataset.tensorflow as wlbl
+import wlmmuq.data.tensorflow as wlbl
 
 IMGSIZE = 304
 NIMGS = 2048
