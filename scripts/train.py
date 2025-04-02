@@ -6,9 +6,8 @@ import cProfile
 import threading
 
 import numpy as np
-import tensorflow as tf
 import torch
-import deepinv as dinv
+import tensorflow as tf
 
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
