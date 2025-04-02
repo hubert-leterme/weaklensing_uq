@@ -384,7 +384,7 @@ if __name__ == "__main__":
         help="Use sigmoid activation function in the output layer."
     )
     parser.add_argument(
-        "--nepochs", type=int,
+        "-e", "--nepochs", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of training epochs. "
@@ -400,7 +400,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "-n", "--num-workers", type=int,
+        "-w", "--num-workers", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of workers for parallel processing. Only work for PyTorch datasets. "
