@@ -306,13 +306,6 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--score-matching", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Train the network to predict the score (Tweedie's formula)."
-        )
-    )
-    parser.add_argument(
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
