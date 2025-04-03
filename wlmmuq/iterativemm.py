@@ -411,7 +411,7 @@ class ProximalWiener:
 class BaseKerasDenoiser:
 
     def __init__(
-            self, models, tweedie=False, sigma: float=None,
+            self, models, tweedie=False, sigma: Union[float, np.ndarray]=None,
             offset=OFFSET, offset_out=True, **kwargs
     ):
         self.models = models
@@ -427,8 +427,11 @@ class BaseKerasDenoiser:
         list_of_outputs = []
         inp = inp[..., np.newaxis] + self.offset
         if self.tweedie: # For models taking the noise level as input
-            nimgs = inp.shape[0]
-            sigma = self.sigma * np.ones((nimgs, 1, 1, 1))
+            if isinstance(self.sigma, np.ndarray):
+                sigma = self.sigma[..., np.newaxis] # Shape = (nx, ny, 1)
+            else:
+                sigma = self.sigma # Float
+            sigma = sigma * np.ones(inp.shape) # Shape = (nimgs, nx, ny, 1)
             inp = (inp, sigma)
         for model in self.models:
             out = model.predict(inp, **self.kwargs)
