@@ -146,7 +146,7 @@ class UNet(BaseModel):
         :param use_bias: whether to use bias in the convolutional and batch
             normalization layers. Default = True
         :param sigmoid_activation: whether to apply a sigmoid activation function
-            at the output. Default = True
+            at the output. Default = False
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
