@@ -108,6 +108,8 @@ class HDF5Dataset:
         self.input_exists = False
         self.current_idx = 0  # To track the batch number
         self.current_real = 0 # Useful when self.nreal_per_img > 1
+        self.nx = None
+        self.ny = None
 
         if self.list_of_outputs is not None:
             self.noutputs = len(self.list_of_outputs)
