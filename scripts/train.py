@@ -143,7 +143,10 @@ def main(
             output_type = "var" # Variance
         else:
             raise ValueError
+        filename = f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + \
+            "{epoch:02d}.keras"
         checkpoint_dir = os.path.join(checkpoint_dir, output_type)
+        filepath = os.path.join(checkpoint_dir, filename)
 
     if backend == 'tensorflow':
 
@@ -156,10 +159,6 @@ def main(
         # Define the checkpoint callback
         callbacks = []
         if checkpoint_dir is not None:
-            filepath = os.path.join(
-                checkpoint_dir,
-                f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + "{epoch:02d}.keras"
-            )
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                 filepath=filepath,
                 save_weights_only=False,
