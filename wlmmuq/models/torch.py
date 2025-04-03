@@ -10,61 +10,63 @@ LOSS_DICT = {
 }
 NC = [16, 32, 64, 64] # Number of channels
 ACT_MODE = 'BR' # Activation mode: BatchNorm + ReLU
+DOWNSAMPLE_MODE = 'avgpool'
 
-class BaseModelMixin:
+class DRUNetMixin:
 
     def __init__(
             self, map_size=None, offset=OFFSET, in_channels=1, out_channels=1,
-            nc=NC, act_mode=ACT_MODE, mean_centering=False,
-            use_bias=None, sigmoid_activation=False, **kwargs
+            small_model=False, act_mode=ACT_MODE, downsample_mode=DOWNSAMPLE_MODE,
+            **kwargs
     ):
         """
         Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels)
+        :param map_size: size of square image (there are map_size**2 pixels).
+            Unused.
         :param offset: mean value of the convergence maps (for mean centering).
-            Default = 0.
+            Unused.
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
-        :param nc: list of numbers of channels. Default = NC
-        :param mean_centering: whether to apply mean centering at the output.
-            Default = False
-        :param use_bias: whether to use bias in the convolutional and batch
-            normalization layers (not used for DeepInverse). Default = None
-        :param sigmoid_activation: whether to apply a sigmoid activation function
-            at the output. Default = True
+        :param small_model: whether to use a small model. Default = False
         """
-        self.map_size = map_size
-        self.offset = offset
-        if mean_centering:
-            raise NotImplementedError
-        if sigmoid_activation:
-            raise NotImplementedError
-
+        if small_model:
+            kwargs.update(nc=NC)
         super().__init__(
-            in_channels=in_channels, out_channels=out_channels, nc=nc,
-            downsample_mode='avgpool', bias=use_bias, act_mode=act_mode, **kwargs
+            in_channels=in_channels, out_channels=out_channels,
+            act_mode=act_mode, downsample_mode=downsample_mode,
+            **kwargs
         )
 
-class CSZNMixin:
-    def __init__(self, *args, in_channels=1, out_channels=1, bias=None, **kwargs):
-        if bias is not None:
-            kwargs.update(bias=bias)
-        super().__init__(*args, in_nc=in_channels, out_nc=out_channels, **kwargs)
 
-class DeepInvMixin:
-    def __init__(self, *args, bias=True, **kwargs):
-        if bias is not None:
-            warnings.warn("Argument 'bias' not used in DeepInverse models.")
-        super().__init__(*args, pretrained=None, **kwargs)
+class CSZNMixin(DRUNetMixin):
+
+    def __init__(
+            self, *args, in_channels=1, out_channels=1, use_bias=True, **kwargs
+    ):
+        """
+        Initialisation
+        :param map_size: size of square image (there are map_size**2 pixels).
+            Unused.
+        :param offset: mean value of the convergence maps (for mean centering).
+            Unused.
+        :param in_channels: number of input channels. Default = 1
+        :param out_channels: number of output channels. Default = 1
+        :param small_model: whether to use a small model. Default = False
+        :param use_bias: whether to use bias in the convolutional and batch
+            normalization layers (not used for DeepInverse). Default = True
+        """
+        super().__init__(
+            *args, in_nc=in_channels, out_nc=out_channels, bias=use_bias, **kwargs
+        )
 
 
-class UNetRes(BaseModelMixin, CSZNMixin, network_unet.UNetRes):
+class UNetRes(CSZNMixin, network_unet.UNetRes):
     pass
 
-class ResUNet(BaseModelMixin, CSZNMixin, network_unet.ResUNet):
+class ResUNet(CSZNMixin, network_unet.ResUNet):
     pass
 
-class DRUNet(BaseModelMixin, DeepInvMixin, dinv.models.DRUNet):
+class DRUNet(DRUNetMixin, dinv.models.DRUNet):
     pass
 
 
