@@ -75,7 +75,7 @@ class Square(keras.layers.Layer):
 
 class BaseModel(keras.models.Model):
 
-    def __init__(self, map_size, offset=OFFSET):
+    def __init__(self, map_size, offset=OFFSET, **kwargs):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels)
@@ -84,7 +84,7 @@ class BaseModel(keras.models.Model):
         """
         self.map_size = map_size
         self.offset = offset
-        kwargs = self._init_model()
+        kwargs.update(**self._init_model())
         super().__init__(**kwargs)
 
     def get_config(self):
@@ -95,7 +95,7 @@ class BaseModel(keras.models.Model):
         })
         return config
 
-    def _init_model(self) -> dict:
+    def _init_model(self, **kwargs) -> dict:
         raise NotImplementedError
 
 
