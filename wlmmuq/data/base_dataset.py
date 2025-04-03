@@ -511,7 +511,7 @@ class GammaKappaMixin:
                 "kappa_inp": kappa_inp + self.offset
             })
 
-            return out_dict
+        return out_dict
 
 
 class DenoiserMixin:
