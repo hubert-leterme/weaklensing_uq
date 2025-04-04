@@ -60,7 +60,7 @@ def main(
         np.random.seed(seed)
 
     keys_model = [
-        'mean_centering', 'sigmoid_activation', 'pretrained'
+        'mean_centering', 'sigmoid_activation', 'small_model', 'pretrained'
     ]
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
@@ -282,10 +282,18 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--pretrained", action='store_true',
+        "-s", "--small-model", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Whether to use a pretrained network. Not available for all architectures."
+            "Whether to use a small model. Only available for PyTorch models."
+        )
+    )
+    parser.add_argument(
+        "-p", "--pretrained", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to use a pretrained network. Only available for PyTorch models. "
+            "Not available if `--small-model` is used."
         )
     )
     parser.add_argument(
