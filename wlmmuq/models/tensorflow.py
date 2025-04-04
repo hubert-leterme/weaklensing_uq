@@ -277,7 +277,7 @@ class UNetScoreMatching(UNet):
 
     def _postprocess(self, inp, out):
         # Argument out estimates the score of the log-prior PDF of the noisy images
-        sigma = Input(shape=(self.map_size, self.map_size, self.in_channels))
+        sigma = Input(shape=(1, 1, 1))
         var = Square()(sigma)
         minusnoise = Multiply()([var, out])
         out = Add()([inp, minusnoise])

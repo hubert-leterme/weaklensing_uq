@@ -616,7 +616,6 @@ class DenoiserMixin:
         scale = np.random.uniform(
             self.scale_min, self.scale_max, size=size
         ) # Shape = ([nimgs], 1, 1)
-        scale = scale * np.ones((self.nx, self.ny)) # Shape = ([nimgs], nx, ny)
         std_noise = scale.copy()
         if self.std_noise is not None:
             std_noise *= self.std_noise # Shape = ([nimgs], nx, ny)

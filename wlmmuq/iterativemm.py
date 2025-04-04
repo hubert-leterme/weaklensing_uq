@@ -411,7 +411,7 @@ class ProximalWiener:
 class BaseDeepDenoiser:
 
     def __init__(
-            self, list_of_models, sigma: Union[float, np.ndarray]=None,
+            self, list_of_models, sigma: float=None,
             offset=OFFSET, offset_out=True, meancentering=False, **kwargs
     ):
         self.list_of_models = list_of_models
