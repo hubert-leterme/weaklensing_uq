@@ -17,7 +17,7 @@ class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
         return torch.tensor(arr, dtype=torch.float32)
 
     def _add_newaxis_arr(self, arr: torch.tensor) -> torch.tensor:
-        return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nchannels, nx, ny)
+        return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nx, ny)
 
     def to_torch_dataloader(self, **kwargs):
         out = data.DataLoader(
