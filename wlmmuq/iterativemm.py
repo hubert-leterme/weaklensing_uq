@@ -408,73 +408,141 @@ class ProximalWiener:
         return out.real
 
 
-class BaseKerasDenoiser:
+class BaseDeepDenoiser:
 
     def __init__(
-            self, models, tweedie=False, sigma: Union[float, np.ndarray]=None,
-            offset=OFFSET, offset_out=True, **kwargs
+            self, list_of_models, sigma: Union[float, np.ndarray]=None,
+            offset=OFFSET, offset_out=True, meancentering=False, **kwargs
     ):
-        self.models = models
-        self.tweedie = tweedie
+        self.list_of_models = list_of_models
         self.sigma = sigma
         self.offset = offset
         self.offset_out = offset_out
+        self.meancentering = meancentering
         self.kwargs = kwargs
 
 
     def __call__(self, inp):
 
         list_of_outputs = []
-        inp = inp[..., np.newaxis] + self.offset
-        if self.tweedie: # For models taking the noise level as input
-            if isinstance(self.sigma, np.ndarray):
-                sigma = self.sigma[..., np.newaxis] # Shape = (nx, ny, 1)
-            else:
-                sigma = self.sigma # Float
-            sigma = sigma * np.ones(inp.shape) # Shape = (nimgs, nx, ny, 1)
-            inp = (inp, sigma)
-        for model in self.models:
-            out = model.predict(inp, **self.kwargs)
-            out = out[..., 0]
+        inp = self._convert_to_tensor(inp) # np.ndarray or torch.tensor
+        inp = self._add_channelaxis(inp) + self.offset
+        inp = self._preprocess(inp)
+        for model in self.list_of_models:
+            out = self._predict(inp, model)
+            out = self._remove_channelaxis(out)
             if self.offset_out:
                 out -= self.offset
+            out = self._convert_to_ndarray(out)
+            # Projection onto the subspace orthogonal to the kernel of the
+            # Kaiser-Squires operator
+            if self.meancentering:
+                out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
             list_of_outputs.append(out)
 
         return list_of_outputs
 
 
-class KerasDenoiser(BaseKerasDenoiser):
+    def _convert_to_tensor(self, arr):
+        raise NotImplementedError
 
-    def __init__(self, model, meancentering=True, **kwargs):
-        super().__init__([model], **kwargs)
-        self.meancentering = meancentering
+    def _convert_to_ndarray(self, arr):
+        raise NotImplementedError
+
+    def _add_channelaxis(self, arr):
+        raise NotImplementedError
+
+    def _remove_channelaxis(self, arr):
+        raise NotImplementedError
+
+    def _preprocess(self, inp):
+        raise NotImplementedError
+
+    def _predict(self, inp, model):
+        raise NotImplementedError
 
 
-    def __call__(self, inp):
+class BaseKerasDenoiser(BaseDeepDenoiser):
 
-        out = super().__call__(inp)[0]
+    def _convert_to_tensor(self, arr):
+        return arr
 
-        # Projection onto the subspace orthogonal to the kernel of the
-        # Kaiser-Squires operator
-        if self.meancentering:
-            out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+    def _convert_to_ndarray(self, arr):
+        return arr
 
+    def _add_channelaxis(self, arr):
+        return arr[..., np.newaxis] # Shape = (nimgs, nx, ny, 1)
+
+    def _remove_channelaxis(self, arr):
+        return arr[..., 0] # Shape = (nimgs, nx, ny)
+
+    def _preprocess(self, inp):
+        if self.sigma is not None:
+            if isinstance(self.sigma, np.ndarray):
+                sigma = self._add_channelaxis(sigma) # Shape = (nx, ny, 1)
+            else:
+                sigma = self.sigma # Float
+            sigma = sigma * np.ones(inp.shape) # Shape = (nimgs, nx, ny, 1)
+            inp = (inp, sigma)
+        return inp
+
+    def _predict(self, inp, model):
+        return model.predict(inp, **self.kwargs)
+
+
+class BaseDeepinvDenoiser(BaseDeepDenoiser):
+
+    def __init__(self, list_of_models, *args, device=None, **kwargs):
+        self.device = device if device is not None else torch.device('cpu')
+        list_of_models = [
+            model.to(self.device) for model in list_of_models
+        ]
+        super().__init__(list_of_models, *args, **kwargs)
+
+    def _convert_to_tensor(self, arr):
+        out = torch.tensor(arr, dtype=torch.float32)
+        out = out.to(self.device)
+        return out
+
+    def _convert_to_ndarray(self, arr):
+        return arr.cpu().numpy()
+
+    def _add_channelaxis(self, arr):
+        return arr.unsqueeze(-3) # Shape = (nimgs, 1, nx, ny)
+
+    def _remove_channelaxis(self, arr):
+        return arr.squeeze(-3) # Shape = (nimgs, nx, ny)
+
+    def _preprocess(self, inp):
+        return (inp, self.sigma)
+
+    def _predict(self, inp, model):
+        with torch.no_grad():
+            out = model(*inp) # inp = (y, sigma)
         return out
 
 
-class KerasDenoiserScoreMatching(KerasDenoiser):
-
-    def __call__(self, inp):
-        out = super().__call__(inp) # Score estimation
-        out *= self.sigma**2
-        out += inp
-        return out
-
-
-class KerasDenoiserVar(BaseKerasDenoiser):
-
-    def __init__(self, model, **kwargs):
-        super().__init__([model], offset_out=False, **kwargs)
-
+class Order1MomentNetworkMixin:
+    """To be used for order-1 moment networks"""
+    def __init__(self, model, *args, **kwargs):
+        super().__init__([model], *args, **kwargs)
     def __call__(self, inp):
         return super().__call__(inp)[0]
+
+class Order2MomentNetworkMixin:
+    """To be used for order-2 moment networks"""
+    def __init__(self, model, *args, **kwargs):
+        super().__init__([model], *args, offset_out=False, **kwargs)
+    def __call__(self, inp):
+        return super().__call__(inp)[0]
+
+
+class KerasDenoiser(Order1MomentNetworkMixin, BaseKerasDenoiser):
+    pass
+class KerasDenoiserVar(Order2MomentNetworkMixin, BaseKerasDenoiser):
+    pass
+
+class DeepinvDenoiser(Order1MomentNetworkMixin, BaseDeepinvDenoiser):
+    pass
+class DeepinvDenoiserVar(Order2MomentNetworkMixin, BaseDeepinvDenoiser):
+    pass
