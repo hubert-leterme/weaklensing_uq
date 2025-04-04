@@ -16,8 +16,8 @@ class DRUNetMixin:
 
     def __init__(
             self, map_size=None, offset=OFFSET, in_channels=1, out_channels=1,
-            small_model=False, act_mode=ACT_MODE, downsample_mode=DOWNSAMPLE_MODE,
-            **kwargs
+            small_model=False, act_mode=ACT_MODE,
+            downsample_mode=DOWNSAMPLE_MODE, **kwargs
     ):
         """
         Initialisation
@@ -28,6 +28,8 @@ class DRUNetMixin:
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
         :param small_model: whether to use a small model. Default = False
+        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
+        :param downsample_mode: downsample mode. Default = 'avgpool'
         """
         if small_model:
             kwargs.update(nc=NC)
@@ -52,6 +54,8 @@ class CSZNMixin(DRUNetMixin):
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
         :param small_model: whether to use a small model. Default = False
+        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
+        :param downsample_mode: downsample mode. Default = 'avgpool'
         :param use_bias: whether to use bias in the convolutional and batch
             normalization layers (not used for DeepInverse). Default = True
         """
@@ -67,7 +71,25 @@ class ResUNet(CSZNMixin, network_unet.ResUNet):
     pass
 
 class DRUNet(DRUNetMixin, dinv.models.DRUNet):
-    pass
+    def __init__(self, *args, pretrained=False, **kwargs):
+        """
+        Initialisation
+        :param map_size: size of square image (there are map_size**2 pixels).
+            Unused.
+        :param offset: mean value of the convergence maps (for mean centering).
+            Unused.
+        :param in_channels: number of input channels. Default = 1
+        :param out_channels: number of output channels. Default = 1
+        :param small_model: whether to use a small model. Default = False
+        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
+        :param downsample_mode: downsample mode. Default = 'avgpool'
+        :param pretrained: whether to use a pretrained model. Default = False
+        """
+        if not pretrained:
+            pretrained = None
+        else:
+            pretrained = 'download'
+        super().__init__(*args, pretrained=pretrained, **kwargs)
 
 
 class ScoreMatchingMixin:
