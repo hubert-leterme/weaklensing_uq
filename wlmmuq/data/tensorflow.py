@@ -5,16 +5,6 @@ from . import base_dataset
 
 class HDF5Dataset(base_dataset.HDF5Dataset):
 
-    @property
-    def tensor_shape(self):
-        try:
-            out = (None, *self.output_shape)
-        except TypeError:
-            out = (None, self.output_shape, self.output_shape)
-        if self.newaxis:
-            out += (1,)
-        return out
-
     def _add_newaxis_arr(self, arr):
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
 
@@ -56,7 +46,13 @@ class HDF5Dataset(base_dataset.HDF5Dataset):
 
     def _get_output_signature(self):
 
-        out = tf.TensorSpec(shape=self.tensor_shape, dtype=tf.float32)
+        try:
+            tensor_shape = (None, *self.output_shape)
+        except TypeError:
+            tensor_shape = (None, self.output_shape, self.output_shape)
+        if self.newaxis:
+            tensor_shape += (1,)
+        out = tf.TensorSpec(shape=tensor_shape, dtype=tf.float32)
         if self.noutputs > 1:
             out = self.noutputs * (out,)
 
@@ -73,8 +69,11 @@ class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
         out = super()._get_output_signature()
         if self.scale_as_input:
             # Inputs are given as (kappa_inp, scale)
+            tensor_shape_scale = (None, 1, 1)
+            if self.newaxis:
+                tensor_shape_scale += (1,)
             tensorspec_scale = tf.TensorSpec(
-                shape=self.tensor_shape, dtype=tf.float32
+                shape=tensor_shape_scale, dtype=tf.float32
             )
             out = list(out) # Convert to list to allow item assignment
             for idx, val in enumerate(self.list_of_outputs):
