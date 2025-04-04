@@ -516,6 +516,10 @@ class GammaKappaMixin:
         return out_dict
 
 
+class HDF5DatasetGammaKappa(GammaKappaMixin, HDF5Dataset):
+    pass
+
+
 class DenoiserMixin:
 
     def __init__(
@@ -634,6 +638,10 @@ class DenoiserMixin:
         return out_dict
 
 
+class BaseHDF5DatasetDenoiser(DenoiserMixin, HDF5Dataset):
+    pass
+
+
 class MomentNetworkMixin:
 
     def __init__(self, *args, order=1, mode='NC', **kwargs):
@@ -735,6 +743,13 @@ class MomentNetworkMixin:
             out_dict["sqdiff_true_pred"] = (kappa_true - kappa_pred)**2
 
         return out_dict
+
+
+class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
+    """Batch loader for training DeepMass."""
+
+class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+    """Batch loader for training a Gaussian denoiser."""
 
 
 def _pipeline(inp, *transforms):

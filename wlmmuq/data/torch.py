@@ -27,6 +27,9 @@ class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
         return out
 
 
+class HDF5DatasetGammaKappa(base_dataset.GammaKappaMixin, HDF5Dataset):
+    pass
+
 class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
     pass
 
