@@ -478,11 +478,8 @@ class BaseKerasDenoiser(BaseDeepDenoiser):
 
     def _preprocess(self, inp):
         if self.sigma is not None:
-            if isinstance(self.sigma, np.ndarray):
-                sigma = self._add_channelaxis(sigma) # Shape = (nx, ny, 1)
-            else:
-                sigma = self.sigma # Float
-            sigma = sigma * np.ones(inp.shape) # Shape = (nimgs, nx, ny, 1)
+            nimgs = inp.shape[0]
+            sigma = self.sigma * np.ones((nimgs, 1, 1, 1))
             inp = (inp, sigma)
         return inp
 
