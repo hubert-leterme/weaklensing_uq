@@ -297,7 +297,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--denoiser", action='store_true',
+        "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Reconstruct the original convergence map from an input corrupted "
