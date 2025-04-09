@@ -13,7 +13,6 @@ from .. import utils
 from .. import OFFSET
 
 SCALE = 1.
-NUM_WORKERS = 0
 
 # TODO: Update docstrings
 
@@ -25,7 +24,7 @@ class BaseHDF5Dataset:
             offset=OFFSET, beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
-            nreal_per_img=1, num_workers=NUM_WORKERS, verbose=False, **kwargs
+            nreal_per_img=1, verbose=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data.
@@ -100,7 +99,6 @@ class BaseHDF5Dataset:
         self.list_of_outputs = list_of_outputs
         self.close_after_batch = close_after_batch
         self.nreal_per_img = nreal_per_img
-        self.num_workers = num_workers
         self.verbose = verbose
 
         self.idx = None  # Will hold the shuffled indices

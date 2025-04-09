@@ -3,10 +3,13 @@ from torch.utils import data
 
 from . import base_dataset
 
+NUM_WORKERS = 0
+
 class TorchMixin:
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, num_workers=NUM_WORKERS, **kwargs):
         super().__init__(*args, mode='TI', **kwargs) # Target-Input mode
+        self.num_workers = num_workers
 
     def __len__(self):
         return self.nreal_per_img * self.nimgs
