@@ -8,7 +8,7 @@ import wlmmuq.data.tensorflow as wlbl
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.kappatng as wlktng
 import wlmmuq.utils as wlutils
-import wlmmuq.iterativemm as wlpnp
+import wlmmuq.iterativemm.iterativemm as wlpnp
 
 from wlmmuq import OFFSET
 

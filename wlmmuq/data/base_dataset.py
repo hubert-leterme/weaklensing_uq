@@ -2,12 +2,14 @@ import warnings
 import numpy as np
 import h5py
 import torch
+
+from ..iterativemm import iterativemm
 try:
     import pycs.astro.wl.mass_mapping as csmm
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from .. import iterativemm, utils
+from .. import utils
 from .. import OFFSET
 
 SCALE = 1.

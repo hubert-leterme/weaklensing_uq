@@ -1,6 +1,5 @@
 import os
 import warnings
-from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -10,8 +9,8 @@ try:
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
-from . import utils
-from . import OFFSET
+from .. import utils
+from .. import OFFSET
 
 ############################################################################
 # PGD mass mapping
@@ -351,7 +350,7 @@ class UQ(Callback):
 
     def __init__(
             self, pgd_massmapping: BasePGDMassMapping, backward_uq,
-            gamma: Union[np.ndarray, torch.tensor]
+            gamma: np.ndarray | torch.Tensor
     ):
         """
         Parameters
@@ -425,7 +424,7 @@ class BaseDeepDenoiser:
     def __call__(self, inp):
 
         list_of_outputs = []
-        inp = self._convert_to_tensor(inp) # np.ndarray or torch.tensor
+        inp = self._convert_to_tensor(inp) # np.ndarray or torch.Tensor
         inp = self._add_channelaxis(inp) + self.offset
         inp = self._preprocess(inp)
         for model in self.list_of_models:
@@ -433,11 +432,11 @@ class BaseDeepDenoiser:
             out = self._remove_channelaxis(out)
             if self.offset_out:
                 out -= self.offset
-            out = self._convert_to_ndarray(out)
             # Projection onto the subspace orthogonal to the kernel of the
             # Kaiser-Squires operator
             if self.meancentering:
-                out -= np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
+                out = self._meancentering(out)
+            out = self._convert_to_ndarray(out)
             list_of_outputs.append(out)
 
         return list_of_outputs
@@ -459,6 +458,9 @@ class BaseDeepDenoiser:
         raise NotImplementedError
 
     def _predict(self, inp, model):
+        raise NotImplementedError
+
+    def _meancentering(self, out):
         raise NotImplementedError
 
 
@@ -486,23 +488,48 @@ class BaseKerasDenoiser(BaseDeepDenoiser):
     def _predict(self, inp, model):
         return model.predict(inp, **self.kwargs)
 
+    def _meancentering(self, out):
+        return out - np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
-class BaseDeepinvDenoiser(BaseDeepDenoiser):
+
+class BaseTorchDenoiser(BaseDeepDenoiser):
 
     def __init__(self, list_of_models, *args, device=None, **kwargs):
-        self.device = device if device is not None else torch.device('cpu')
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cpu')
         list_of_models = [
             model.to(self.device) for model in list_of_models
         ]
         super().__init__(list_of_models, *args, **kwargs)
 
+        self.convert_back_to_ndarray = True
+        self.back_to_cpu = True
+
+
     def _convert_to_tensor(self, arr):
-        out = torch.tensor(arr, dtype=torch.float32)
-        out = out.to(self.device)
-        return out
+
+        if torch.is_tensor(arr):
+            self.convert_back_to_ndarray = False
+            if arr.device == self.device:
+                self.back_to_cpu = False
+        else:
+            arr = torch.tensor(arr, dtype=torch.float32)
+        arr = arr.to(self.device)
+
+        return arr
+
 
     def _convert_to_ndarray(self, arr):
-        return arr.cpu().numpy()
+
+        if self.back_to_cpu:
+            arr = arr.cpu()
+            if self.convert_back_to_ndarray:
+                arr = arr.numpy()
+
+        return arr
+
 
     def _add_channelaxis(self, arr):
         return arr.unsqueeze(-3) # Shape = (nimgs, 1, nx, ny)
@@ -517,6 +544,9 @@ class BaseDeepinvDenoiser(BaseDeepDenoiser):
         with torch.no_grad():
             out = model(*inp) # inp = (y, sigma)
         return out
+
+    def _meancentering(self, out):
+        return out - torch.mean(out, dim=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
 
 
 class Order1MomentNetworkMixin:
@@ -539,7 +569,7 @@ class KerasDenoiser(Order1MomentNetworkMixin, BaseKerasDenoiser):
 class KerasDenoiserVar(Order2MomentNetworkMixin, BaseKerasDenoiser):
     pass
 
-class DeepinvDenoiser(Order1MomentNetworkMixin, BaseDeepinvDenoiser):
+class TorchDenoiser(Order1MomentNetworkMixin, BaseTorchDenoiser):
     pass
-class DeepinvDenoiserVar(Order2MomentNetworkMixin, BaseDeepinvDenoiser):
+class TorchDenoiserVar(Order2MomentNetworkMixin, BaseTorchDenoiser):
     pass
