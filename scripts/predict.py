@@ -27,9 +27,9 @@ def main(
         print("Initialize batch generator")
 
     if not denoiser:
-        batch_loader = wlbl.HDF5Dataset
+        batch_loader = wlbl.HDF5DatasetDeepMass
     else:
-        batch_loader = wlbl.BaseHDF5DatasetDenoiser
+        batch_loader = wlbl.HDF5DatasetDenoiser
 
     # *** CAUTION ***
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
@@ -38,8 +38,7 @@ def main(
     data_gen = batch_loader(
         path_to_augmented_dataset,
         nimgs=nimgs, sort_by_filename_ori=False, shuffle=False,
-        output_shape=imgsize, list_of_outputs=['kappa_inp'],
-        **kwargs
+        output_shape=imgsize, **kwargs
     )
 
     # Load trained model
@@ -65,9 +64,9 @@ def main(
         while end_idx < nimgs:
             beg_idx = end_idx
             end_idx = min(beg_idx + nimgs_iter, nimgs)
-            kappa_inp = data_gen.load_batch(
+            kappa_inp, _ = data_gen.load_batch(
                 beg_idx=beg_idx, max_idx=end_idx, get_all_images=True
-            )
+            ) # kappa_true is discarded
             print(f"Processing images {beg_idx} to {end_idx}")
 
             kappa_inp = kappa_inp[..., np.newaxis] + offset

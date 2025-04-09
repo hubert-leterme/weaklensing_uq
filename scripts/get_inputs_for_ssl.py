@@ -59,10 +59,9 @@ def main(
             # Load a set of convergence maps among the training set
             train_gen_ps = wlbl.HDF5Dataset(
                 path_to_augmented_dataset, nimgs=NIMGS_PS, batch_size=NIMGS_PS,
-                std_noise=std_noise, mask=mask, output_shape=imgsize,
-                list_of_outputs=['kappa_true']
+                std_noise=std_noise, mask=mask, output_shape=imgsize
             )
-            kappa_ps = train_gen_ps.load_batch()
+            _, kappa_ps = train_gen_ps.load_batch()
             train_gen_ps.close()
 
             # Compute the 1D power spectrum
@@ -84,7 +83,7 @@ def main(
     # Keyword arguments `sort_by_filename_ori` and `shuffle` must be set to
     # False in order input convergence maps `kappa_inp` to be stored in the
     # same order as the targets `kappa_true`.
-    data_loader = wlbl.HDF5DatasetGammaKappa(
+    data_loader = wlbl.BaseHDF5DatasetGammaKappa(
         path_to_augmented_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, input_method=input_method,
         sort_by_filename_ori=False, shuffle=False, output_shape=imgsize,

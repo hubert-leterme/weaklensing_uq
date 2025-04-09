@@ -3,7 +3,10 @@ from torch.utils import data
 
 from . import base_dataset
 
-class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
+class TorchMixin:
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, mode='TI', **kwargs) # Target-Input mode
 
     def __len__(self):
         return self.nreal_per_img * self.nimgs
@@ -27,36 +30,25 @@ class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
         return out
 
 
-class HDF5DatasetGammaKappa(base_dataset.GammaKappaMixin, HDF5Dataset):
+class HDF5Dataset(TorchMixin, base_dataset.HDF5Dataset):
     pass
 
-class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
+class HDF5DatasetMassMapping(TorchMixin, base_dataset.HDF5DatasetMassMapping):
+    pass
+
+class HDF5DatasetDeepMass(TorchMixin, base_dataset.HDF5DatasetDeepMass):
     pass
 
 
-class InputTargetMixin(base_dataset.InputTargetMixin):
+class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, mode='TI', **kwargs)
-
-    def _prepare_output(self, out_dict):
-        out = super()._prepare_output(out_dict)
+    def _postprocess(self, out_dict, idx):
+        out_dict = super()._postprocess(out_dict, idx)
         if self.scale_as_input:
-            target, (kappa_inp, scale) = out
-            out = target, TensorList([kappa_inp, scale])
-        return out
+            out_dict["kappa_inp"] = TensorList(out_dict["kappa_inp"])
+        return out_dict
 
 
 class TensorList(list[torch.Tensor]):
     def to(self, device):
         return TensorList(t.to(device) for t in self)
-
-
-class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
-    """Batch loader for iterative mass mapping methods."""
-
-class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
-    """Batch loader for training DeepMass."""
-
-class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
-    """Batch loader for training a Gaussian denoiser."""

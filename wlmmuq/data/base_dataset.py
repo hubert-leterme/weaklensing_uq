@@ -15,7 +15,9 @@ from .. import OFFSET
 SCALE = 1.
 NUM_WORKERS = 0
 
-class HDF5Dataset:
+# TODO: Update docstrings
+
+class BaseHDF5Dataset:
 
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
@@ -361,7 +363,7 @@ class HDF5Dataset:
         self.close()
 
 
-class GammaKappaMixin:
+class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
             self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
@@ -530,11 +532,7 @@ class GammaKappaMixin:
         return out_dict
 
 
-class HDF5DatasetGammaKappa(GammaKappaMixin, HDF5Dataset):
-    pass
-
-
-class DenoiserMixin:
+class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
 
     def __init__(
             self, *args, std_noise=None, scale=SCALE, scale_min=None,
@@ -651,10 +649,6 @@ class DenoiserMixin:
         return out_dict
 
 
-class BaseHDF5DatasetDenoiser(DenoiserMixin, HDF5Dataset):
-    pass
-
-
 class InputTargetMixin:
 
     def __init__(self, *args, input_type='kappa_inp', order=1, mode='IT', **kwargs):
@@ -669,8 +663,8 @@ class InputTargetMixin:
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
         input_type : str, optional
-            Type of input data: 'kappa_inp' (noisy convergence map or naive estimation)
-            or 'gamma_noisy' (shear map).
+            Type of input data: 'kappa_inp' (noisy convergence map, naive estimation,
+            or None), or 'gamma_noisy' (shear map).
         order : int, optional
             Order of the moment network: 1 for standard posterior mean estimate,
             2 for posterior variance. Default is 1.
@@ -756,18 +750,45 @@ class InputTargetMixin:
 
         return out_dict
 
-class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
-    """Batch loader for iterative mass mapping methods."""
+
+class HDF5Dataset(InputTargetMixin, BaseHDF5Dataset):
+    """
+    Dataset with ground truth convergence maps only.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, input_type='kappa_inp', **kwargs
+        ) # kappa_inp is None, unless a mass mapping method is specified
+
+class HDF5DatasetMassMapping(InputTargetMixin, BaseHDF5DatasetGammaKappa):
+    """
+    Dataset for iterative mass mapping methods. The dataset takes as input
+    the noisy shear maps in a complex format.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args, input_type='gamma_noisy', return_complex=True, **kwargs
         )
 
-class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
-    """Batch loader for training DeepMass."""
+class HDF5DatasetDeepMass(InputTargetMixin, BaseHDF5DatasetGammaKappa):
+    """
+    Dataset for training DeepMass. The dataset takes as input
+    an initial estimation (Kaiser-Squires or Wiener) of the convergence maps.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, input_type='kappa_inp', return_complex=False, **kwargs
+        )
 
 class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
-    """Batch loader for training a Gaussian denoiser."""
+    """
+    Batch loader for training a Gaussian denoiser. The dataset takes as input
+    the noisy convergence maps.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, input_type='kappa_inp', **kwargs
+        )
 
 
 def _pipeline(inp, *transforms):

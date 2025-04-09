@@ -3,7 +3,11 @@ import tensorflow as tf
 
 from . import base_dataset
 
-class HDF5Dataset(base_dataset.HDF5Dataset):
+class TensorflowMixin:
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, mode='IT', **kwargs) # Input-Target mode
+
 
     def _add_newaxis_arr(self, arr):
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
@@ -59,10 +63,17 @@ class HDF5Dataset(base_dataset.HDF5Dataset):
         return out
 
 
-class HDF5DatasetGammaKappa(base_dataset.GammaKappaMixin, HDF5Dataset):
+class HDF5Dataset(TensorflowMixin, base_dataset.HDF5Dataset):
     pass
 
-class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
+class HDF5DatasetMassMapping(TensorflowMixin, base_dataset.HDF5DatasetMassMapping):
+    pass
+
+class HDF5DatasetDeepMass(TensorflowMixin, base_dataset.HDF5DatasetDeepMass):
+    pass
+
+
+class HDF5DatasetDenoiser(TensorflowMixin, base_dataset.HDF5DatasetDenoiser):
 
     def _get_output_signature(self):
 
@@ -82,17 +93,3 @@ class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
             out = tuple(out)
 
         return out
-
-
-class InputTargetMixin(base_dataset.InputTargetMixin):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, mode='IT', **kwargs)
-
-class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
-    """Batch loader for iterative mass mapping methods."""
-
-class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
-    """Batch loader for training DeepMass."""
-
-class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
-    """Batch loader for training a Gaussian denoiser."""

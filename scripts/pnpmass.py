@@ -51,12 +51,11 @@ def main(
     std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
 
     # Initialize batch generator for the validation set
-    val_gen = wlbl.HDF5DatasetGammaKappa(
+    val_gen = wlbl.HDF5DatasetMassMapping
         path_to_augmented_dataset, nimgs=nimgs_val, beg_idx=nimgs_train,
         batch_size=batch_size, sort_by_filename_ori=True, shuffle=False,
         std_noise=std_noise, mask=mask, inpainting=True,
-        output_shape=imgsize,
-        list_of_outputs=['gamma1_noisy', 'gamma2_noisy', 'kappa_true']
+        output_shape=imgsize
     )
 
     # Load the trained denoiser
@@ -78,10 +77,9 @@ def main(
     end_idx = 0
     while end_idx < nimgs_val:
         beg_idx = end_idx
-        (gamma1, gamma2, kappa_true), end_idx = val_gen.load_batch(
+        (gamma, kappa_true), end_idx = val_gen.load_batch(
             beg_idx=beg_idx, max_idx=nimgs_val, return_end_idx=True
         )
-        gamma = gamma1 + 1j * gamma2
         rmse.kappa_true = kappa_true # Update RMSE callback (ground truth)
 
         # Run PnP for this batch

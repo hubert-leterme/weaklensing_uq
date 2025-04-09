@@ -19,11 +19,10 @@ def main(
 
     data_loader = wlbl.HDF5Dataset(
         path_to_dataset, nimgs=nimgs, batch_size=batch_size,
-        output_shape=imgsize, list_of_outputs=['kappa_true'],
-        shuffle=True
+        output_shape=imgsize, shuffle=True
     )
     data_gen = data_loader.to_tf_dataloader(raise_stop_iteration=True)
-    data_gen = iter(data_gen)
+    _, data_gen = iter(data_gen)
 
     list_of_powerspectrum_1d = []
     nsteps = nimgs // batch_size
