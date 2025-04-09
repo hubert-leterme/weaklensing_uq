@@ -16,7 +16,7 @@ class HDF5Dataset(base_dataset.HDF5Dataset, data.Dataset):
     def _convert_to_tensor(self, arr):
         return torch.tensor(arr, dtype=torch.float32)
 
-    def _add_newaxis_arr(self, arr: torch.tensor) -> torch.tensor:
+    def _add_newaxis_arr(self, arr: torch.Tensor) -> torch.Tensor:
         return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nx, ny)
 
     def to_torch_dataloader(self, **kwargs):
@@ -34,10 +34,10 @@ class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
     pass
 
 
-class MomentNetworkMixin(base_dataset.MomentNetworkMixin):
+class InputTargetMixin(base_dataset.InputTargetMixin):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, mode='CN', **kwargs)
+        super().__init__(*args, mode='TI', **kwargs)
 
     def _prepare_output(self, out_dict):
         out = super()._prepare_output(out_dict)
@@ -47,13 +47,16 @@ class MomentNetworkMixin(base_dataset.MomentNetworkMixin):
         return out
 
 
-class TensorList(list):
+class TensorList(list[torch.Tensor]):
     def to(self, device):
-        return [t.to(device) for t in self]
+        return TensorList(t.to(device) for t in self)
 
 
-class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
+class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
+    """Batch loader for iterative mass mapping methods."""
+
+class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""

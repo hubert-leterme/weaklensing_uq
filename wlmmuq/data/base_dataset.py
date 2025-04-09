@@ -365,7 +365,7 @@ class GammaKappaMixin:
 
     def __init__(
             self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
-            step_size=None, niter=1, **kwargs
+            step_size=None, niter=1, return_complex=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -421,6 +421,9 @@ class GammaKappaMixin:
         niter: int, optional
             If `input_method` is set to 'wiener' or 'wiener_pgd', number of iterations.
             Default is 1.
+        return_complex (bool, default=False)
+            If True, then complex-valued arrays will be returned. If False, then
+            real and imaginary parts will be returned separately.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
@@ -438,6 +441,7 @@ class GammaKappaMixin:
         self.powerspectrum_1d = powerspectrum_1d
         self.step_size = step_size
         self.niter = niter
+        self.return_complex = return_complex
 
         self.sheardata = None # For Wiener filtering
 
@@ -464,17 +468,25 @@ class GammaKappaMixin:
 
         # Generate noisy shear maps
         kappa_true = out_dict["kappa_true"] - self.offset
-        gamma1, gamma2 = utils.get_shear_from_convergence(kappa_true)
+        gamma1, gamma2 = utils.get_shear_from_convergence(
+            kappa_true, return_complex=False
+        )
         gamma1_noisy, gamma2_noisy, _ = utils.get_masked_and_noisy_shear(
             gamma1, gamma2, std_noise=self.std_noise,
             mask=self.mask, inpainting=self.inpainting
         )
-        out_dict.update({
-            "gamma1": gamma1,
-            "gamma2": gamma2,
-            "gamma1_noisy": gamma1_noisy,
-            "gamma2_noisy": gamma2_noisy
-        })
+        if not self.return_complex:
+            out_dict.update({
+                "gamma1": gamma1,
+                "gamma2": gamma2,
+                "gamma1_noisy": gamma1_noisy,
+                "gamma2_noisy": gamma2_noisy
+            })
+        else:
+            out_dict.update({
+                "gamma": gamma1 + 1j * gamma2,
+                "gamma_noisy": gamma1_noisy + 1j * gamma2_noisy
+            })
 
         # Compute KS solution if required
         if self.input_method is not None and not self.input_exists:
@@ -643,11 +655,11 @@ class BaseHDF5DatasetDenoiser(DenoiserMixin, HDF5Dataset):
     pass
 
 
-class MomentNetworkMixin:
+class InputTargetMixin:
 
-    def __init__(self, *args, order=1, mode='NC', **kwargs):
+    def __init__(self, *args, input_type='kappa_inp', order=1, mode='IT', **kwargs):
         """
-        Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
+        Dataset adapted for batch loading of type (input, target) or (target, input).
 
         Parameters
         ----------
@@ -656,13 +668,16 @@ class MomentNetworkMixin:
         nimgs : int
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
+        input_type : str, optional
+            Type of input data: 'kappa_inp' (noisy convergence map or naive estimation)
+            or 'gamma_noisy' (shear map).
         order : int, optional
             Order of the moment network: 1 for standard posterior mean estimate,
             2 for posterior variance. Default is 1.
         mode : str, optional
-            Whether to yield tuples of noisy / clean images ('NC', used by Keras / TensorFlow),
-            or tuples of clean / noisy images ('CN', used by DeepInverse / PyTorch).
-            Default is 'NC'.
+            Whether to yield tuples of input (noisy) / target (clean) images
+            ('IT', used by Keras / TensorFlow), or tuples of target / input images
+            ('TI', used by DeepInverse / PyTorch). Default is 'IT'.
         std_noise : numpy.ndarray, optional
             Array of noise standard deviation. If none is given, a white noise
             will be applied (identity). Default is None.
@@ -705,10 +720,6 @@ class MomentNetworkMixin:
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
             or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
-        list_of_outputs: list of str, optional
-            List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
-            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
-            If None, returns a dictionary of outputs. Default is None.
         close_after_batch: bool, optional
             Default is False.
         verbose : bool, optional
@@ -718,16 +729,16 @@ class MomentNetworkMixin:
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
         if order == 1:
-            target = "kappa_true"
+            target_type = "kappa_true"
         elif order == 2:
-            target = "sqdiff_true_pred"
+            target_type = "sqdiff_true_pred"
         else:
             raise ValueError("Wrong value for argument `order`: must be equal to 1 or 2.")
 
-        if mode == 'NC':
-            list_of_outputs = ["kappa_inp", target]
-        elif mode == 'CN':
-            list_of_outputs = [target, "kappa_inp"]
+        if mode == 'IT':
+            list_of_outputs = [input_type, target_type]
+        elif mode == 'TI':
+            list_of_outputs = [target_type, input_type]
         else:
             raise ValueError
 
@@ -745,11 +756,17 @@ class MomentNetworkMixin:
 
         return out_dict
 
+class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
+    """Batch loader for iterative mass mapping methods."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, input_type='gamma_noisy', return_complex=True, **kwargs
+        )
 
-class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
+class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""
 
 

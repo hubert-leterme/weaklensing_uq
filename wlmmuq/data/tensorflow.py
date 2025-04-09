@@ -84,12 +84,15 @@ class BaseHDF5DatasetDenoiser(base_dataset.DenoiserMixin, HDF5Dataset):
         return out
 
 
-class MomentNetworkMixin(base_dataset.MomentNetworkMixin):
+class InputTargetMixin(base_dataset.InputTargetMixin):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, mode='NC', **kwargs)
+        super().__init__(*args, mode='IT', **kwargs)
 
-class HDF5DatasetDeepMass(MomentNetworkMixin, HDF5Dataset):
+class HDF5DatasetMassMapping(InputTargetMixin, HDF5DatasetGammaKappa):
+    """Batch loader for iterative mass mapping methods."""
+
+class HDF5DatasetDeepMass(InputTargetMixin, HDF5Dataset):
     """Batch loader for training DeepMass."""
 
-class HDF5DatasetDenoiser(MomentNetworkMixin, BaseHDF5DatasetDenoiser):
+class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):
     """Batch loader for training a Gaussian denoiser."""
