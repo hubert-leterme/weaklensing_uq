@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
+import torch
 
 #from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
@@ -70,8 +71,21 @@ def ngal_per_pixel(ra, dec, width, extent):
 
 
 def _get_shear_fromto_convergence(
-        func, inp1, inp2=None, complexconjugate=False, return_complex=False
+        func: callable, inp1: np.ndarray | torch.Tensor,
+        inp2: np.ndarray | torch.Tensor=None,
+        complexconjugate=False, return_complex=False
 ):
+    # TODO: implement the function entirely in torch
+    if isinstance(inp1, torch.Tensor):
+        torch_tensors = True
+        device = inp1.device
+        inp1 = inp1.cpu().numpy()
+        if inp2 is not None:
+            inp2 = inp2.cpu().numpy()
+    else:
+        torch_tensors = False
+        device = None
+
     if inp2 is None:
         inp2 = inp1.imag
         inp1 = inp1.real
@@ -79,6 +93,10 @@ def _get_shear_fromto_convergence(
     if complexconjugate:
         # Use convention from jax_lensing (due to the inversion of the x-axis?)
         out2 = -out2
+
+    if torch_tensors:
+        out1 = torch.from_numpy(out1).to(device)
+        out2 = torch.from_numpy(out2).to(device)
 
     if return_complex:
         out = out1 + 1j * out2
@@ -89,7 +107,10 @@ def _get_shear_fromto_convergence(
 
 
 def get_shear_from_convergence(
-        kappa1, kappa2=None, mask=None, complexconjugate=False, return_complex=False
+        kappa1: np.ndarray | torch.Tensor,
+        kappa2: np.ndarray | torch.Tensor=None,
+        mask: np.ndarray | torch.Tensor=None,
+        complexconjugate=False, return_complex=False
 ):
     """
     Parameters
@@ -112,12 +133,20 @@ def get_shear_from_convergence(
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     if mask is not None:
-        gamma[..., ~mask] = 0
+        if return_complex:
+            gamma[..., ~mask] = 0
+        else:
+            gamma1, gamma2 = gamma
+            gamma1[..., ~mask] = 0
+            gamma2[..., ~mask] = 0
     return gamma
 
 
 def get_convergence_from_shear(
-        gamma1, gamma2=None, mask=None, complexconjugate=False, return_complex=False
+        gamma1: np.ndarray | torch.Tensor,
+        gamma2: np.ndarray | torch.Tensor=None,
+        mask: np.ndarray | torch.Tensor=None,
+        complexconjugate=False, return_complex=False
 ):
     """
     Parameters
@@ -232,7 +261,7 @@ def get_std_ks(
 
     dirac_imag = np.zeros((width1, width2))
 
-    ksmatr_real, ksmatr_imag = ks93(dirac_real, dirac_imag)
+    ksmatr_real, ksmatr_imag = ks93.ks93(dirac_real, dirac_imag)
     if std_gaussianfilter is not None:
         ksmatr_real = ndimage.gaussian_filter(
             ksmatr_real, std_gaussianfilter, mode="wrap"
@@ -322,6 +351,14 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
 
 
 def _get_stats(func, *args, mask=None):
+
+    # Convert torch tensors to numpy arrays
+    args = list(args)
+    for i, arr in enumerate(args):
+        if arr is not None and torch.is_tensor(arr):
+            args[i] = arr.cpu().numpy()
+    if mask is not None and torch.is_tensor(mask):
+        mask = mask.cpu().numpy()
 
     # TODO: replace by a decorator
     width1, width2 = test_array_shape(args)[-2:]
