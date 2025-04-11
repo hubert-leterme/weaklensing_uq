@@ -16,20 +16,24 @@ DOWNSAMPLE_MODE = 'avgpool'
 class DRUNetMixin:
 
     def __init__(
-            self, map_size=None, offset=OFFSET, in_channels=1, out_channels=1,
-            small_model=False, act_mode=ACT_MODE,
-            downsample_mode=DOWNSAMPLE_MODE, **kwargs
+            self, map_size=None, meancentering: bool=False,
+            offset: float=OFFSET, in_channels=1, out_channels=1,
+            small_model=False, act_mode: str=ACT_MODE,
+            downsample_mode: str=DOWNSAMPLE_MODE, **kwargs
     ):
         """
         Initialisation
         :param map_size: size of square image (there are map_size**2 pixels).
             Unused.
-        :param offset: mean value of the convergence maps (for mean centering).
+        :param bool meancentering: whether to apply mean centering at the output of
+            the network. Default = False.
+        :param float offset: mean value of the convergence maps (used for mean centering).
+            Default = 0.
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
-        :param small_model: whether to use a small model. Default = False
-        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
-        :param downsample_mode: downsample mode. Default = 'avgpool'
+        :param bool small_model: whether to use a small model. Default = False
+        :param str act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
+        :param str downsample_mode: downsample mode. Default = 'avgpool'
         """
         if small_model:
             kwargs.update(nc=NC)
@@ -38,6 +42,18 @@ class DRUNetMixin:
             act_mode=act_mode, downsample_mode=downsample_mode,
             **kwargs
         )
+        self.offset = offset
+        self.meancentering = meancentering
+
+
+    def forward(self, inp, *args, **kwargs):
+        out = super().forward(inp, *args, **kwargs)
+        if self.meancentering:
+            mean = torch.mean(
+                out - self.offset, dim=tuple(range(1, out.ndim))
+            ).unsqueeze(-1).unsqueeze(-1)
+            out = out - mean
+        return out
 
 
 class CSZNMixin(DRUNetMixin):
