@@ -63,6 +63,9 @@ class TensorflowMixin:
         return out
 
 
+class BaseHDF5DatasetGammaKappa(TensorflowMixin, base_dataset.BaseHDF5DatasetGammaKappa):
+    pass
+
 class HDF5Dataset(TensorflowMixin, base_dataset.HDF5Dataset):
     pass
 
