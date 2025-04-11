@@ -181,9 +181,33 @@ class OffsetMeancenteringWrapper(nn.Module):
         return out
 
 
+class MetricDict(dict):
+
+    def __init__(
+            self, batch_size, *args,
+            dtype=torch.float32, device="cpu", **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.batch_size = batch_size
+        self.dtype = dtype
+        self.device = device
+
+    def init_metric(self, metric_name: str):
+        self[metric_name] = torch.empty(
+            (self.batch_size, 0),
+            dtype=self.dtype, device=self.device
+        )
+
+    def cat(self, metric_name: str, metric: torch.Tensor):
+        metric = metric.unsqueeze(1) # Shape = (batch_size, 1)
+        self[metric_name] = torch.cat(
+            [self[metric_name], metric], dim=1
+        ) # Shape = (batch_size, niter + 1)
+
+
 class BaseOptim(dinv.optim.BaseOptim):
 
-    def __init__(self, *args, custom_metrics: dict=None, **kwargs):
+    def __init__(self, *args, custom_metrics: MetricDict=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.psnr_metric = dinv.metric.PSNR()
         if custom_metrics is not None:
@@ -194,58 +218,41 @@ class BaseOptim(dinv.optim.BaseOptim):
 
 
     def _update_metrics(
-            self, metrics: dict, x: torch.Tensor, x_gt: torch.Tensor=None
+            self, metrics: MetricDict, x: torch.Tensor, x_gt: torch.Tensor=None
     ):
         if x_gt is not None:
             psnr = self.psnr_metric.metric(x, x_gt) # Shape = (batch_size,)
-            psnr = psnr.unsqueeze(1) # Shape = (batch_size, 1)
-            metrics["psnr"] = torch.cat(
-                [metrics["psnr"], psnr], dim=1
-            ) # Shape = (batch_size, niter + 1)
+            metrics.cat("psnr", psnr)
         if self.custom_metrics is not None:
             for custom_metric_name, custom_metric_fn in self.custom_metrics.items():
                 custom_metric = custom_metric_fn(
                     x, x_gt, metrics[custom_metric_name], None
                 ) # Shape = (batch_size,)
-                custom_metric = custom_metric.unsqueeze(1) # Shape = (batch_size, 1)
-                metrics[custom_metric_name] = torch.cat(
-                    [metrics[custom_metric_name], custom_metric], dim=1
-                ) # Shape = (batch_size, niter + 1)
+                metrics.cat(custom_metric_name, custom_metric)
 
         return metrics
 
 
     def init_metrics_fn(self, X_init, x_gt=None):
 
-        init = {}
         x_init = self.get_output(X_init)
         self.batch_size = x_init.shape[0]
-
+        init = MetricDict(
+            batch_size=self.batch_size, dtype=x_init.dtype, device=x_init.device
+        )
         if x_gt is not None:
-            init["psnr"] = torch.empty(
-                (self.batch_size, 0),
-                dtype=x_init.dtype, device=x_init.device
-            )
+            init.init_metric("psnr")
         if self.custom_metrics is not None:
             for custom_metric_name in self.custom_metrics.keys():
-                init[custom_metric_name] = torch.empty(
-                    (self.batch_size, 0),
-                    dtype=x_init.dtype, device=x_init.device
-                )
+                init.init_metric(custom_metric_name)
         if self.has_cost:
-            init["cost"] = torch.empty(
-                (self.batch_size, 0),
-                dtype=x_init.dtype, device=x_init.device
-            )
-        init["residual"] = torch.empty(
-            (self.batch_size, 0),
-            dtype=x_init.dtype, device=x_init.device
-        )
+            init.init_metric("cost")
+        init.init_metric("residual")
 
         return self._update_metrics(init, x_init, x_gt)
 
 
-    def update_metrics_fn(self, metrics, X_prev, X, x_gt=None):
+    def update_metrics_fn(self, metrics: MetricDict, X_prev, X, x_gt=None):
 
         if metrics is not None:
             x_prev = self.get_output(X_prev)
@@ -256,16 +263,10 @@ class BaseOptim(dinv.optim.BaseOptim):
             x_flattened = x.reshape(self.batch_size, -1)
             residual = torch.linalg.norm(diff_flattened, dim=1) / \
                 torch.linalg.norm(x_flattened, dim=1)  # Shape = (batch_size,)
-            residual = residual.unsqueeze(1) # Shape = (batch_size, 1)
-            metrics["residual"] = torch.cat(
-                [metrics["residual"], residual], dim=1
-            ) # Shape = (batch_size, niter + 1)
+            metrics.cat("residual", residual)
 
             if self.has_cost:
-                cost = X["cost"].unsqueeze(1) # Shape = (batch_size, 1)
-                metrics["cost"] = torch.cat(
-                    [metrics["cost"], cost], dim=1
-                ) # Shape = (batch_size, niter + 1)
+                metrics.cat("cost", X["cost"])
 
             metrics = self._update_metrics(metrics, x, x_gt)
 
