@@ -76,6 +76,7 @@ def _get_shear_fromto_convergence(
         complexconjugate=False, return_complex=False
 ):
     if inp2 is None:
+        inp1 = convert_to_complex(inp1)
         inp2 = inp1.imag
         inp1 = inp1.real
     out1, out2 = func(inp1, inp2)
@@ -160,6 +161,32 @@ def get_convergence_from_shear(
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     return kappa
+
+
+def convert_to_complex(arr: np.ndarray | torch.Tensor):
+
+    if isinstance(arr, np.ndarray):
+        if not np.iscomplexobj(arr):
+            if arr.dtype == np.float32:
+                arr = arr.astype(np.complex64)
+            elif arr.dtype == np.float64:
+                arr = arr.astype(np.complex128)
+            else:
+                raise TypeError(f"Unsupported NumPy dtype: {arr.dtype}")
+
+    elif isinstance(arr, torch.Tensor):
+        if not arr.is_complex():
+            if arr.dtype == torch.float32:
+                arr = arr.to(torch.complex64)
+            elif arr.dtype == torch.float64:
+                arr = arr.to(torch.complex128)
+            else:
+                raise TypeError(f"Unsupported PyTorch dtype: {arr.dtype}")
+
+    else:
+        raise TypeError(f"Unsupported input type: {type(arr)}")
+
+    return arr
 
 
 def get_std_noise(ngal, shapedisp, std_noise_mask):

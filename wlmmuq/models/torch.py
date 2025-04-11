@@ -1,4 +1,5 @@
 import warnings
+import torch
 import deepinv as dinv
 
 from .cszn_models import network_unet
@@ -108,6 +109,7 @@ class ResUNetScoreMatching(ScoreMatchingMixin, ResUNet):
 
 
 class Trainer(dinv.Trainer):
+
     def __init__(self, *args, scale_as_input=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
@@ -120,6 +122,11 @@ class Trainer(dinv.Trainer):
             y, scale = y
             physics = scale
         return x, y, physics
+
+    def plot(self, epoch, physics, x, y, x_net, train=True):
+        if torch.is_complex(y):
+            y = y.real
+        super().plot(epoch, physics, x, y, x_net, train=train)
 
 
 def load_model(path_to_pretrained_model, **kwargs):
