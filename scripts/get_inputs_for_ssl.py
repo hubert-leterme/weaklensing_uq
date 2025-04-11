@@ -3,6 +3,7 @@ import warnings
 import random
 import h5py
 import numpy as np
+import torch
 
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
@@ -24,6 +25,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     # Compute a map of number of galaxies per pixels and a binary mask
     if verbose:

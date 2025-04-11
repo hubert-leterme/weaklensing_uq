@@ -58,6 +58,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     keys_model = [
         'mean_centering', 'sigmoid_activation', 'small_model', 'pretrained'

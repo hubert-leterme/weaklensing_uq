@@ -4,6 +4,7 @@ import random
 import h5py
 import numpy as np
 from tensorflow import keras, data
+import torch
 
 import wlmmuq.data.tensorflow as wlbl
 from wlmmuq import OFFSET
@@ -22,6 +23,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     if verbose:
         print("Initialize batch generator")

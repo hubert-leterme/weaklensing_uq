@@ -1,6 +1,7 @@
 import argparse
 import random
 import numpy as np
+import torch
 
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
@@ -16,6 +17,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     # Get redshift weights from the COSMOS catalog
     if verbose:

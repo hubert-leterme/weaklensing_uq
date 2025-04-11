@@ -2,6 +2,7 @@ import os
 import argparse
 import random
 import numpy as np
+import torch
 
 import wlmmuq.data.tensorflow as wlbl
 from wlmmuq import OFFSET
@@ -22,6 +23,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     # Initialize batch generators
     if denoiser:

@@ -5,6 +5,7 @@ import argparse
 import time
 import random
 import numpy as np
+import torch
 import astropy.table as aptable
 
 import wlmmuq as wl
@@ -33,6 +34,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     beg = time.time()
     assert method in METHOD_LIST

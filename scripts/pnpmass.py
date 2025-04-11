@@ -3,6 +3,7 @@ import os
 import random
 import numpy as np
 from tensorflow import keras
+import torch
 
 import wlmmuq.data.tensorflow as wlbl
 import wlmmuq.cosmos as wlcosmos
@@ -37,6 +38,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     # Load COSMOS galaxy shape catalog
     if verbose:

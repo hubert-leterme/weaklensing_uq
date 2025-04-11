@@ -1,6 +1,8 @@
 import argparse
 import random
 import numpy as np
+import torch
+
 import wlmmuq.utils as wlutils
 import wlmmuq.data.tensorflow as wlbl
 
@@ -16,6 +18,7 @@ def main(
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
 
     data_loader = wlbl.HDF5Dataset(
         path_to_dataset, nimgs=nimgs, batch_size=batch_size,
