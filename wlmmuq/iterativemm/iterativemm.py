@@ -495,15 +495,9 @@ class BaseKerasDenoiser(BaseDeepDenoiser):
 class BaseTorchDenoiser(BaseDeepDenoiser):
 
     def __init__(self, list_of_models, *args, device=None, **kwargs):
-        if device is not None:
-            self.device = device
-        else:
-            self.device = torch.device('cpu')
-        list_of_models = [
-            model.to(self.device) for model in list_of_models
-        ]
         super().__init__(list_of_models, *args, **kwargs)
 
+        self.device = device
         self.convert_back_to_ndarray = True
         self.back_to_cpu = True
 
@@ -512,11 +506,13 @@ class BaseTorchDenoiser(BaseDeepDenoiser):
 
         if torch.is_tensor(arr):
             self.convert_back_to_ndarray = False
-            if arr.device == self.device:
+            if arr.is_cuda:
                 self.back_to_cpu = False
         else:
             arr = torch.tensor(arr, dtype=torch.float32)
-        arr = arr.to(self.device)
+
+        if self.device is not None:
+            arr = arr.to(self.device)
 
         return arr
 

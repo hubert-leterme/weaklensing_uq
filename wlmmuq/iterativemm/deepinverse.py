@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import deepinv as dinv
 
 class MahalanobisDistance(dinv.optim.Distance):
@@ -16,7 +17,11 @@ class MahalanobisDistance(dinv.optim.Distance):
 
     def __init__(self, sigma: float | torch.Tensor=1.):
         super().__init__()
-        self.var = sigma**2 # Float or torch.Tensor, shape = (nx, ny)
+        # The tensor is properly sent to GPU when applying `self.to(device)`
+        if torch.is_tensor(sigma):
+            self.var = torch.nn.Parameter(sigma**2, requires_grad=False)
+        else:
+            self.var = sigma**2
 
 
     def fn(self, x: torch.Tensor, y: torch.Tensor, *args, **kwargs):

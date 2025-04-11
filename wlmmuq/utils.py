@@ -75,17 +75,6 @@ def _get_shear_fromto_convergence(
         inp2: np.ndarray | torch.Tensor=None,
         complexconjugate=False, return_complex=False
 ):
-    # TODO: implement the function entirely in torch
-    if isinstance(inp1, torch.Tensor):
-        torch_tensors = True
-        device = inp1.device
-        inp1 = inp1.cpu().numpy()
-        if inp2 is not None:
-            inp2 = inp2.cpu().numpy()
-    else:
-        torch_tensors = False
-        device = None
-
     if inp2 is None:
         inp2 = inp1.imag
         inp1 = inp1.real
@@ -93,10 +82,6 @@ def _get_shear_fromto_convergence(
     if complexconjugate:
         # Use convention from jax_lensing (due to the inversion of the x-axis?)
         out2 = -out2
-
-    if torch_tensors:
-        out1 = torch.from_numpy(out1).to(device)
-        out2 = torch.from_numpy(out2).to(device)
 
     if return_complex:
         out = out1 + 1j * out2
@@ -187,10 +172,15 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 
 
 def get_masked_and_noisy_shear(
-        gamma1, gamma2, std_noise=None, mask=None,
-        ngal=None, shapedisp=None,
-        std_noise_mask=None, multfact_std_noise=30.,
-        inpainting=False
+        gamma1: np.ndarray | torch.Tensor,
+        gamma2: np.ndarray | torch.Tensor,
+        std_noise: np.ndarray | torch.Tensor=None,
+        mask: np.ndarray | torch.Tensor=None,
+        ngal: np.ndarray | torch.Tensor=None,
+        shapedisp: float=None,
+        std_noise_mask: float=None,
+        multfact_std_noise: float=30.,
+        inpainting: bool=False
 ):
     """
     Parameters
@@ -224,7 +214,13 @@ def get_masked_and_noisy_shear(
         Noise standard deviation, unaffected by argument `inpainting`.
     
     """
-    nimgs, width1, width2 = test_array_shape([gamma1, gamma2, std_noise, mask, ngal])
+    shape = test_array_shape([gamma1, gamma2, std_noise, mask, ngal])
+    if torch.is_tensor(gamma1):
+        numel = gamma1.numel()
+        randn = torch.randn
+    else:
+        numel = gamma1.size
+        randn = np.random.randn
 
     # Set masked values to 0
     if mask is None:
@@ -239,11 +235,11 @@ def get_masked_and_noisy_shear(
         if std_noise_mask is None:
             sqnorm_gamma = (
                 np.linalg.norm(gamma1)**2 + np.linalg.norm(gamma2)**2
-            ) / (nimgs * width1 * width2) # normalized squared norm
-            std_noise_mask = multfact_std_noise * np.sqrt(sqnorm_gamma / 2)
+            ) / numel # normalized squared norm
+            std_noise_mask = multfact_std_noise * (sqnorm_gamma / 2)**0.5
         std_noise = get_std_noise(ngal, shapedisp, std_noise_mask)
-    noise1 = std_noise * np.random.randn(nimgs, width1, width2)
-    noise2 = std_noise * np.random.randn(nimgs, width1, width2)
+    noise1 = std_noise * randn(*shape)
+    noise2 = std_noise * randn(*shape)
 
     if not inpainting:
         noise1[:, ~mask] = 0.
@@ -356,14 +352,6 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
 
 def _get_stats(func, *args, mask=None):
 
-    # Convert torch tensors to numpy arrays
-    args = list(args)
-    for i, arr in enumerate(args):
-        if arr is not None and torch.is_tensor(arr):
-            args[i] = arr.cpu().numpy()
-    if mask is not None and torch.is_tensor(mask):
-        mask = mask.cpu().numpy()
-
     # TODO: replace by a decorator
     width1, width2 = test_array_shape(args)[-2:]
     if mask is not None:
@@ -371,11 +359,11 @@ def _get_stats(func, *args, mask=None):
     vals = func(*args) # shape = (nimgs, [npatches], nx, ny)
     if mask is not None:
         vals *= mask # shape = (nimgs, [npatches], nx, ny)
-        npixels = np.sum(mask, axis=(-2, -1)) # float or shape = (npatches,)
+        npixels = mask.sum(axis=(-2, -1)) # int or shape = (npatches,)
     else:
         npixels = width1 * width2
 
-    return np.sum(vals, axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
+    return vals.sum(axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
 
 
 def miscoverage_rate(kappa_lo, kappa_hi, kappa, mask=None):
@@ -416,7 +404,7 @@ def normalized_mse(kappa_pred, kappa, mask=None):
 
 
 def rmse(kappa_pred, kappa, mask=None):
-    return np.sqrt(normalized_mse(kappa_pred, kappa, mask=mask))
+    return normalized_mse(kappa_pred, kappa, mask=mask) ** 0.5
 
 
 def mean_val(kappa_pred, mask=None):

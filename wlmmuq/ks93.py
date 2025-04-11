@@ -2,8 +2,10 @@
 
 # Modified version of module `inversion.py` from the lenspack package.
 # The functions `ks93` and `ks93inv` can take as input arrays of shape (nimgs, nx, ny).
+# Either torch or numpy arrays can be used as input.
 
 import numpy as np
+import torch
 
 
 def ks93(g1, g2):
@@ -47,16 +49,26 @@ def ks93(g1, g2):
     1.0842021724855044e-18
 
     """
+    if torch.is_tensor(g1):
+        lib = torch
+        device = g1.device
+    else:
+        lib = np
+        device = None
+
     # Check consistency of input maps
     assert g1.shape == g2.shape
 
     # Compute Fourier space grids
     (nx, ny) = g1.shape[-2:]
-    k1, k2 = np.meshgrid(np.fft.fftfreq(ny), np.fft.fftfreq(nx))
+    k1, k2 = lib.meshgrid(lib.fft.fftfreq(ny), lib.fft.fftfreq(nx))
+    if lib == torch:
+        k1 = k1.to(device)
+        k2 = k2.to(device)
 
     # Compute Fourier transforms of g1 and g2
-    g1hat = np.fft.fft2(g1)
-    g2hat = np.fft.fft2(g2)
+    g1hat = lib.fft.fft2(g1)
+    g2hat = lib.fft.fft2(g2)
 
     # Apply Fourier space inversion operator
     p1 = k1 * k1 - k2 * k2
@@ -67,8 +79,8 @@ def ks93(g1, g2):
     kBhat = -(p2 * g1hat - p1 * g2hat) / k2
 
     # Transform back to pixel space
-    kE = np.fft.ifft2(kEhat).real
-    kB = np.fft.ifft2(kBhat).real
+    kE = lib.fft.ifft2(kEhat).real
+    kB = lib.fft.ifft2(kBhat).real
 
     return kE, kB
 
@@ -102,16 +114,26 @@ def ks93inv(kE, kB):
         For the forward operation (shear to convergence).
 
     """
+    if torch.is_tensor(kE):
+        lib = torch
+        device = kE.device
+    else:
+        lib = np
+        device = None
+
     # Check consistency of input maps
     assert kE.shape == kB.shape
 
     # Compute Fourier space grids
     (nx, ny) = kE.shape[-2:]
-    k1, k2 = np.meshgrid(np.fft.fftfreq(ny), np.fft.fftfreq(nx))
+    k1, k2 = lib.meshgrid(lib.fft.fftfreq(ny), lib.fft.fftfreq(nx))
+    if lib == torch:
+        k1 = k1.to(device)
+        k2 = k2.to(device)
 
     # Compute Fourier transforms of kE and kB
-    kEhat = np.fft.fft2(kE)
-    kBhat = np.fft.fft2(kB)
+    kEhat = lib.fft.fft2(kE)
+    kBhat = lib.fft.fft2(kB)
 
     # Apply Fourier space inversion operator
     p1 = k1 * k1 - k2 * k2
@@ -122,7 +144,7 @@ def ks93inv(kE, kB):
     g2hat = (p2 * kEhat + p1 * kBhat) / k2
 
     # Transform back to pixel space
-    g1 = np.fft.ifft2(g1hat).real
-    g2 = np.fft.ifft2(g2hat).real
+    g1 = lib.fft.ifft2(g1hat).real
+    g2 = lib.fft.ifft2(g2hat).real
 
     return g1, g2
