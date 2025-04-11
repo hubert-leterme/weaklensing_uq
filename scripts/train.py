@@ -33,8 +33,6 @@ LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
 
-tf.config.experimental.set_visible_devices([], 'GPU')
-
 MODEL_CLASSES = {
     "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
     "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
