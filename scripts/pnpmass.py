@@ -13,6 +13,8 @@ import wlmmuq.iterativemm.iterativemm as wlpnp
 
 from wlmmuq import OFFSET
 
+# TODO: Update (DeepInverse)
+
 DATA_FIDELITY = 'noisewhitening'
 STEP_SIZE = 1.4e-1
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset (discarded)
