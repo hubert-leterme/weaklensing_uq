@@ -27,7 +27,7 @@ def main(
         method, picklename, idx_lp=None, idx_redshift=None, openingangle=OPENINGANGLE,
         cosmos_include_faint=False,
         ninpimgs=NINPIMGS, ninpimgs_ps=NINPIMGS_PS, path_to_powerspectrum=None,
-        nimgs=None, niter=None, Nsigma=None, Inpaint=False, mean_centering=False,
+        nimgs=None, niter=None, Nsigma=None, Inpaint=False, meancentering=False,
         batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, seed=None, verbose=False, **kwargs
 ):
@@ -173,7 +173,7 @@ def main(
             rec = func(
                 sheardata, Inpaint=Inpaint, **kwargs
             )[0]
-            if method == 'mcalens' and mean_centering:
+            if method == 'mcalens' and meancentering:
                 # Mean centering
                 rec -= np.mean(rec, axis=(-2, -1), keepdims=True)
             recs_batch.append(rec)
@@ -299,7 +299,7 @@ if __name__ == "__main__":
         help="Whether to inpaint the missing data. Default = False"
     )
     parser.add_argument(
-        "--mean-centering", action='store_true',
+        "--meancentering", action='store_true',
         default=argparse.SUPPRESS,
         help="Whether to apply mean centering for MCALens outputs. Default = False"
     )

@@ -33,6 +33,8 @@ LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
 
+tf.config.experimental.set_visible_devices([], 'GPU')
+
 MODEL_CLASSES = {
     "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
     "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
@@ -61,7 +63,7 @@ def main(
         torch.manual_seed(seed)
 
     keys_model = [
-        'mean_centering', 'sigmoid_activation', 'small_model', 'pretrained'
+        'meancentering', 'sigmoid_activation', 'small_model', 'pretrained'
     ]
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
@@ -261,7 +263,7 @@ if __name__ == "__main__":
         help=(
             "Path to the pretrained model. If none is given, then the model is "
             "initialized and trained from scratch. If provided, then arguments "
-            "`--mean-centering` and `--no-bias` are ineffective; "
+            "`--meancentering` and `--no-bias` are ineffective; "
             "moreover, `--imgsize` must be compatible with the provided model. "
             "Default = None"
         )
@@ -391,10 +393,10 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--mean-centering", action='store_true',
+        "--meancentering", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Apply a mean-centering operator at the output of the network."
+            "Apply a meancentering operator at the output of the network."
         )
     )
     parser.add_argument(

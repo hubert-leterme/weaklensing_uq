@@ -131,7 +131,7 @@ class UNet(BaseModel):
     """
 
     def __init__(
-            self, *args, in_channels=1, out_channels=1, mean_centering=False,
+            self, *args, in_channels=1, out_channels=1, meancentering=False,
             use_bias=True, sigmoid_activation=False, **kwargs
     ):
         """
@@ -141,7 +141,7 @@ class UNet(BaseModel):
             Default = 0.
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
-        :param mean_centering: whether to apply mean centering at the output.
+        :param meancentering: whether to apply mean centering at the output.
             Default = False
         :param use_bias: whether to use bias in the convolutional and batch
             normalization layers. Default = True
@@ -150,7 +150,7 @@ class UNet(BaseModel):
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.mean_centering = mean_centering
+        self.meancentering = meancentering
         self.use_bias = use_bias
         if sigmoid_activation:
             self.activation = 'sigmoid'
@@ -164,7 +164,7 @@ class UNet(BaseModel):
         config.update({
             "in_channels": self.in_channels,
             "out_channels": self.out_channels,
-            "mean_centering": self.mean_centering,
+            "meancentering": self.meancentering,
             "use_bias": self.use_bias,
             "activation": self.activation
         })
@@ -248,7 +248,7 @@ class UNet(BaseModel):
 
         inp, out = self._postprocess(inp, out)
 
-        if self.mean_centering:
+        if self.meancentering:
             out = MeanCentering(self.offset)(out)
 
         out_dict = {'inputs': inp, 'outputs': out}
