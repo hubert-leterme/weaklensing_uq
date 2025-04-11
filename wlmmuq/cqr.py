@@ -171,10 +171,12 @@ class GenCQR(BaseCQR):
 
     """
     def __init__(
-            self, alpha, eps=1e-9, mask=None
+            self, alpha, eps=1e-9, mask: np.ndarray=None
     ):
         super().__init__(alpha)
         self.eps = eps
+        if mask is not None:
+            utils.check_mask(mask)
         self.mask = mask
 
     def _rho(self, res):

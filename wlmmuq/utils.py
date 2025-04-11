@@ -133,6 +133,7 @@ def get_shear_from_convergence(
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     if mask is not None:
+        check_mask(mask)
         if return_complex:
             gamma[..., ~mask] = 0
         else:
@@ -165,6 +166,7 @@ def get_convergence_from_shear(
     
     """
     if mask is not None:
+        check_mask(mask)
         gamma1[..., ~mask] = 0
         if gamma2 is not None:
             gamma2[..., ~mask] = 0
@@ -227,6 +229,8 @@ def get_masked_and_noisy_shear(
     # Set masked values to 0
     if mask is None:
         mask = ngal > 0
+    else:
+        check_mask(mask)
     gamma1_masked = mask * gamma1
     gamma2_masked = mask * gamma2
 
@@ -553,3 +557,12 @@ def get_1d_powerspectrum(kappa):
     powerspectrum_1d = (powerspectrum[0, :] + powerspectrum[:, 0]) / 2 # Assumed isotropic
 
     return powerspectrum_1d
+
+
+def check_mask(mask: np.ndarray | torch.Tensor):
+    if torch.is_tensor(mask):
+        assertion = mask.dtype == torch.bool
+    else:
+        assertion = mask.dtype == bool
+    if not assertion:
+        raise ValueError("mask must be a boolean array")
