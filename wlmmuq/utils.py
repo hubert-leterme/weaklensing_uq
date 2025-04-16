@@ -584,9 +584,10 @@ def check_mask(mask: np.ndarray | torch.Tensor):
 
 
 def forward_offset_meancentering(
-        inp: torch.Tensor, *args, forward: callable=None, offset: float=0.,
-        offset_out: bool=True, meancentering: bool=False, **kwargs
-) -> torch.Tensor:
+        inp: np.ndarray | torch.Tensor, *args, forward: callable=None,
+        offset: float=0., offset_out: bool=True, meancentering: bool=False,
+        **kwargs
+) -> np.ndarray | torch.Tensor:
 
     # TODO: replace by a decorator?
     inp = inp + offset
@@ -600,10 +601,23 @@ def forward_offset_meancentering(
     return out
 
 
-def meancenter(arr: torch.Tensor, offset=0.) -> torch.Tensor:
-    mean = torch.mean(
-        arr - offset, dim=tuple(range(1, arr.ndim))
+def meancenter(
+        arr: np.ndarray | torch.Tensor, offset=None
+) -> np.ndarray | torch.Tensor:
+
+    if torch.is_tensor(arr):
+        unsqueeze = lambda x: x.unsqueeze(-1)
+    else:
+        unsqueeze = lambda x: np.expand_dims(x, axis=-1)
+
+    if offset is not None:
+        arr_minus_offset = arr - offset
+    else:
+        arr_minus_offset = arr
+    mean = arr_minus_offset.mean(
+        axis=tuple(range(1, arr.ndim))
     )
     for _ in range(1, arr.ndim):
-        mean = mean.unsqueeze(-1)
+        mean = unsqueeze(mean)
+
     return arr - mean
