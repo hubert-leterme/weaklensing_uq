@@ -92,7 +92,7 @@ class PnP(dinv.optim.PnP):
 
     def prox(self, x, sigma_denoiser, *args, **kwargs):
 
-        out = _forward_offset_meancentering(
+        out = utils.forward_offset_meancentering(
             x, sigma_denoiser, *args, forward=super().prox,
             offset=self.offset, offset_out=self.offset_out,
             meancentering=self.meancentering, **kwargs
@@ -173,7 +173,7 @@ class OffsetMeancenteringWrapper(nn.Module):
 
     def forward(self, inp, *args, **kwargs):
 
-        out = _forward_offset_meancentering(
+        out = utils.forward_offset_meancentering(
             inp, *args, forward=self.model.forward,
             offset=self.offset, offset_out=self.offset_out,
             meancentering=self.meancentering, **kwargs
@@ -327,20 +327,3 @@ def optim_builder(
         max_iter=max_iter,
         **kwargs,
     ).eval()
-
-
-def _forward_offset_meancentering(
-        inp: torch.Tensor, *args, forward: callable=None, offset: float=0.,
-        offset_out: bool=True, meancentering: bool=False, **kwargs
-) -> torch.Tensor:
-
-    # TODO: replace by a decorator?
-    inp = inp + offset
-    if forward is not None:
-        out = forward(inp, *args, **kwargs)
-    if offset_out:
-        out = out - offset
-    if meancentering:
-        out = out - torch.mean(out, dim=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-
-    return out

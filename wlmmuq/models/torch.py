@@ -3,6 +3,7 @@ import torch
 import deepinv as dinv
 
 from .cszn_models import network_unet
+from .. import utils
 from .. import OFFSET
 
 LOSS_DICT = {
@@ -49,10 +50,7 @@ class DRUNetMixin:
     def forward(self, inp, *args, **kwargs):
         out = super().forward(inp, *args, **kwargs)
         if self.meancentering:
-            mean = torch.mean(
-                out - self.offset, dim=tuple(range(1, out.ndim))
-            ).unsqueeze(-1).unsqueeze(-1)
-            out = out - mean
+            out = utils.meancenter(out, offset=self.offset)
         return out
 
 

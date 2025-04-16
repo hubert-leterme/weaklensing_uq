@@ -581,3 +581,29 @@ def check_mask(mask: np.ndarray | torch.Tensor):
         assertion = mask.dtype == bool
     if not assertion:
         raise ValueError("mask must be a boolean array")
+
+
+def forward_offset_meancentering(
+        inp: torch.Tensor, *args, forward: callable=None, offset: float=0.,
+        offset_out: bool=True, meancentering: bool=False, **kwargs
+) -> torch.Tensor:
+
+    # TODO: replace by a decorator?
+    inp = inp + offset
+    if forward is not None:
+        out = forward(inp, *args, **kwargs)
+    if meancentering:
+        out = meancenter(out, offset=offset)
+    if offset_out:
+        out = out - offset
+
+    return out
+
+
+def meancenter(arr: torch.Tensor, offset=0.) -> torch.Tensor:
+    mean = torch.mean(
+        arr - offset, dim=tuple(range(1, arr.ndim))
+    )
+    for _ in range(1, arr.ndim):
+        mean = mean.unsqueeze(-1)
+    return arr - mean
