@@ -8,7 +8,7 @@ from .. import OFFSET
 
 LOSS_DICT = {
     'mse': dinv.loss.SupLoss(metric=dinv.metric.MSE()),
-    'mae': dinv.loss.SupLoss(metric=dinv.metric.MSE())
+    'mae': dinv.loss.SupLoss(metric=dinv.metric.MAE())
 }
 NC = [16, 32, 64, 64] # Number of channels
 ACT_MODE = 'BR' # Activation mode: BatchNorm + ReLU
