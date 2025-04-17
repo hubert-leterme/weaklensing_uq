@@ -372,8 +372,9 @@ def create_augmented_dataset(
         while end_angle < 360:
             beg_angle = end_angle
             end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
-            nangles = (end_angle - beg_angle) // angle_step
+            nangles = int((end_angle - beg_angle) / angle_step)
             angles = beg_angle + angle_step * np.arange(nangles)
+            nimgs_batch = nangles * niter_per_angle * (end_idx - beg_idx)
 
             list_of_kappa_rot = []
             list_of_idx_rows = []
@@ -392,7 +393,6 @@ def create_augmented_dataset(
             kappa_rot = np.concatenate(list_of_kappa_rot, axis=0)
             rows = np.concatenate(list_of_idx_rows, axis=0)
             cols = np.concatenate(list_of_idx_cols, axis=0)
-            nimgs_batch = nangles * niter_per_angle * (end_idx - beg_idx)
 
             # Update the HDF5 file
             with h5py.File(hdf5_filepath, 'r+') as f:
