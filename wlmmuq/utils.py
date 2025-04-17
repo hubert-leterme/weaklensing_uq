@@ -602,7 +602,8 @@ def forward_offset_meancentering(
 
 
 def meancenter(
-        arr: np.ndarray | torch.Tensor, offset=None
+        arr: np.ndarray | torch.Tensor, axis: int | tuple=(-2, -1),
+        offset: float=None
 ) -> np.ndarray | torch.Tensor:
 
     if torch.is_tensor(arr):
@@ -614,10 +615,10 @@ def meancenter(
         arr_minus_offset = arr - offset
     else:
         arr_minus_offset = arr
-    mean = arr_minus_offset.mean(
-        axis=tuple(range(1, arr.ndim))
-    )
-    for _ in range(1, arr.ndim):
+    mean = arr_minus_offset.mean(axis=axis)
+    if isinstance(axis, float):
+        axis = (axis,)
+    for _ in axis:
         mean = unsqueeze(mean)
 
     return arr - mean
