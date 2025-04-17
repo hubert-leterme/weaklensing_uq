@@ -392,8 +392,7 @@ def create_augmented_dataset(
             kappa_rot = np.concatenate(list_of_kappa_rot, axis=0)
             rows = np.concatenate(list_of_idx_rows, axis=0)
             cols = np.concatenate(list_of_idx_cols, axis=0)
-            angle_batch_size_adjusted = -(beg_angle - end_angle) // angle_step
-            nimgs_batch = angle_batch_size_adjusted * niter_per_angle * (end_idx - beg_idx)
+            nimgs_batch = nangles * niter_per_angle * (end_idx - beg_idx)
 
             # Update the HDF5 file
             with h5py.File(hdf5_filepath, 'r+') as f:
@@ -403,7 +402,7 @@ def create_augmented_dataset(
                 f['kappa'][-nimgs_batch:] = kappa_rot
 
                 f['filename_ori'].resize((new_size,))
-                f['filename_ori'][-nimgs_batch:] = angle_batch_size_adjusted * niter_per_angle * [
+                f['filename_ori'][-nimgs_batch:] = nangles * niter_per_angle * [
                     f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
                         np.arange(beg_idx, end_idx)
                     )
