@@ -190,15 +190,12 @@ class BaseHDF5Dataset:
         if self.close_after_batch:
             self._open_and_get_dataset()
         kappa_true = self.ds_kappa_true[idx]
-        kappa_true = utils.meancenter(kappa_true) + self.offset
         if self.input_exists:
             kappa_inp = self.ds_kappa_inp[idx]
-            kappa_inp = utils.meancenter(kappa_inp) + self.offset
         else:
             kappa_inp = None
         if self.pred_filepath is not None:
             kappa_pred = self.ds_kappa_pred[idx]
-            kappa_pred = utils.meancenter(kappa_pred) + self.offset
         else:
             kappa_pred = None
         if self.close_after_batch:
@@ -227,6 +224,7 @@ class BaseHDF5Dataset:
         if transform is not None:
             transforms.append(transform)
         transforms.append(self._convert_to_tensor) # Identity by default
+        transforms.append(self._meancenter_offset)
 
         transform = _pipe(*transforms)
 
@@ -255,6 +253,10 @@ class BaseHDF5Dataset:
 
     def _convert_to_tensor(self, arr):
         return arr # By default, no conversion
+
+
+    def _meancenter_offset(self, arr):
+        return utils.meancenter(arr) + self.offset
 
 
     def _postprocess(self, out_dict, _):
