@@ -536,6 +536,7 @@ def patchify(
 
 def get_beg_end_idx(inpsize, outsize):
 
+    assert inpsize >= outsize
     beg_idx = (inpsize - outsize) // 2
     end_idx = beg_idx + outsize
 

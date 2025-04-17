@@ -80,7 +80,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--angle-step", type=int,
+        "--angle-step", type=float,
         default=argparse.SUPPRESS,
         help=(
             "Interval between two rotation angles (deg). "

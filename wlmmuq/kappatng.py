@@ -372,11 +372,13 @@ def create_augmented_dataset(
         while end_angle < 360:
             beg_angle = end_angle
             end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
+            nangles = (end_angle - beg_angle) // angle_step
+            angles = beg_angle + angle_step * np.arange(nangles)
 
             list_of_kappa_rot = []
             list_of_idx_rows = []
             list_of_idx_cols = []
-            for angle in range(beg_angle, end_angle, angle_step):
+            for angle in angles:
                 if verbose:
                     print(f"\tAngle = {angle}...")
                 kappa_rot, rows, cols = dataaugm.rotate_and_crop(
