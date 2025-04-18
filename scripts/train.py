@@ -20,12 +20,10 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
 MOMENT_ORDER = 1
-FWHM = 2.4 # As in Starck et al. (2021) (Gaussian smoothing for KS)
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
 NREAL_PER_IMG = 1
-NIMGS_PS = 256 # To compute the power spectrum
 NEPOCHS = 20
 BATCH_SIZE = 32
 LOSS = 'mse'
@@ -218,7 +216,7 @@ def main(
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:
-            print(f"Send model to device: {device}")
+            print(f"Device: {device}")
         cnn_model.to(device)
         trainer = wlcnn.torch.Trainer(
             cnn_model,
@@ -329,9 +327,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
-            "If option `--denoiser` is activated, then the network will be trained "
-            "on the residuals between the ground truth convergence maps and the "
-            "reconstructed image using the provided method. Default = None"
+            "Only used if option `--denoiser` is not activated. Default = None"
         )
     )
     parser.add_argument(
