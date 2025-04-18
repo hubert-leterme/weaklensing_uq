@@ -2,7 +2,7 @@ import warnings
 import torch
 import deepinv as dinv
 
-from .cszn_models import network_unet
+from .sunet import sunet
 from .. import utils
 from .. import OFFSET
 
@@ -10,41 +10,51 @@ LOSS_DICT = {
     'mse': dinv.loss.SupLoss(metric=dinv.metric.MSE()),
     'mae': dinv.loss.SupLoss(metric=dinv.metric.MAE())
 }
-NC = [16, 32, 64, 64] # Number of channels
-ACT_MODE = 'BR' # Activation mode: BatchNorm + ReLU
-DOWNSAMPLE_MODE = 'avgpool'
 
-class DRUNetMixin:
+# Default parameters for DRUNet
+NC_DRUNET = [16, 32, 64, 64] # Number of channels
+ACT_MODE_DRUNET = 'BR' # Activation mode: BatchNorm + ReLU
+DOWNSAMPLE_MODE_DRUNET = 'avgpool'
+
+# Default parameters for SUNet, as specified in the `training.yaml`
+# file from the repository: https://github.com/utsav-akhaury/SUNet
+PATCH_SIZE_SUNET = 1 # https://github.com/JingyunLiang/SwinIR/issues/14#issuecomment-911831278
+WIN_SIZE_SUNET = 8
+EMB_DIM_SUNET = 48
+DEPTH_EN_SUNET = [2, 6, 8, 16] # https://github.com/megvii-research/NAFNet/issues/9
+HEAD_NUM_SUNET = [8, 8, 8, 8]
+MLP_RATIO_SUNET = 4.0
+QKV_BIAS_SUNET = True
+QK_SCALE_SUNET = 8
+DROP_RATE_SUNET = 0.
+ATTN_DROP_RATE_SUNET = 0.
+DROP_PATH_RATE_SUNET = 0.1
+APE_SUNET = False
+PATCH_NORM_SUNET = True
+USE_CHECKPOINTS_SUNET = False
+FINAL_UPSAMPLE_SUNET = 'bilinear' # Avoids checkerboard effects
+
+#=================================================================================
+# Models
+#=================================================================================
+
+class ModelMixin:
 
     def __init__(
-            self, map_size=None, meancentering: bool=False,
-            offset: float=OFFSET, in_channels=1, out_channels=1,
-            small_model=False, act_mode: str=ACT_MODE,
-            downsample_mode: str=DOWNSAMPLE_MODE, **kwargs
+            self, map_size=None, in_channels=1, out_channels=1,
+            meancentering: bool=False, offset: float=OFFSET, **kwargs
     ):
-        """
-        Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels).
-            Unused.
-        :param bool meancentering: whether to apply mean centering at the output of
-            the network. Default = False.
-        :param float offset: mean value of the convergence maps (used for mean centering).
-            Default = 0.
-        :param in_channels: number of input channels. Default = 1
-        :param out_channels: number of output channels. Default = 1
-        :param bool small_model: whether to use a small model. Default = False
-        :param str act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
-        :param str downsample_mode: downsample mode. Default = 'avgpool'
-        """
-        if small_model:
-            kwargs.update(nc=NC)
-        super().__init__(
-            in_channels=in_channels, out_channels=out_channels,
-            act_mode=act_mode, downsample_mode=downsample_mode,
+        kwargs = self._preprocess_kwargs(
+            map_size=map_size, in_channels=in_channels, out_channels=out_channels,
             **kwargs
         )
-        self.offset = offset
+        super().__init__(**kwargs)
         self.meancentering = meancentering
+        self.offset = offset
+
+
+    def _preprocess_kwargs(self, **kwargs):
+        raise NotImplementedError
 
 
     def forward(self, inp, *args, **kwargs):
@@ -54,56 +64,75 @@ class DRUNetMixin:
         return out
 
 
-class CSZNMixin(DRUNetMixin):
+class DRUNet(ModelMixin, dinv.models.DRUNet):
 
-    def __init__(
-            self, *args, in_channels=1, out_channels=1, use_bias=True, **kwargs
+    def _preprocess_kwargs(
+            self, map_size=None, small_model=False,
+            act_mode: str=ACT_MODE_DRUNET,
+            downsample_mode: str=DOWNSAMPLE_MODE_DRUNET,
+            pretrained=False, **kwargs
     ):
-        """
-        Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels).
-            Unused.
-        :param offset: mean value of the convergence maps (for mean centering).
-            Unused.
-        :param in_channels: number of input channels. Default = 1
-        :param out_channels: number of output channels. Default = 1
-        :param small_model: whether to use a small model. Default = False
-        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
-        :param downsample_mode: downsample mode. Default = 'avgpool'
-        :param use_bias: whether to use bias in the convolutional and batch
-            normalization layers (not used for DeepInverse). Default = True
-        """
-        super().__init__(
-            *args, in_nc=in_channels, out_nc=out_channels, bias=use_bias, **kwargs
-        )
-
-
-class UNetRes(CSZNMixin, network_unet.UNetRes):
-    pass
-
-class ResUNet(CSZNMixin, network_unet.ResUNet):
-    pass
-
-class DRUNet(DRUNetMixin, dinv.models.DRUNet):
-    def __init__(self, *args, pretrained=False, **kwargs):
-        """
-        Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels).
-            Unused.
-        :param offset: mean value of the convergence maps (for mean centering).
-            Unused.
-        :param in_channels: number of input channels. Default = 1
-        :param out_channels: number of output channels. Default = 1
-        :param small_model: whether to use a small model. Default = False
-        :param act_mode: activation mode. Default = 'BR' (BatchNorm + ReLU)
-        :param downsample_mode: downsample mode. Default = 'avgpool'
-        :param pretrained: whether to use a pretrained model. Default = False
-        """
+        # map_size is discarded
+        if small_model:
+            kwargs.update(nc=NC_DRUNET)
         if not pretrained:
             pretrained = None
         else:
             pretrained = 'download'
-        super().__init__(*args, pretrained=pretrained, **kwargs)
+        kwargs.update(
+            act_mode=act_mode, downsample_mode=downsample_mode,
+            pretrained=pretrained
+        )
+
+        return kwargs
+
+
+class SUNet(ModelMixin, sunet.SUNet):
+
+    def _preprocess_kwargs(
+            self, map_size=None, in_channels=1, out_channels=1,
+            patch_size=PATCH_SIZE_SUNET,
+            embed_dim=EMB_DIM_SUNET,
+            depths=None, num_heads=None,
+            window_size=WIN_SIZE_SUNET,
+            mlp_ratio=MLP_RATIO_SUNET,
+            qkv_bias=QKV_BIAS_SUNET,
+            qk_scale=QK_SCALE_SUNET,
+            drop_rate=DROP_RATE_SUNET,
+            drop_path_rate=DROP_PATH_RATE_SUNET,
+            ape=APE_SUNET,
+            patch_norm=PATCH_NORM_SUNET,
+            use_checkpoint=USE_CHECKPOINTS_SUNET,
+            final_upsample=FINAL_UPSAMPLE_SUNET, **kwargs
+    ):
+        if depths is None:
+            kwargs.update(depth=DEPTH_EN_SUNET)
+        if num_heads is None:
+            kwargs.update(num_heads=HEAD_NUM_SUNET)
+        kwargs.update(
+            img_size=map_size,
+            patch_size=patch_size,
+            in_chans=in_channels, out_chans=out_channels,
+            embed_dim=embed_dim, window_size=window_size,
+            mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
+            qk_scale=qk_scale, drop_rate=drop_rate,
+            drop_path_rate=drop_path_rate, ape=ape,
+            patch_norm=patch_norm, use_checkpoint=use_checkpoint,
+            final_upsample=final_upsample
+        )
+        return kwargs
+
+
+    def forward(self, inp, sigma=None, **kwargs):
+        r"""
+        Run the denoiser on noisy image. The noise level is not used in this denoiser.
+
+        :param torch.Tensor x: noisy image, of shape B, C, W, H.
+        :param float sigma: noise level (not used).
+        """
+        # The signature of this forward method follows the specifications of DeepInverse,
+        # to be able to use the `Trainer` class for training.
+        return super().forward(inp, **kwargs)
 
 
 class ScoreMatchingMixin:
@@ -114,12 +143,10 @@ class ScoreMatchingMixin:
         var = sigma**2 # Shape = (batch_size, 1, 1, 1)
         return inp + var * out
 
-class UNetResScoreMatching(ScoreMatchingMixin, UNetRes):
-    pass
 
-class ResUNetScoreMatching(ScoreMatchingMixin, ResUNet):
-    pass
-
+#=================================================================================
+# Class inheriting from dinv.Trainer, used for training
+#=================================================================================
 
 class Trainer(dinv.Trainer):
 
@@ -141,6 +168,10 @@ class Trainer(dinv.Trainer):
             y = y.real
         super().plot(epoch, physics, x, y, x_net, train=train)
 
+
+#=================================================================================
+# Functions
+#=================================================================================
 
 def load_model(path_to_pretrained_model, **kwargs):
     raise NotImplementedError

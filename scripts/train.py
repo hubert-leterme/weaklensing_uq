@@ -36,11 +36,8 @@ NDECAYS = 4 # Number of decays for the learning rate scheduler
 MODEL_CLASSES = {
     "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
     "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
-    "torch.UNetRes": (wlcnn.torch.UNetRes, False),
-    "torch.ResUNet": (wlcnn.torch.ResUNet, False),
     "torch.DRUNet": (wlcnn.torch.DRUNet, True),
-    "torch.UNetResScoreMatching": (wlcnn.torch.UNetResScoreMatching, True),
-    "torch.ResUNetScoreMatching": (wlcnn.torch.ResUNetScoreMatching, True)
+    "torch.SUNet": (wlcnn.torch.SUNet, False)
 } # (model_class, scale_as_input)
 
 def main(
