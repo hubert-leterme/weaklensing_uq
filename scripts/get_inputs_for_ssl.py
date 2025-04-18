@@ -91,7 +91,7 @@ def main(
         sort_by_filename_ori=False, shuffle=False, output_shape=imgsize,
         list_of_outputs=['kappa_inp'], close_after_batch=True, **kwargs
     )
-    data_gen = data_loader.to_tf_dataloader(raise_stop_iteration=True)
+    data_gen = data_loader.to_dataloader(raise_stop_iteration=True)
     data_gen = iter(data_gen)
 
     with h5py.File(path_to_augmented_dataset, 'r+') as file:

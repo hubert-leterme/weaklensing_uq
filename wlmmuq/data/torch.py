@@ -25,7 +25,7 @@ class TorchMixin:
     def _add_newaxis_arr(self, arr: torch.Tensor) -> torch.Tensor:
         return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nx, ny)
 
-    def to_torch_dataloader(self, **kwargs):
+    def to_dataloader(self, **kwargs):
         out = data.DataLoader(
             self, batch_size=self.batch_size, num_workers=self.num_workers,
             shuffle=self.shuffle, **kwargs

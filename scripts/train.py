@@ -113,6 +113,7 @@ def main(
         offset=offset, newaxis=True,
         nreal_per_img=nreal_per_img, **kwargs
     )
+    train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
         order=moment_order, hdf5_filepath=path_to_augmented_dataset,
         pred_filepath=path_to_pred_dataset,
@@ -120,6 +121,7 @@ def main(
         beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, offset=offset, newaxis=True, **kwargs
     )
+    val_dataloader = val_dataset.to_dataloader()
 
     # Initialize model
     if path_to_pretrained_model is None:
@@ -192,10 +194,6 @@ def main(
             )
             callbacks.append(lrscheduler_callback)
 
-        # Prefetch datasets for efficiency
-        train_dataloader = train_dataset.to_tf_dataloader().prefetch(tf.data.AUTOTUNE)
-        val_dataloader = val_dataset.to_tf_dataloader().prefetch(tf.data.AUTOTUNE)
-
         # Fit model
         cnn_model.fit(
             train_dataloader, epochs=nepochs,
@@ -217,8 +215,6 @@ def main(
             )
         else:
             scheduler = None
-        train_dataloader = train_dataset.to_torch_dataloader()
-        val_dataloader = val_dataset.to_torch_dataloader()
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:

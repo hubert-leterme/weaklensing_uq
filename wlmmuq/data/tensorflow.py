@@ -13,7 +13,7 @@ class TensorflowMixin:
         return arr[..., np.newaxis] # Shape = (batch_size, H, W, 1)
 
 
-    def to_tf_dataloader(
+    def to_dataloader(
             self, min_idx=0, max_idx=None, raise_stop_iteration=False, **kwargs
     ):
         if max_idx is None:
@@ -45,7 +45,7 @@ class TensorflowMixin:
         out = tf.data.Dataset.from_generator(
             generator, output_signature=output_signature
         )
-        return out
+        return out.prefetch(tf.data.AUTOTUNE) # Prefetch data loader for efficiency
 
 
     def _get_output_signature(self):
