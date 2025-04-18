@@ -8,6 +8,7 @@ import threading
 import numpy as np
 import torch
 import tensorflow as tf
+import deepinv as dinv
 
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
@@ -19,7 +20,6 @@ from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
-MOMENT_ORDER = 1
 IMGSIZE = 304
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
@@ -41,7 +41,8 @@ MODEL_CLASSES = {
 def main(
         path_to_augmented_dataset, path_to_pretrained_model=None, backend=None,
         arch=None, denoiser=False, use_std_noise=False,
-        moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
+        order2=False, path_to_pred_dataset=None,
+        path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
@@ -87,6 +88,14 @@ def main(
         cnn_class = None
         scale_as_input = False
 
+    if order2:
+        if path_to_pred_dataset is not None:
+            kwargs.update(
+                order=2, pred_filepath=path_to_pred_dataset
+            )
+        elif backend == 'tensorflow':
+            raise NotImplementedError
+
     if backend == 'tensorflow': # Use Keras (TensorFlow backend)
         data_module = wlds.tensorflow
         model_module = wlcnn.tensorflow
@@ -104,8 +113,7 @@ def main(
     if verbose:
         print("Initialize batch generators for training and validation")
     train_dataset = dataset_class(
-        order=moment_order, hdf5_filepath=path_to_augmented_dataset,
-        pred_filepath=path_to_pred_dataset,
+        hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
         offset=offset, newaxis=True,
@@ -113,8 +121,7 @@ def main(
     )
     train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
-        order=moment_order, hdf5_filepath=path_to_augmented_dataset,
-        pred_filepath=path_to_pred_dataset,
+        hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, offset=offset, newaxis=True, **kwargs
@@ -123,24 +130,22 @@ def main(
 
     # Initialize model
     if path_to_pretrained_model is None:
-        cnn_model = cnn_class(
+        model = cnn_class(
             map_size=imgsize, offset=offset, **kwargs_model
         )
     else:
-        cnn_model = model_module.load_model(
+        model = model_module.load_model(
             path_to_pretrained_model, **kwargs_model
         )
 
     if verbose:
-        model_module.print_model(cnn_model)
+        model_module.print_model(model)
 
     if checkpoint_dir is not None:
-        if moment_order == 1:
+        if not order2:
             output_type = "pe" # Point estimate
-        elif moment_order == 2:
-            output_type = "var" # Variance
         else:
-            raise ValueError
+            output_type = "var" # Variance
         filename = f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + \
             "{epoch:02d}.keras"
         checkpoint_dir = os.path.join(checkpoint_dir, output_type)
@@ -150,7 +155,7 @@ def main(
 
         # Compile model
         wlcnn.tensorflow.compile_kerasmodel(
-            cnn_model, loss=loss, l2_lambda=l2_lambda, offset=offset,
+            model, loss=loss, l2_lambda=l2_lambda, offset=offset,
             learning_rate=learning_rate
         )
 
@@ -193,7 +198,7 @@ def main(
             callbacks.append(lrscheduler_callback)
 
         # Fit model
-        cnn_model.fit(
+        model.fit(
             train_dataloader, epochs=nepochs,
             steps_per_epoch=nreal_per_img * nimgs_train // batch_size,
             validation_data=val_dataloader,
@@ -203,9 +208,28 @@ def main(
 
     elif backend == 'torch':
 
-        loss_fun = wlcnn.torch.LOSS_DICT[loss]
+        # Set loss function
+        metric = wlcnn.torch.METRIC_DICT[loss]
+        if order2 and path_to_pred_dataset is None:
+            order1_model = cnn_class(
+                map_size=imgsize, offset=offset, **kwargs_model
+            )
+            checkpoint_order1_model = torch.load(path_to_order1_model)
+            order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
+
+            # No mean centering, no offset in order-2 mmoment networks
+            model.meancentering = False
+            model.offset = 0.
+
+            loss_fun = wlcnn.torch.Order2SupLoss(
+                order1_model=order1_model, metric=metric
+            )
+        else:
+            loss_fun = dinv.loss.SupLoss(metric=metric)
+
+        # Set optimizer and learning rate scheduler
         optimizer = torch.optim.Adam(
-            cnn_model.parameters(), lr=learning_rate, weight_decay=1e-8
+            model.parameters(), lr=learning_rate, weight_decay=1e-8
         )
         if lr_scheduler:
             scheduler = torch.optim.lr_scheduler.StepLR(
@@ -217,9 +241,9 @@ def main(
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:
             print(f"Device: {device}")
-        cnn_model.to(device)
+        model.to(device)
         trainer = wlcnn.torch.Trainer(
-            cnn_model,
+            model,
             device=device,
             save_path=checkpoint_dir,
             verbose=verbose,
@@ -331,11 +355,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--moment-order", type=int,
+        "--order2", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Order of the moment network. "
-            f"Default = {MOMENT_ORDER}"
+            "Train order-2 moment network. If activated, then either `--path-to-pred-dataset` "
+            "or `--path-to-order1-model` must be provided."
         )
     )
     parser.add_argument(
@@ -345,6 +369,15 @@ if __name__ == "__main__":
             "Path to the prediction dataset (HDF5 file), computed with "
             "a previously-trained network. This is useful to train a moment "
             "network of order 2. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--path-to-order1-model", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the trained order-1 moment network. "
+            "This is useful to train a moment network of order 2. "
+            "Only works for PyTorch models. Default = None"
         )
     )
     parser.add_argument(
