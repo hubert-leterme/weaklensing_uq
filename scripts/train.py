@@ -242,6 +242,7 @@ def main(
         if verbose:
             print(f"Device: {device}")
         model.to(device)
+        loss_fun.to(device)
         trainer = wlcnn.torch.Trainer(
             model,
             device=device,
