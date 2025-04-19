@@ -13,7 +13,7 @@ current_date=$(date +"%Y%m%d_%H%M%S")
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 [-m <filename> OR -a torch.DRUNet] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss l2reg_mse]"
+  echo "Example: $0 0 [-m <filename> OR -a torch.DRUNet] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss mse]"
   exit 1
 fi
 
