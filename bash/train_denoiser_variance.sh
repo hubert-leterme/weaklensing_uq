@@ -1,37 +1,39 @@
 #!/bin/bash
 
-# TODO: to be updated
-
-# Check if correct number of arguments are provided
-if [ "$#" -ne 5 ]; then
-  echo "Usage: $0 <GPU_ID> <PRED_DATASET> <SCALE> <TRAINING_DATE> <LEARNING_RATE>"
-  echo "Example: $0 0 LP002_augmented_pred_denoiser_1_40e_01_20241118_183322.hdf5 1.4e-1 20241118_183322 1e-4"
-  exit 1
-fi
-
-pred_dataset=$2
-scale=$3
-training_date=$4
-lr=$5
-save_freq=1
-
 # Set paths
-datadir=/ceph/chercheurs/leterme231/kappaTNG_augmented
-path_to_augmented_dataset=${datadir}/LP002_augmented.hdf5
-path_to_pred_dataset=${datadir}/${pred_dataset}
+path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
+save_freq=1
 backup_dir=/ceph/chercheurs/leterme231/backups
 stats_dir=/ceph/chercheurs/leterme231/stats
 
+# Check if correct number of arguments are provided
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $0 <GPU_ID> <NAME_DENOISER> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 denoiser_torch.DRUNet_small-model_scale_2.0e-1_scale-min_1.0e-1_20250417_105243 [-m <filename> OR -a torch.DRUNet] [-pred <filename> OR -o1 <timestamp>/ckp_20.pth.tar] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss mse]"
+  exit 1
+fi
+
+name_denoiser=$2
+optional_args="${@:3}"
+
+# Update optional arguments with full path to saved order-1 model
+if [[ $optional_args == *"-o1 "* ]]; then
+  order1_model_filename=$(echo "$optional_args" | xargs | grep -oP '\-o1 \K[^\s]+' | xargs)
+  optional_args=$(echo "$optional_args" | sed "s/-o1 $order1_model_filename//g" | xargs)
+  optional_args="-o1 ${checkpoint_dir}/${name_denoiser}/pe/${order1_model_filename} ${optional_args}"
+fi
+
+# Command to execute
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser --order2 ${optional_args} -lr 1e-4 --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_var.csv --seed 42 -v" | xargs)
+
+# Print the command for tracking
+echo "Running the following command:"
+echo "=============================================================================="
+echo "$cmd"
+echo "=============================================================================="
+echo ""
+
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python scripts/train.py $path_to_augmented_dataset \
-  --denoiser --scale $scale --scale-range \
-  --moment-order 2 \
-  --path-to-pred-dataset $path_to_pred_dataset \
-  -lr $lr --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/denoiser_${scale}_${training_date} \
-  --save-freq $save_freq \
-  --backup-dir $backup_dir/denoiser_${scale}_${training_date} \
-  --path-to-csv-log $stats_dir/log_denoiser_${scale}_${training_date}_var.csv \
-  --seed 42 -v
+eval "$cmd"
