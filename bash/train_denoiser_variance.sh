@@ -20,7 +20,7 @@ optional_args="${@:3}"
 # Update optional arguments with full path to saved order-1 model
 if [[ $optional_args == *"-o1 "* ]]; then
   order1_model_filename=$(echo "$optional_args" | xargs | grep -oP '\-o1 \K[^\s]+' | xargs)
-  optional_args=$(echo "$optional_args" | sed "s/-o1 $order1_model_filename//g" | xargs)
+  optional_args=$(echo "$optional_args" | sed "s|-o1 $order1_model_filename||g" | xargs)
   optional_args="-o1 ${checkpoint_dir}/${name_denoiser}/pe/${order1_model_filename} ${optional_args}"
 fi
 
