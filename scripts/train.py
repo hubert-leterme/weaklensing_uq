@@ -363,7 +363,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--path-to-pred-dataset", type=str,
+        "-pred", "--path-to-pred-dataset", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Path to the prediction dataset (HDF5 file), computed with "
@@ -372,7 +372,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--path-to-order1-model", type=str,
+        "-o1", "--path-to-order1-model", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Path to the trained order-1 moment network. "
