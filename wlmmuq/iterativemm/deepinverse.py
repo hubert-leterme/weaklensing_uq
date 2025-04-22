@@ -207,7 +207,10 @@ class MetricDict(dict):
 
 class BaseOptim(dinv.optim.BaseOptim):
 
-    def __init__(self, *args, custom_metrics: MetricDict=None, **kwargs):
+    def __init__(
+            self, *args, custom_metrics: MetricDict=None,
+            prior_uq: dinv.optim.Prior=None, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.psnr_metric = dinv.metric.PSNR()
         if custom_metrics is not None:
@@ -215,6 +218,19 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             self.custom_metrics = None
         self.batch_size = None
+        if prior_uq is not None:
+            self.fixed_point = FixedPointUQ(self.fixed_point)
+        self.prior_uq = prior_uq
+
+        get_output_0 = self.get_output
+        def _get_output(X):
+            if isinstance(X, tuple):
+                X, X_uq = X
+                out = get_output_0(X), get_output_0(X_uq)
+            else:
+                out = get_output_0(X)
+            return out
+        self.get_output = _get_output
 
 
     def _update_metrics(
@@ -273,12 +289,51 @@ class BaseOptim(dinv.optim.BaseOptim):
         return metrics
 
 
+    def update_prior_fn(self, it):
+        r"""
+        For each prior function in `prior`, selects the prior value for iteration ``it``
+        (if this prior depends on the iteration number).
+        If `it == self.max_iter`, then the optimizer is set to UQ mode.
+
+        :param int it: iteration number.
+        :return: the prior at iteration ``it``.
+        """
+        if it < self.max_iter:
+            # Do not use `super().update_prior_fn(it)` to avoid passing a bound method
+            # without class context to the FixedPoint module
+            cur_prior = self.prior[it] if len(self.prior) > 1 else self.prior[0]
+        elif self.prior_uq is not None:
+            cur_prior = self.prior_uq
+        else:
+            raise ValueError
+        return cur_prior
+
+
+class FixedPointUQ(nn.Module):
+    def __init__(self, fixed_point:dinv.optim.FixedPoint):
+        super().__init__()
+        self.fixed_point = fixed_point
+
+    def forward(self, *args, compute_metrics=False, x_gt=None, **kwargs):
+        X, metrics = self.fixed_point.forward(
+            *args, compute_metrics=compute_metrics, x_gt=x_gt, **kwargs
+        )
+        X_uq = self.fixed_point.single_iteration(
+            X,
+            self.fixed_point.max_iter,
+            *args,
+            **kwargs,
+        )
+        return (X, X_uq), metrics
+
+
 def optim_builder(
     iteration,
     max_iter=100,
     params_algo={"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05},
     data_fidelity=None,
     prior=None,
+    prior_uq=None,
     F_fn=None,
     g_first=False,
     bregman_potential=None,
@@ -323,6 +378,7 @@ def optim_builder(
         has_cost=iterator.has_cost,
         data_fidelity=data_fidelity,
         prior=prior,
+        prior_uq=prior_uq,
         params_algo=params_algo,
         max_iter=max_iter,
         **kwargs,
