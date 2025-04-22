@@ -95,6 +95,14 @@ def main(
             )
         elif backend == 'tensorflow':
             raise NotImplementedError
+        else:
+            # No mean centering, no offset, and only positive values in order-2 moment networks
+            offset_order1 = offset
+            kwargs_model_order1 = kwargs_model.copy()
+            offset = 0.
+            kwargs_model.update(
+                meancentering=False, onlypositive=True
+            )
 
     if backend == 'tensorflow': # Use Keras (TensorFlow backend)
         data_module = wlds.tensorflow
@@ -212,15 +220,10 @@ def main(
         metric = wlcnn.torch.METRIC_DICT[loss]
         if order2 and path_to_pred_dataset is None:
             order1_model = cnn_class(
-                map_size=imgsize, offset=offset, **kwargs_model
+                map_size=imgsize, offset=offset_order1, **kwargs_model_order1
             )
             checkpoint_order1_model = torch.load(path_to_order1_model)
             order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
-
-            # No mean centering, no offset, and only positive values in order-2 moment networks
-            model.meancentering = False
-            model.offset = 0.
-            model.onlypositive = True
 
             loss_fun = wlcnn.torch.Order2SupLoss(
                 order1_model=order1_model, metric=metric
