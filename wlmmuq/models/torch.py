@@ -43,7 +43,8 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            meancentering: bool=False, offset: float=OFFSET, **kwargs
+            meancentering: bool=False, offset: float=OFFSET, onlypositive: bool=False,
+            **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
@@ -52,6 +53,10 @@ class ModelMixin:
         super().__init__(**kwargs)
         self.meancentering = meancentering
         self.offset = offset
+        if onlypositive:
+            self.softplus = nn.Softplus()
+        else:
+            self.softplus = None
 
 
     def _preprocess_kwargs(self, **kwargs):
@@ -62,6 +67,8 @@ class ModelMixin:
         out = super().forward(inp, *args, **kwargs)
         if self.meancentering:
             out = utils.meancenter(out, offset=self.offset)
+        if self.softplus is not None:
+            out = self.softplus(out)
         return out
 
 

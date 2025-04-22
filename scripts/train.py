@@ -217,9 +217,10 @@ def main(
             checkpoint_order1_model = torch.load(path_to_order1_model)
             order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
 
-            # No mean centering, no offset in order-2 mmoment networks
+            # No mean centering, no offset, and only positive values in order-2 moment networks
             model.meancentering = False
             model.offset = 0.
+            model.onlypositive = True
 
             loss_fun = wlcnn.torch.Order2SupLoss(
                 order1_model=order1_model, metric=metric
