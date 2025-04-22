@@ -44,7 +44,7 @@ class ModelMixin:
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
             meancentering: bool=False, offset: float=OFFSET, onlypositive: bool=False,
-            **kwargs
+            beta: float=100., **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
@@ -54,7 +54,7 @@ class ModelMixin:
         self.meancentering = meancentering
         self.offset = offset
         if onlypositive:
-            self.softplus = nn.Softplus()
+            self.softplus = nn.Softplus(beta=beta)
         else:
             self.softplus = None
 
