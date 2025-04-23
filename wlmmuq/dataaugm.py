@@ -2,6 +2,8 @@ import numpy as np
 from scipy import ndimage
 from skimage.util.shape import view_as_windows
 
+from . import utils
+
 class Rotation:
 
     def __init__(self, angle, imgsize0):
@@ -56,8 +58,8 @@ class Rotation:
         vlowerleft_j = self._vmin_j(rows + cropsize - 1)
         vlowerright_j = self._vmax_j(rows + cropsize - 1)
 
-        vmin_j = np.maximum(vupperleft_j, vlowerleft_j) # Shape = (nimgs,)
-        vmax_j = np.minimum(vupperright_j, vlowerright_j) # Shape = (nimgs,)
+        vmin_j = utils.maximum(vupperleft_j, vlowerleft_j) # Shape = (nimgs,)
+        vmax_j = utils.minimum(vupperright_j, vlowerright_j) # Shape = (nimgs,)
 
         return vmin_j, vmax_j
 

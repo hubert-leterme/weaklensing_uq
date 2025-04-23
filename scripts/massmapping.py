@@ -107,7 +107,7 @@ def main(
         if path_to_powerspectrum is None:
             kappa_ps = ktng.get_kappa(ninpimgs_ps, start_idx=ninpimgs)
             powerspectrum = np.mean(
-                np.abs(np.fft.fft2(kappa_ps) / ktng.width)**2, axis=0
+                wlutils.absolute(np.fft.fft2(kappa_ps) / ktng.width)**2, axis=0
             ) # expected value of the squared Fourier modulus
             # Only positive frequencies, by symmetry
             powerspectrum = powerspectrum[:ktng.width//2, :ktng.width//2]

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
@@ -34,7 +35,7 @@ def get_alpha_from_confidence(confidence):
     return 2 - 2 * stats.norm.cdf(confidence)
 
 
-def get_min_nimgs_calib(alpha):
+def get_min_nimgs_calib(alpha: float):
     """
     Get minimal size for the calibration set (otherwise the adjusted quantile is above 1)
     
@@ -242,11 +243,10 @@ def get_masked_and_noisy_shear(
     
     """
     shape = test_array_shape([gamma1, gamma2, std_noise, mask, ngal])
+    numel = count_elts(gamma1)
     if torch.is_tensor(gamma1):
-        numel = gamma1.numel()
         randn = torch.randn
     else:
-        numel = gamma1.size
         randn = np.random.randn
 
     # Set masked values to 0
@@ -356,13 +356,19 @@ def ksfilter(
     return out
 
 
-def _split_test_calib(arr, nimgs_calib, calib_first=True):
-    if calib_first:
-        arr_calib = arr[:nimgs_calib].copy()
-        arr_test = arr[nimgs_calib:].copy()
+def _split_test_calib(
+        arr: np.ndarray | torch.Tensor, nimgs_calib, calib_first=True
+) -> tuple[np.ndarray | torch.Tensor]:
+    if torch.is_tensor(arr):
+        arr = arr.clone()
     else:
-        arr_calib = arr[-nimgs_calib:].copy()
-        arr_test = arr[:-nimgs_calib].copy()
+        arr = arr.copy()
+    if calib_first:
+        arr_calib = arr[:nimgs_calib]
+        arr_test = arr[nimgs_calib:]
+    else:
+        arr_calib = arr[-nimgs_calib:]
+        arr_test = arr[:-nimgs_calib]
     return arr_calib, arr_test
 
 
@@ -431,39 +437,12 @@ def normalized_mse(kappa_pred, kappa, mask=None):
 
 
 def rmse(kappa_pred, kappa, mask=None):
-    return normalized_mse(kappa_pred, kappa, mask=mask) ** 0.5
+    return normalized_mse(kappa_pred, kappa, mask=mask)**0.5
 
 
 def mean_val(kappa_pred, mask=None):
     func = lambda kappa_pred: kappa_pred # identity
     return _get_stats(func, kappa_pred, mask=mask)
-
-
-def skyshow(
-        img, boundaries=None, c='w', cbarshrink=None, title=None,
-        printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, offset=OFFSET, **kwargs
-):
-    out = plt.imshow(img - offset, origin='lower', **kwargs)
-    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
-    if printxylabels:
-        plt.xlabel("Right ascension")
-        plt.ylabel("Declination")
-    if not printxticks:
-        plt.xticks([])
-    if not printyticks:
-        plt.yticks([])
-    kwargs_cbar = {}
-    if cbarshrink is not None:
-        kwargs_cbar.update(shrink=cbarshrink)
-    if printcolorbar:
-        plt.colorbar(**kwargs_cbar)
-    if boundaries is not None:
-        plt.plot(*boundaries, c=c, lw=1)
-    if title is not None:
-        plt.title(title)
-
-    return out
 
 
 def get_emp_variance(func, nreal_noise, *args, **kwargs):
@@ -567,7 +546,7 @@ def get_1d_powerspectrum(kappa):
     _, imgsize, imgsize0 = kappa.shape
     assert imgsize0 == imgsize
     powerspectrum = np.mean(
-        np.abs(np.fft.fft2(kappa) / imgsize)**2, axis=0
+        absolute(np.fft.fft2(kappa) / imgsize)**2, axis=0
     )
     powerspectrum = powerspectrum[:imgsize//2, :imgsize//2] # Only positive frequencies, by symmetry
     powerspectrum_1d = (powerspectrum[0, :] + powerspectrum[:, 0]) / 2 # Assumed isotropic
@@ -623,3 +602,301 @@ def meancenter(
         mean = unsqueeze(mean)
 
     return arr - mean
+
+
+def get_metrics(pred, res, truth, **kwargs):
+
+    kappa_lo = pred - res
+    kappa_hi = pred + res
+
+    # Error rate per image (over pixels)
+    err = miscoverage_rate(
+        kappa_lo, kappa_hi, truth, **kwargs
+    )
+
+    # Mean length of prediction intervals
+    predinterv = mean_predinterv(
+        kappa_lo, kappa_hi, **kwargs
+    )
+
+    # Mean value for the lower and upper bounds
+    lower = mean_val(kappa_lo, **kwargs)
+    upper = mean_val(kappa_hi, **kwargs)
+
+    return err, predinterv, lower, upper
+
+
+def plot_means_errs(
+        list_of_means, list_of_stds, list_of_methods, xticklabels=None, sec_xticklabels=None,
+        xlabel=None, ylabel=None, drawtarget=True, alpha=None, drawbounds=True,
+        y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None, loclegend=None,
+        figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None
+):
+    """
+    Plot means with error bars representing standard deviations
+    
+    """
+    nseries = len(list_of_means)
+    assert len(list_of_stds) == nseries
+    if xticklabels is not None:
+        nvals = len(xticklabels)
+    else:
+        nvals = 1
+    offset = 0.15  # Adjust the offset as needed
+
+    _, ax = plt.subplots(figsize=figsize)
+    for i, (means, stds, label) in enumerate(zip(list_of_means, list_of_stds, list_of_methods)):
+        x_values = np.arange(nvals) + 1 + (i - (nseries - 1) / 2) * offset  # Adjusted x-coordinates
+        plt.errorbar(x_values, means, yerr=stds, fmt='.', capsize=3, label=label)
+
+    if xticklabels is not None:
+        plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=45)
+    else:
+        plt.xticks([])
+    ax.set_xlim(0.5, nvals + 0.5)
+
+    if sec_xticklabels is not None:
+        sec_nvals = len(sec_xticklabels)
+        sec_xticks = nvals / sec_nvals * np.arange(sec_nvals) + (nvals / sec_nvals + 1) / 2
+        sec = ax.secondary_xaxis(location=0)
+        sec.set_xticks(sec_xticks, labels=sec_xticklabels)
+        sec.tick_params('x', length=0)
+
+        # lines between the classes:
+        sec_xticks = nvals / sec_nvals * np.arange(sec_nvals + 1) + 0.5
+        sec2 = ax.secondary_xaxis(location=0)
+        sec2.set_xticks(sec_xticks, labels=[])
+        sec2.tick_params('x', length=50, width=1)
+
+    if xlabel is not None:
+        plt.xlabel(xlabel)
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    if drawtarget:
+        plt.axhline(y=alpha, color='red', linestyle='--', linewidth=0.8, label=r'$\alpha$ (target)')
+    if drawbounds:
+        plt.axhspan(
+            y_lower, y_upper,
+            color='yellow', alpha=0.3, linewidth=0., label=r"Theoretical bounds for $\mathrm{\mathbb{E}}[L]$"
+        )
+    plt.legend(loc=loclegend)
+    if logscale:
+        plt.yscale('log')
+    kwargs = {}
+    if ymin is not None:
+        kwargs.update(bottom=ymin)
+    if ymax is not None:
+        kwargs.update(top=ymax)
+    if kwargs != {}:
+        plt.ylim(**kwargs)
+    if savefig:
+        plt.savefig(os.path.join(filepath, f"{filename}.{extension}"), bbox_inches='tight')
+
+    plt.show()
+
+
+def skyshow(
+        img, boundaries=None, c='w', cbarshrink=None, title=None,
+        printcolorbar=True, printxylabels=True,
+        printxticks=True, printyticks=True, offset=OFFSET, **kwargs
+):
+    out = plt.imshow(img - offset, origin='lower', **kwargs)
+    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
+    if printxylabels:
+        plt.xlabel("Right ascension")
+        plt.ylabel("Declination")
+    if not printxticks:
+        plt.xticks([])
+    if not printyticks:
+        plt.yticks([])
+    kwargs_cbar = {}
+    if cbarshrink is not None:
+        kwargs_cbar.update(shrink=cbarshrink)
+    if printcolorbar:
+        plt.colorbar(**kwargs_cbar)
+    if boundaries is not None:
+        plt.plot(*boundaries, c=c, lw=1)
+    if title is not None:
+        plt.title(title)
+
+    return out
+
+
+class BaseKappamapVisualizer:
+
+    def __init__(
+            self, extent, boundaries, offset=0., vmin=None, vmax=None,
+            vmax_bounds=None, plot_colorbar=False
+    ):
+        self.extent = extent
+        self.boundaries = boundaries
+        self.offset = offset
+        self.plot_colorbar = plot_colorbar
+        self.vmin = vmin
+        self.vmax = vmax
+        self.vmax_bounds = vmax_bounds
+
+
+    def _skyshow_pointestimate(self, pred, **kwargs):
+
+        out = skyshow(
+            pred, vmin=self.vmin, vmax=self.vmax, extent=self.extent,
+            boundaries=self.boundaries, printxylabels=False,
+            printxticks=False, printyticks=False, printcolorbar=False, offset=self.offset,
+            **kwargs
+        )
+        if self.plot_colorbar:
+            plt.colorbar()
+
+        return out
+  
+
+    def _skyshow_bound(self, bound, **kwargs):
+
+        out = skyshow(
+            bound,
+            cmap="coolwarm", vmin=-self.vmax_bounds, vmax=self.vmax_bounds,
+            extent=self.extent, boundaries=self.boundaries,
+            printcolorbar=False, printxylabels=False, printxticks=False, printyticks=False,
+            **kwargs
+        )
+        if self.plot_colorbar:
+            cbar = plt.colorbar()
+            cbar.set_ticks(np.linspace(-.2, .2, 5))
+
+        return out
+
+
+    def _visualize(self, pred, lowerbound, upperbound, **kwargs):
+        raise NotImplementedError
+
+
+    def __call__(
+            self, pred, res, kappa, mask=None, **kwargs
+    ):
+        lowerbound = pred - res - kappa
+        upperbound = pred + res - kappa
+        if mask is not None:
+            lowerbound *= mask
+            upperbound *= mask
+
+        self._visualize(pred, lowerbound, upperbound, **kwargs)
+
+
+class KappamapVisualizerCompact(BaseKappamapVisualizer):
+
+    def __init__(self, *args, msg='method?', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.msg = msg
+
+    def _visualize(self, pred, lowerbound, upperbound, **kwargs):
+
+        plt.figure(figsize=(14, 3))
+        plt.subplot(131)
+        self._skyshow_pointestimate(pred, title='Point estimate')
+        plt.subplot(132)
+        self._skyshow_bound(lowerbound, title=f'Lower bound ({self.msg})')
+        plt.subplot(133)
+        self._skyshow_bound(upperbound, title=f'Upper bound ({self.msg})')
+        plt.show()
+
+
+class KappamapVisualizerSavefig(BaseKappamapVisualizer):
+
+    def __init__(
+            self, *args, savefig=False, save_dir=None, extension=None, showpred=True,
+            **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.savefig = savefig
+        self.save_dir = save_dir
+        self.extension = extension
+        self.showpred = showpred
+
+
+    def _visualize(self, pred, lowerbound, upperbound, filename=None, **kwargs):
+
+        if self.showpred:
+            plt.figure(figsize=(5, 3))
+            self._skyshow_pointestimate(pred)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
+                )
+            plt.show()
+
+        plt.figure(figsize=(5, 3))
+        self._skyshow_bound(lowerbound)
+        if self.savefig:
+            plt.savefig(
+                os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
+            )
+        plt.show()
+
+        plt.figure(figsize=(5, 3))
+        self._skyshow_bound(upperbound)
+        if self.savefig:
+            plt.savefig(
+                os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
+            )
+        plt.show()
+
+
+#=================================================================================
+# Functions on torch tensors or numpy arrays
+#=================================================================================
+
+def absolute(arr: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
+    if torch.is_tensor(arr):
+        out = torch.abs(arr)
+    else:
+        out = np.abs(arr)
+    return out
+
+
+def quantile(
+        inp: np.ndarray | torch.Tensor, q, axis=None, **kwargs
+) -> np.ndarray | torch.Tensor:
+    if torch.is_tensor(inp):
+        out = torch.quantile(inp, q, dim=axis, **kwargs)
+    else:
+        out = np.quantile(inp, q, axis=axis, **kwargs)
+    return out
+
+
+def _min_max(
+        which: str,
+        inp: np.ndarray | torch.Tensor, other: float | np.ndarray | torch.Tensor,
+        *args, **kwargs
+) -> np.ndarray | torch.Tensor:
+    if torch.is_tensor(inp):
+        fn = getattr(torch, which)
+        if not torch.is_tensor(other):
+            other = other * torch.ones_like(inp)
+    else:
+        fn = getattr(np, which)
+    return fn(inp, other, *args, **kwargs)
+
+def maximum(
+        inp: np.ndarray | torch.Tensor, other: float | np.ndarray | torch.Tensor,
+        *args, **kwargs
+) -> np.ndarray | torch.Tensor:
+    return _min_max(
+        'maximum', inp, other, *args, **kwargs
+    )
+
+def minimum(
+        inp: np.ndarray | torch.Tensor, other: np.ndarray | torch.Tensor,
+        *args, **kwargs
+) -> np.ndarray | torch.Tensor:
+    return _min_max(
+        'minimum', inp, other, *args, **kwargs
+    )
+
+
+def count_elts(arr: np.ndarray | torch.Tensor) -> int:
+    if torch.is_tensor(arr):
+        out = arr.numel()
+    else:
+        out = arr.size
+    return out

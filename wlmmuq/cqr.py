@@ -49,7 +49,7 @@ class BaseCQR:
         nimgs_calib = conformity_scores.shape[0]
         assert nimgs_calib >= utils.get_min_nimgs_calib(self.alpha)
         adjusted_quantile = (1 - self.alpha) * (1 + 1/nimgs_calib)
-        quantile_vals = np.percentile(conformity_scores, adjusted_quantile*100, axis=0)
+        quantile_vals = utils.quantile(conformity_scores, adjusted_quantile, axis=0)
         return quantile_vals, adjusted_quantile
 
 
@@ -98,10 +98,10 @@ class AddCQR(BaseCQR):
     
     """
     def _calibration_fun(self, lamb, res):
-        return np.maximum(res + lamb, 0)
+        return utils.maximum(res + lamb, 0)
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
-        return np.abs(pred_calib - kappa_calib) - res_calib
+        return utils.absolute(pred_calib - kappa_calib) - res_calib
 
 
 class MultCQR(BaseCQR):
@@ -133,7 +133,7 @@ class MultCQR(BaseCQR):
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         res_calib[res_calib <= self.eps] = self.eps
-        return np.abs(kappa_calib - pred_calib) / res_calib
+        return utils.absolute(kappa_calib - pred_calib) / res_calib
 
 
 class GenCQR(BaseCQR):
@@ -193,7 +193,7 @@ class GenCQR(BaseCQR):
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         weights_calib = self._rho_nonzero(res_calib)
         out = 1 + (
-            np.abs(pred_calib - kappa_calib) - res_calib
+            utils.absolute(pred_calib - kappa_calib) - res_calib
         ) / weights_calib
         out[out < 0] = 0 # The calibration parameters must be positive
         return out
@@ -205,10 +205,11 @@ class GenCQR(BaseCQR):
         iszero = quantile_vals == 0
         if self.mask is not None:
             iszero[self.mask] = False
-        sum_iszero = np.sum(iszero)
+        sum_iszero = iszero.sum()
+        numel = utils.count_elts(iszero)
         if sum_iszero > 0:
             warnings.warn(
-                f"Some pixels are impossible to calibrate ({sum_iszero / iszero.size:.0%}); the "
+                f"Some pixels are impossible to calibrate ({sum_iszero / numel:.0%}); the "
                 "predictions will be overconservative. Choose another calibration function."
             )
         return res_cqr_test, quantile_vals, adjusted_quantile

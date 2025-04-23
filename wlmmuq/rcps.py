@@ -254,7 +254,7 @@ class AddRCPS(BaseRCPS):
 
     """
     def _calibration_fun(self, lamb, res):
-        return np.maximum(res + lamb, 0)
+        return utils.maximum(res + lamb, 0)
 
     LOWER_LAMB = -1.
     UPPER_LAMB = 1.
