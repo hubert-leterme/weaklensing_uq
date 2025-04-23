@@ -140,7 +140,7 @@ class KappaTNG(BaseKappaTNG):
             f"LP{self.idx_lp}",
             f"LP{self.idx_lp}_run{idx_run}_maps.hdf5"
         )
-        with h5py.File(fname, 'r') as file:
+        with h5py.File(fname, 'r', swmr=True) as file:
             list_of_idx_redshift = sorted(file.keys())[1:]
             nredshifts = len(list_of_idx_redshift)
             if self.weights is not None:

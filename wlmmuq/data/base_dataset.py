@@ -122,7 +122,7 @@ class BaseHDF5Dataset:
 
 
     def _open_and_get_dataset(self):
-        self.file = h5py.File(self.hdf5_filepath, 'r')  # Keep file open
+        self.file = h5py.File(self.hdf5_filepath, 'r', swmr=True)  # Keep file open
         self.ds_kappa_true = self.file['kappa']
 
         # Load dataset of input mass mapping method
@@ -138,7 +138,7 @@ class BaseHDF5Dataset:
 
         # Load dataset of predictions (for order-2 moment networks)
         if self.pred_filepath is not None:
-            self.file_pred = h5py.File(self.pred_filepath, 'r') # Keep file open
+            self.file_pred = h5py.File(self.pred_filepath, 'r', swmr=True) # Keep file open
             self.ds_kappa_pred = self.file_pred['kappa_pred']
 
 
