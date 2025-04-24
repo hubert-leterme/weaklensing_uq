@@ -265,6 +265,7 @@ def _get_stats(func, *args, mask=None):
     width1, width2 = test_array_shape(args)[-2:]
     if mask is not None:
         assert mask.shape[-2:] == (width1, width2)
+
     vals = func(*args) # shape = (nimgs, [npatches], nx, ny)
     if mask is not None:
         vals *= mask # shape = (nimgs, [npatches], nx, ny)
@@ -306,14 +307,17 @@ def mean_predinterv(kappa_lo, kappa_hi, mask=None):
     return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
 
 
-def normalized_mse(kappa_pred, kappa, mask=None):
+def normalized_mse(kappa_pred, kappa, mask=None, meancentering=False):
+    if meancentering:
+        kappa_pred = meancenter(kappa_pred, mask=mask)
+        kappa = meancenter(kappa, mask=mask)
     def func(kappa_pred, kappa):
         return (kappa_pred - kappa)**2
     return _get_stats(func, kappa_pred, kappa, mask=mask)
 
 
-def rmse(kappa_pred, kappa, mask=None):
-    return np.sqrt(normalized_mse(kappa_pred, kappa, mask=mask))
+def rmse(kappa_pred, kappa, **kwargs):
+    return normalized_mse(kappa_pred, kappa, **kwargs)**0.5
 
 
 def mean_val(kappa_pred, mask=None):
@@ -454,3 +458,22 @@ def get_1d_powerspectrum(kappa):
     powerspectrum_1d = (powerspectrum[0, :] + powerspectrum[:, 0]) / 2 # Assumed isotropic
 
     return powerspectrum_1d
+
+
+def meancenter(
+        arr: np.ndarray, axis: int | tuple=(-2, -1),
+        offset: float=None, mask: np.ndarray=None
+) -> np.ndarray:
+    if offset is not None:
+        arr0 = arr - offset
+    else:
+        arr0 = arr
+    if mask is not None:
+        arr0 = arr0 * mask
+    mean = arr0.mean(axis=axis)
+    if isinstance(axis, float):
+        axis = (axis,)
+    for _ in axis:
+        mean = np.expand_dims(mean, axis=-1)
+
+    return arr - mean
