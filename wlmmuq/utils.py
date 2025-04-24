@@ -722,7 +722,7 @@ def skyshow(
     return out
 
 
-class BaseKappamapVisualizer:
+class KappamapVisualizer:
 
     def __init__(
             self, extent, boundaries, offset=0., vmin=None, vmax=None,
@@ -737,7 +737,10 @@ class BaseKappamapVisualizer:
         self.vmax_bounds = vmax_bounds
 
 
-    def _skyshow_pointestimate(self, pred, **kwargs):
+    def skyshow_pointestimate(self, pred: np.ndarray | torch.Tensor, **kwargs):
+
+        if torch.is_tensor(pred):
+            pred = pred.cpu().numpy()
 
         out = skyshow(
             pred, vmin=self.vmin, vmax=self.vmax, extent=self.extent,
@@ -749,9 +752,12 @@ class BaseKappamapVisualizer:
             plt.colorbar()
 
         return out
-  
 
-    def _skyshow_bound(self, bound, **kwargs):
+
+    def skyshow_bound(self, bound: np.ndarray | torch.Tensor, **kwargs):
+
+        if torch.is_tensor(bound):
+            bound = bound.cpu().numpy()
 
         out = skyshow(
             bound,
@@ -772,7 +778,7 @@ class BaseKappamapVisualizer:
 
 
     def __call__(
-            self, pred, res, kappa, mask=None, **kwargs
+            self, pred, res, kappa, mask=None, visualize=False, **kwargs
     ):
         lowerbound = pred - res - kappa
         upperbound = pred + res - kappa
@@ -780,28 +786,35 @@ class BaseKappamapVisualizer:
             lowerbound *= mask
             upperbound *= mask
 
-        self._visualize(pred, lowerbound, upperbound, **kwargs)
+        if visualize:
+            self._visualize(pred, lowerbound, upperbound, **kwargs)
+
+        return lowerbound, upperbound
 
 
-class KappamapVisualizerCompact(BaseKappamapVisualizer):
+class KappamapVisualizerCompact(KappamapVisualizer):
 
     def __init__(self, *args, msg='method?', **kwargs):
         super().__init__(*args, **kwargs)
         self.msg = msg
 
-    def _visualize(self, pred, lowerbound, upperbound, **kwargs):
-
+    def _visualize(
+            self, pred: np.ndarray | torch.Tensor,
+            lowerbound: np.ndarray | torch.Tensor,
+            upperbound: np.ndarray | torch.Tensor,
+            **kwargs
+    ):
         plt.figure(figsize=(14, 3))
         plt.subplot(131)
-        self._skyshow_pointestimate(pred, title='Point estimate')
+        self.skyshow_pointestimate(pred, title='Point estimate')
         plt.subplot(132)
-        self._skyshow_bound(lowerbound, title=f'Lower bound ({self.msg})')
+        self.skyshow_bound(lowerbound, title=f'Lower bound ({self.msg})')
         plt.subplot(133)
-        self._skyshow_bound(upperbound, title=f'Upper bound ({self.msg})')
+        self.skyshow_bound(upperbound, title=f'Upper bound ({self.msg})')
         plt.show()
 
 
-class KappamapVisualizerSavefig(BaseKappamapVisualizer):
+class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
             self, *args, savefig=False, save_dir=None, extension=None, showpred=True,
@@ -814,11 +827,15 @@ class KappamapVisualizerSavefig(BaseKappamapVisualizer):
         self.showpred = showpred
 
 
-    def _visualize(self, pred, lowerbound, upperbound, filename=None, **kwargs):
-
+    def _visualize(
+            self, pred: np.ndarray | torch.Tensor,
+            lowerbound: np.ndarray | torch.Tensor,
+            upperbound: np.ndarray | torch.Tensor,
+            filename: str=None, **kwargs
+    ):
         if self.showpred:
             plt.figure(figsize=(5, 3))
-            self._skyshow_pointestimate(pred)
+            self.skyshow_pointestimate(pred)
             if self.savefig:
                 plt.savefig(
                     os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
@@ -826,7 +843,7 @@ class KappamapVisualizerSavefig(BaseKappamapVisualizer):
             plt.show()
 
         plt.figure(figsize=(5, 3))
-        self._skyshow_bound(lowerbound)
+        self.skyshow_bound(lowerbound)
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
@@ -834,7 +851,7 @@ class KappamapVisualizerSavefig(BaseKappamapVisualizer):
         plt.show()
 
         plt.figure(figsize=(5, 3))
-        self._skyshow_bound(upperbound)
+        self.skyshow_bound(upperbound)
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
