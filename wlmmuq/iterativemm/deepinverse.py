@@ -131,7 +131,7 @@ class MassMapping(dinv.physics.LinearPhysics):
 class MSE(dinv.metric.MSE):
 
     def __init__(
-            self, mask: torch.Tensor[bool]=None, meancentering: bool=False,
+            self, mask: torch.Tensor=None, meancentering: bool=False,
             **kwargs
     ):
         super().__init__(**kwargs)
