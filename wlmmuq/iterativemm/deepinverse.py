@@ -1,6 +1,6 @@
 import shutil
 import torch
-import torch.nn as nn
+from torch import nn
 import deepinv as dinv
 
 from .. import utils
@@ -31,7 +31,7 @@ class MahalanobisDistance(dinv.optim.Distance):
         super().__init__()
         # The tensor is properly sent to GPU when applying `self.to(device)`
         if torch.is_tensor(sigma):
-            self.var = torch.nn.Parameter(sigma**2, requires_grad=False)
+            self.var = nn.Parameter(sigma**2, requires_grad=False)
         else:
             self.var = sigma**2
 
@@ -113,7 +113,7 @@ class MassMapping(dinv.physics.LinearPhysics):
             noise_model=noise_model, **kwargs
         )
         if mask is not None:
-            self.mask = torch.nn.Parameter(mask, requires_grad=False)
+            self.mask = nn.Parameter(mask, requires_grad=False)
         else:
             self.mask = None
 
@@ -137,7 +137,7 @@ class MSE(dinv.metric.MSE):
         super().__init__(**kwargs)
         if mask is not None:
             utils.check_mask(mask)
-            self.mask = torch.nn.Parameter(mask, requires_grad=False)
+            self.mask = nn.Parameter(mask, requires_grad=False)
         else:
             self.mask = None
         self.meancentering = meancentering
