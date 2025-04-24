@@ -130,15 +130,22 @@ class MassMapping(dinv.physics.LinearPhysics):
 
 class MSE(dinv.metric.MSE):
 
-    def __init__(self, mask: torch.Tensor=None, **kwargs):
+    def __init__(
+            self, mask: torch.Tensor[bool]=None, meancentering: bool=False,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         if mask is not None:
             utils.check_mask(mask)
             self.mask = torch.nn.Parameter(mask, requires_grad=False)
         else:
             self.mask = None
+        self.meancentering = meancentering
 
     def metric(self, x_net, x, *args, **kwargs):
+        if self.meancentering:
+            x_net = utils.meancenter(x_net, mask=self.mask)
+            x = utils.meancenter(x, mask=self.mask)
         if self.mask is not None:
             x_net = x_net[..., self.mask]
             x = x[..., self.mask]

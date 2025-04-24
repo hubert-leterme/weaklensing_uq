@@ -74,7 +74,8 @@ def main(
         std_noise=std_noise, mask=mask
     )
     rmse = wlpnp.RMSEMultibatch(
-        niter=niter, mask=mask, path_to_saved_stats=path_to_saved_stats
+        niter=niter, mask=mask, meancentering=True,
+        path_to_saved_stats=path_to_saved_stats
     )
 
     # Iterate through batches

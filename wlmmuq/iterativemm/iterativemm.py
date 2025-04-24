@@ -294,7 +294,8 @@ class ShowIntermediateMaps(Callback):
 class RMSE(Callback):
 
     def __init__(
-            self, niter, kappa_true=None, mask=None, path_to_saved_stats=None
+            self, niter, kappa_true=None, mask=None, meancentering=False,
+            path_to_saved_stats=None
     ):
         """
         Parameters
@@ -312,11 +313,15 @@ class RMSE(Callback):
         self.niter = niter
         self.kappa_true = kappa_true
         self.mask = mask
+        self.meancentering = meancentering
         self.path_to_saved_stats = path_to_saved_stats
         self.rmse_backward = None
 
     def rmse(self, kappa):
-        return utils.rmse(kappa, self.kappa_true, mask=self.mask)
+        return utils.rmse(
+            kappa, self.kappa_true, mask=self.mask,
+            meancentering=self.meancentering
+        )
 
     def on_backward_end(self, i, kappa):
         self.rmse_backward[i] = self.rmse(kappa) # Shape = (nimgs,)
