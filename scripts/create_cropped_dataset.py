@@ -3,7 +3,8 @@ import argparse
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 
-OPENINGANGLE = 1.5 # Opening angle
+from wlmmuq.kappatng import OPENINGANGLE
+
 NINPIMGS = 100 # Number of input images
 
 def main(

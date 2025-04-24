@@ -1,5 +1,4 @@
 import os
-import sys
 import pickle
 import argparse
 import time
@@ -15,7 +14,8 @@ import wlmmuq.cosmos as wlcosmos
 
 import pycs.astro.wl.mass_mapping as csmm
 
-OPENINGANGLE = 1.5 # opening angle (deg)
+from wlmmuq.kappatng import OPENINGANGLE
+
 NINPIMGS = 25 # number of images to load from the kappaTNG dataset
 NINPIMGS_PS = 20 # separate set of images to compute the power spectrum
 CONFIDENCE = 2 # number of sigmas
