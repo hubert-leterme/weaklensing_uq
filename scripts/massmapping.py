@@ -189,6 +189,14 @@ if __name__ == "__main__":
         help=f"Number of images to reconstruct. Default = {NIMGS}"
     )
     parser.add_argument(
+        "-b", "--batch-size", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Batch size, to avoid memory overload. "
+            "Default = None (all input images are computed in a single batch)"
+        )
+    )
+    parser.add_argument(
         "--nimgs-ps", type=int,
         default=argparse.SUPPRESS,
         help=f"Number of additional images to compute the power spectrum. Default = {NIMGS_PS}"
@@ -222,14 +230,6 @@ if __name__ == "__main__":
         "--Inpaint", action='store_true',
         default=argparse.SUPPRESS,
         help="Inpaint the missing data."
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size, to avoid memory overload. "
-            "Default = None (all input images are computed in a single batch)"
-        )
     )
     parser.add_argument(
         "-w", "--num-workers", type=int,

@@ -113,7 +113,7 @@ def get_shear_from_convergence(
     return_complex (bool, default=False)
         If True, then a complex-valued numpy array will be returned. If False, then
         two real-valued numpy arrays will be returned.
-    
+
     """
     gamma = _get_shear_fromto_convergence(
         ks93.ks93inv, kappa1, kappa2,
@@ -326,7 +326,7 @@ def ksfilter(
         Level of confidence (n-sigma)
     std_gaussianfilter (float)
         Standard deviation of the smoothing filter
-    complexconjugate (bool, default=éTrue)   
+    complexconjugate (bool, default=True)   
         Whether to use convention from jax_lensing (due to the inversion of the x-axis?)
     
     """
