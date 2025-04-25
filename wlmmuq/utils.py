@@ -360,18 +360,24 @@ def ksfilter(
 
 
 def _split_test_calib(
-        arr: np.ndarray | torch.Tensor, nimgs_calib, calib_first=True
+        arr: np.ndarray | torch.Tensor | float, nimgs_calib, calib_first=True
 ) -> tuple[np.ndarray | torch.Tensor]:
-    if torch.is_tensor(arr):
-        arr = arr.clone()
+
+    if not isinstance(arr, float):
+        if torch.is_tensor(arr):
+            arr = arr.clone()
+        else:
+            arr = arr.copy()
+        if calib_first:
+            arr_calib = arr[:nimgs_calib]
+            arr_test = arr[nimgs_calib:]
+        else:
+            arr_calib = arr[-nimgs_calib:]
+            arr_test = arr[:-nimgs_calib]
     else:
-        arr = arr.copy()
-    if calib_first:
-        arr_calib = arr[:nimgs_calib]
-        arr_test = arr[nimgs_calib:]
-    else:
-        arr_calib = arr[-nimgs_calib:]
-        arr_test = arr[:-nimgs_calib]
+        arr_calib = arr
+        arr_test = arr
+
     return arr_calib, arr_test
 
 

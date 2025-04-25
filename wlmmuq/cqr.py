@@ -53,7 +53,10 @@ class BaseCQR:
         return quantile_vals, adjusted_quantile
 
 
-    def conformalize(self, res_test, pred_calib, res_calib, kappa_calib):
+    def conformalize(
+            self, res_test: np.ndarray | float, pred_calib: np.ndarray,
+            res_calib: np.ndarray | float, kappa_calib: np.ndarray
+    ):
         """
         Perform conformal calibration.
 
@@ -128,11 +131,17 @@ class MultCQR(BaseCQR):
         self.eps = eps
 
     def _calibration_fun(self, lamb, res):
-        res[res <= self.eps] = self.eps
+        if isinstance(res, float):
+            res = self.eps if res <= self.eps else res
+        else:
+            res[res <= self.eps] = self.eps
         return lamb * res
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
-        res_calib[res_calib <= self.eps] = self.eps
+        if isinstance(res_calib, float):
+            res_calib = self.eps if res_calib <= self.eps else res_calib
+        else:
+            res_calib[res_calib <= self.eps] = self.eps
         return utils.absolute(kappa_calib - pred_calib) / res_calib
 
 
@@ -184,7 +193,10 @@ class GenCQR(BaseCQR):
 
     def _rho_nonzero(self, res):
         out = self._rho(res)
-        out[out <= self.eps] = self.eps
+        if isinstance(out, float):
+            out = self.eps if out <= self.eps else out
+        else:
+            out[out <= self.eps] = self.eps
         return out
 
     def _calibration_fun(self, lamb, res):
@@ -198,7 +210,10 @@ class GenCQR(BaseCQR):
         out[out < 0] = 0 # The calibration parameters must be positive
         return out
 
-    def conformalize(self, res_test, pred_calib, res_calib, kappa_calib):
+    def conformalize(
+            self, res_test: np.ndarray | float, pred_calib: np.ndarray,
+            res_calib: np.ndarray | float, kappa_calib: np.ndarray
+    ):
         res_cqr_test, quantile_vals, adjusted_quantile = super().conformalize(
             res_test, pred_calib, res_calib, kappa_calib
         )
