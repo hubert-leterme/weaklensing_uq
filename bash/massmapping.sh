@@ -20,7 +20,7 @@ optional_args="${@:2}"
 optional_args_cleaned=$(echo "$optional_args" | sed 's/-w [0-9]\+//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
 picklename=$(echo "${method}_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
-cmd=$(echo "python scripts/massmapping.py $method $picklename $path_to_test_dataset --nimgs $nimgs $optional_args -b $batch_size --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/massmapping.py $method $picklename $path_to_test_dataset --nimgs $nimgs -b $batch_size $optional_args --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
