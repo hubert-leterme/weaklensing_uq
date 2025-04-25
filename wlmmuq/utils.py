@@ -662,7 +662,12 @@ def plot_means_errs(
     _, ax = plt.subplots(figsize=figsize)
     for i, (means, stds, label) in enumerate(zip(list_of_means, list_of_stds, list_of_methods)):
         x_values = np.arange(nvals) + 1 + (i - (nseries - 1) / 2) * offset  # Adjusted x-coordinates
-        plt.errorbar(x_values, means, yerr=stds, fmt='.', capsize=3, label=label)
+        means = np.array(means)
+        stds = np.array(stds)
+        mask = means != None # Array of booleans. Do not use `means is not None` as it returns False
+        plt.errorbar(
+            x_values[mask], means[mask], yerr=stds[mask], fmt='.', capsize=3, label=label
+        )
 
     if xticklabels is not None:
         plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=45)
