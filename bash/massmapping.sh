@@ -1,8 +1,6 @@
 #!/bin/bash
 
 path_to_test_dataset=/home/leterme231/Documents/Data/kappaTNG_cropped/LP001_cropped.hdf5
-nimgs=225
-batch_size=45
 
 current_date=$(date +"%Y%m%d_%H%M%S")
 
@@ -17,10 +15,10 @@ method=$1
 optional_args="${@:2}"
 
 # Set name of the saved array
-optional_args_cleaned=$(echo "$optional_args" | sed 's/-w [0-9]\+//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-b [0-9]\+//g' | sed 's/-w [0-9]\+//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
 picklename=$(echo "${method}_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
-cmd=$(echo "python scripts/massmapping.py $method $picklename $path_to_test_dataset --nimgs $nimgs -b $batch_size $optional_args --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/massmapping.py $method $picklename $path_to_test_dataset $optional_args --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
