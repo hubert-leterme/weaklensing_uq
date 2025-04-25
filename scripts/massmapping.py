@@ -24,7 +24,6 @@ def main(
         method, picklename, path_to_augmented_dataset,
         cosmos_include_faint=False, imgsize=IMGSIZE,
         nimgs=NIMGS, nimgs_ps=NIMGS_PS, path_to_powerspectrum=None,
-        niter=None, Nsigma=None,
         batch_size=None, uq=False, nsamples=None,
         batch_size_noise=None, seed=None, verbose=False, **kwargs
 ):
@@ -33,7 +32,7 @@ def main(
     beg = time.time()
     assert method in METHOD_LIST
 
-    keys_massmapping = ['Inpaint']
+    keys_massmapping = ['niter', 'Nsigma', 'Inpaint']
     kwargs_massmapping = {k: kwargs.pop(k) for k in keys_massmapping if k in kwargs}
 
     std_noise, mask = _commons.get_stdnoise_mask(
@@ -58,10 +57,6 @@ def main(
     # Initialize `csmm.massmap2d` object
     massmap = csmm.massmap2d()
     massmap.init_massmap(imgsize, imgsize)
-    if niter is not None:
-        massmap.DEF_niter = niter
-    if Nsigma is not None:
-        massmap.DEF_Nsigma = Nsigma
     if verbose:
         massmap.Verbose = True
 
@@ -203,8 +198,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Path to the .npy file containing the 1D power spectrum. "
-            "If not provided, and if argument `method` is set to "
-            "'wiener' or mcalens', then the power spectrum will be inferred from the "
+            "If not provided, then the power spectrum will be inferred from the "
             "dataset. Default = None"
         )
     )
