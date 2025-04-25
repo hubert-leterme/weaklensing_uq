@@ -1,12 +1,32 @@
 #!/bin/bash
 
-method=$1
-idx_lp=1
-Nsigma=4
-ninpimgs=25
-Nrea=25
-batch_size=9
+path_to_test_dataset=/home/leterme231/Documents/Data/kappaTNG_cropped/LP001_cropped.hdf5
+nimgs=225
+batch_size=45
 
-python ./scripts/massmapping.py $method $idx_lp ${method}_20240531.pred --Nsigma $Nsigma --ninpimgs $ninpimgs -v
-python ./scripts/massmapping.py $method $idx_lp ${method}_20240531.uq --Nsigma $Nsigma --ninpimgs $ninpimgs \
-        -b $batch_size --uq --nsamples $Nrea -v
+current_date=$(date +"%Y%m%d_%H%M%S")
+
+# Check if correct number of arguments are provided
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $0 <METHOD> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 mcalens --niter 100 --Nsigma 5"
+  exit 1
+fi
+
+method=$1
+optional_args="${@:2}"
+
+# Set name of the saved array
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-w [0-9]\+//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
+picklename=$(echo "${method}_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
+
+cmd=$(echo "python scripts/massmapping.py $method $picklename $path_to_test_dataset --nimgs $nimgs $optional_args -b $batch_size --seed 42 -v" | xargs)
+
+# Print the command for tracking
+echo "Running the following command:"
+echo "=============================================================================="
+echo "$cmd"
+echo "=============================================================================="
+echo ""
+
+eval "$cmd"
