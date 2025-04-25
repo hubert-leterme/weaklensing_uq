@@ -370,7 +370,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
             self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
-            step_size=None, niter=1, return_complex=False, **kwargs
+            step_size=None, niter=1, complexconjugate=False, return_complex=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -426,6 +426,8 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         niter: int, optional
             If `input_method` is set to 'wiener' or 'wiener_pgd', number of iterations.
             Default is 1.
+        complexconjugate (bool, default=True)   
+            Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
         return_complex (bool, default=False)
             If True, then complex-valued arrays will be returned. If False, then
             real and imaginary parts will be returned separately.
@@ -446,6 +448,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         self.powerspectrum_1d = powerspectrum_1d
         self.step_size = step_size
         self.niter = niter
+        self.complexconjugate = complexconjugate
         self.return_complex = return_complex
 
         self.sheardata = None # For Wiener filtering
@@ -474,7 +477,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         # Generate noisy shear maps
         kappa_true = out_dict["kappa_true"] - self.offset
         gamma1, gamma2 = utils.get_shear_from_convergence(
-            kappa_true, return_complex=False
+            kappa_true, complexconjugate=self.complexconjugate, return_complex=False
         )
         gamma1_noisy, gamma2_noisy, _ = utils.get_masked_and_noisy_shear(
             gamma1, gamma2, std_noise=self.std_noise,

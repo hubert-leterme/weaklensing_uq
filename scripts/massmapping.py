@@ -21,7 +21,7 @@ NIMGS_PS = 256 # images used to compute the power spectrum
 METHOD_LIST = ["wiener", "mcalens"]
 
 def main(
-        method, picklename, path_to_augmented_dataset,
+        method, picklename, path_to_test_dataset,
         cosmos_include_faint=False, imgsize=IMGSIZE,
         nimgs=NIMGS, nimgs_ps=NIMGS_PS, path_to_powerspectrum=None,
         batch_size=None, uq=False, nsamples=None,
@@ -42,9 +42,9 @@ def main(
 
     # Initialize dataset
     dataset = wldata.HDF5DatasetMassMapping(
-        path_to_augmented_dataset, nimgs=nimgs,
-        batch_size=batch_size, sort_by_filename_ori=True, shuffle=False,
-        std_noise=std_noise, mask=mask, inpainting=True,
+        path_to_test_dataset, nimgs=nimgs,
+        batch_size=batch_size,
+        std_noise=std_noise, mask=mask, inpainting=False, shuffle=False,
         output_shape=imgsize, **kwargs
     )
     dataloader = dataset.to_dataloader()
@@ -64,7 +64,7 @@ def main(
     if method in ("wiener", "mcalens"):
         if path_to_powerspectrum is None:
             dataset_ps = wldata.HDF5Dataset(
-                path_to_augmented_dataset, nimgs=nimgs_ps, sort_by_filename_ori=True,
+                path_to_test_dataset, nimgs=nimgs_ps, sort_by_filename_ori=True,
                 shuffle=False, beg_idx=nimgs, output_shape=imgsize, **kwargs
             )
             kappa_ps, _ = dataset_ps.load_batch(get_all_images=True)
@@ -108,6 +108,7 @@ def main(
 
         # Register data into the `csmm.shear_data` object
         gamma_noisy = gamma_noisy.numpy()
+        gamma_noisy = -np.conjugate(gamma_noisy) # TODO: I don't know why this is needed
         sheardata.g1 = gamma_noisy.real
         sheardata.g2 = gamma_noisy.imag
 
@@ -175,8 +176,8 @@ if __name__ == "__main__":
         help="File name for the saved object"
     )
     parser.add_argument(
-        "path_to_augmented_dataset", type=str,
-        help="Path to the augmented dataset (HDF5 file)"
+        "path_to_test_dataset", type=str,
+        help="Path to the test dataset (HDF5 file)"
     )
     parser.add_argument(
         "--cosmos-include-faint", action='store_true',

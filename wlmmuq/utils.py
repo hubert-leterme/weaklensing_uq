@@ -80,6 +80,9 @@ def _get_shear_fromto_convergence(
         inp1 = convert_to_complex(inp1)
         inp2 = inp1.imag
         inp1 = inp1.real
+    if complexconjugate:
+        # Use convention from jax_lensing (due to the inversion of the x-axis?)
+        inp2 = -inp2
     out1, out2 = func(inp1, inp2)
     if complexconjugate:
         # Use convention from jax_lensing (due to the inversion of the x-axis?)
@@ -269,8 +272,8 @@ def get_masked_and_noisy_shear(
     noise2 = std_noise * randn(*shape)
 
     if not inpainting:
-        noise1[:, ~mask] = 0.
-        noise2[:, ~mask] = 0.
+        noise1[..., ~mask] = 0.
+        noise2[..., ~mask] = 0.
     gamma1_noisy = gamma1_masked + noise1
     gamma2_noisy = gamma2_masked + noise2
 
