@@ -55,7 +55,7 @@ def main(
     std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
 
     # Initialize batch generator for the validation set
-    val_gen = wlbl.HDF5DatasetMassMapping
+    val_gen = wlbl.HDF5DatasetMassMapping(
         path_to_augmented_dataset, nimgs=nimgs_val, beg_idx=nimgs_train,
         batch_size=batch_size, sort_by_filename_ori=True, shuffle=False,
         std_noise=std_noise, mask=mask, inpainting=True,
