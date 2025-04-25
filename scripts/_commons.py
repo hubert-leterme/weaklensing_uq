@@ -17,7 +17,7 @@ def set_seed(seed):
 
 def get_stdnoise_mask(
         imgsize, cosmos_include_faint=False, convert_to_torch_tensor=False,
-        seed=None, verbose=False
+        inpainting=False, seed=None, verbose=False
 ):
     if seed is not None:
         random.seed(seed)
@@ -39,7 +39,8 @@ def get_stdnoise_mask(
     ngal = data_dict["ngal"]
     mask = data_dict["mask"]
     std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-    std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
+    if inpainting:
+        std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
 
     if convert_to_torch_tensor:
         mask = torch.tensor(mask, dtype=bool)

@@ -36,7 +36,8 @@ def main(
     _commons.set_seed(seed)
     std_noise, mask = _commons.get_stdnoise_mask(
         imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, seed=seed, verbose=verbose
+        convert_to_torch_tensor=True, inpainting=True,
+        seed=seed, verbose=verbose
     )
 
     # Initialize batch generator for the validation set
