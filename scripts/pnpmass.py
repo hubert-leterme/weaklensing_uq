@@ -1,14 +1,10 @@
 import argparse
 import os
-import random
-import numpy as np
 from tensorflow import keras
-import torch
+
+import _commons
 
 import wlmmuq.data.tensorflow as wlbl
-import wlmmuq.cosmos as wlcosmos
-import wlmmuq.kappatng as wlktng
-import wlmmuq.utils as wlutils
 import wlmmuq.iterativemm.iterativemm as wlpnp
 
 from wlmmuq import OFFSET
@@ -32,27 +28,16 @@ METHOD_DICT = {
 
 def main(
         path_to_trained_denoiser, path_to_augmented_dataset, path_to_saved_stats,
-        data_fidelity=DATA_FIDELITY, step_size=STEP_SIZE,
+        cosmos_include_faint=False, data_fidelity=DATA_FIDELITY, step_size=STEP_SIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, imgsize=IMGSIZE,
         batch_size=BATCH_SIZE, niter=NITER,
         offset=OFFSET, seed=None, verbose=False
 ):
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-
-    # Load COSMOS galaxy shape catalog
-    if verbose:
-        print("Load COSMOS galaxy shape catalog")
-    cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
-    data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
-    shapedisp = data_dict["shapedisp"]
-    ngal = data_dict["ngal"]
-    mask = data_dict["mask"]
-    std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-    std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
+    _commons.set_seed(seed)
+    std_noise, mask = _commons.get_stdnoise_mask(
+        imgsize, cosmos_include_faint=cosmos_include_faint,
+        convert_to_torch_tensor=True, seed=seed, verbose=verbose
+    )
 
     # Initialize batch generator for the validation set
     val_gen = wlbl.HDF5DatasetMassMapping(
@@ -93,10 +78,10 @@ def main(
         _ = pnp(gamma, callbacks=[rmse])
 
     # Average RMSE over batches
-    rmse.average_over_batches()
+    rmse.average_over_batches() # FIXME:
 
     # Save array of RMSE per iteration
-    rmse.save()
+    rmse.save() # FIXME:
     if verbose:
         print(f"Array of RMSE saved in '{path_to_saved_stats}'")
 

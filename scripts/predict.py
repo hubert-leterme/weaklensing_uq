@@ -1,16 +1,13 @@
 import warnings
 import argparse
-import random
 import h5py
 
-import numpy as np
 import torch
+
+import _commons
 
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
-import wlmmuq.cosmos as wlcosmos
-import wlmmuq.kappatng as wlktng
-import wlmmuq.utils as wlutils
 
 from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
@@ -30,15 +27,12 @@ MODEL_CLASSES = {
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
-        backend=None, arch=None, denoiser=False, use_std_noise=False,
-        moment_order=MOMENT_ORDER, path_to_pred_dataset=None, imgsize=IMGSIZE,
-        nimgs=NIMGS, batch_size=BATCH_SIZE, offset=OFFSET, idx_dataset=IDX_DATASET,
-        seed=None, verbose=False, **kwargs
+        cosmos_include_faint=False, backend=None, arch=None, denoiser=False,
+        use_stdnoise_mask=False, moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
+        imgsize=IMGSIZE, nimgs=NIMGS, batch_size=BATCH_SIZE, offset=OFFSET,
+        idx_dataset=IDX_DATASET, seed=None, verbose=False, **kwargs
 ):
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
+    _commons.set_seed(seed)
 
     keys_model = [
         'meancentering', 'sigmoid_activation', 'small_model'
@@ -51,17 +45,12 @@ def main(
     else:
         kwargs_model.update(use_bias=not no_bias)
 
-    # Initialize batch generators for training and validation
-    if use_std_noise:
-        cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-        cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
-        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
-        shapedisp = data_dict["shapedisp"]
-        ngal = data_dict["ngal"]
-        mask = data_dict["mask"]
-        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-        std_noise[~mask] = np.max(std_noise)
-        kwargs.update(std_noise=std_noise)
+    if use_stdnoise_mask:
+        std_noise, mask = _commons.get_stdnoise_mask(
+            imgsize, cosmos_include_faint=cosmos_include_faint,
+            convert_to_torch_tensor=True, seed=seed, verbose=verbose
+        )
+        kwargs.update(std_noise=std_noise, mask=mask)
 
     if arch is not None:
         backend = arch.split(".")[0]

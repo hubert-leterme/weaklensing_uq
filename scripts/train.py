@@ -1,20 +1,17 @@
 import os
 import argparse
-import random
 import time
 import cProfile
 import threading
 
-import numpy as np
 import torch
 import tensorflow as tf
 import deepinv as dinv
 
+import _commons
+
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
-import wlmmuq.cosmos as wlcosmos
-import wlmmuq.kappatng as wlktng
-import wlmmuq.utils as wlutils
 
 from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
@@ -39,8 +36,9 @@ MODEL_CLASSES = {
 } # (model_class, scale_as_input)
 
 def main(
-        path_to_augmented_dataset, path_to_pretrained_model=None, backend=None,
-        arch=None, denoiser=False, use_std_noise=False,
+        path_to_augmented_dataset, path_to_pretrained_model=None,
+        cosmos_include_faint=False,
+        backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -51,10 +49,7 @@ def main(
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
 ):
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
+    _commons.set_seed(seed)
 
     keys_model = [
         'meancentering', 'sigmoid_activation', 'small_model', 'pretrained'
@@ -68,16 +63,12 @@ def main(
         kwargs_model.update(use_bias=not no_bias)
 
     # Initialize batch generators for training and validation
-    if use_std_noise:
-        cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-        cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
-        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos_bright, imgsize)
-        shapedisp = data_dict["shapedisp"]
-        ngal = data_dict["ngal"]
-        mask = data_dict["mask"]
-        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-        std_noise[~mask] = np.max(std_noise)
-        kwargs.update(std_noise=std_noise)
+    if use_stdnoise_mask:
+        std_noise, mask = _commons.get_stdnoise_mask(
+            imgsize, cosmos_include_faint=cosmos_include_faint,
+            convert_to_torch_tensor=True, seed=seed, verbose=verbose
+        )
+        kwargs.update(std_noise=std_noise, mask=mask)
 
     if arch is not None:
         backend = arch.split(".")[0]
