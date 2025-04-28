@@ -32,7 +32,7 @@ if [[ $optional_args == *"-m "* ]]; then
 fi
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} -lr 1e-4 --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
