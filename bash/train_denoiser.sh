@@ -20,7 +20,7 @@ fi
 optional_args="${@:2}"
 
 # Set name of the denoiser
-optional_args_cleaned=$(echo "$optional_args" | sed 's/-m //g' | sed 's/-a //g' | sed 's/-s /--small-model /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/--//g' | xargs | sed 's/ /_/g' | sed 's/\.keras//g')
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-m //g' | sed 's/-a //g' | sed 's/-s /--small-model /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--//g' | xargs | sed 's/ /_/g' | sed 's/\.keras//g')
 name_denoiser=$(echo "denoiser_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
 # Check if argument `-m <model_filename>` is provided and
