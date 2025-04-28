@@ -19,8 +19,8 @@ DOWNSAMPLE_MODE_DRUNET = 'avgpool'
 
 # Default parameters for SUNet, as specified in the `training.yaml`
 # file from the repository: https://github.com/utsav-akhaury/SUNet
-PATCH_SIZE_SUNET = 1 # https://github.com/JingyunLiang/SwinIR/issues/14#issuecomment-911831278
-WIN_SIZE_SUNET = 8
+PATCH_SIZE_SUNET = 4
+WIN_SIZE_SUNET = 6 # Works with imgsize = 384
 EMB_DIM_SUNET = 48
 DEPTH_EN_SUNET = [2, 6, 8, 16] # https://github.com/megvii-research/NAFNet/issues/9
 HEAD_NUM_SUNET = [8, 8, 8, 8]
