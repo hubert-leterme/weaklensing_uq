@@ -75,6 +75,8 @@ class BaseCQR:
         conformity_scores = self._conformity_scores(pred_calib, res_calib, kappa_calib)
         quantile_vals, adjusted_quantile = self._adjusted_quantiles(conformity_scores)
         res_cqr_test = self._calibration_fun(quantile_vals, res_test)
+        if isinstance(res_test, float):
+            res_cqr_test = res_cqr_test.reshape(1, *kappa_calib.shape[1:])
 
         return res_cqr_test, quantile_vals, adjusted_quantile
 
