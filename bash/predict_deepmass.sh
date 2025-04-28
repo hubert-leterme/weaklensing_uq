@@ -9,7 +9,7 @@ fi
 
 # Set paths
 path_to_trained_model=/ceph/chercheurs/leterme231/checkpoints/$3
-path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
+path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 path_to_output_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/$4
 
 # Set environment variables and run the task

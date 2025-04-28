@@ -1,6 +1,6 @@
 #!/bin/bash
 
-path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
+path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 path_to_powerspectrum=/ceph/chercheurs/leterme231/kappaTNG_augmented/ps_LP002_306.npy
 batch_size=256
 
