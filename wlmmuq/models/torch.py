@@ -43,20 +43,22 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            meancentering: bool=False, offset: float=OFFSET, onlypositive: bool=False,
-            beta: float=100., **kwargs
+            meancentering: bool=False, offset: float=OFFSET,
+            onlypositive: bool=False, **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
             **kwargs
         )
         super().__init__(**kwargs)
-        self.meancentering = meancentering
-        self.offset = offset
-        if onlypositive:
-            self.softplus = nn.Softplus(beta=beta)
+        if meancentering:
+            if onlypositive:
+                warnings.warn("`onlypositive` is ignored when `meancentering` is True.")
+            self.output_layer = Meancentering(offset=offset)
+        elif onlypositive:
+            self.output_layer = nn.ReLU()
         else:
-            self.softplus = None
+            self.output_layer = None
 
 
     def _preprocess_kwargs(self, **kwargs):
@@ -65,10 +67,8 @@ class ModelMixin:
 
     def forward(self, inp, *args, **kwargs):
         out = super().forward(inp, *args, **kwargs)
-        if self.meancentering:
-            out = utils.meancenter(out, offset=self.offset)
-        if self.softplus is not None:
-            out = self.softplus(out)
+        if self.output_layer is not None:
+            out = self.output_layer(out)
         return out
 
 
@@ -150,6 +150,22 @@ class ScoreMatchingMixin:
         out = super().forward(inp) # Shape = (batch_size, 1, map_size, map_size)
         var = sigma**2 # Shape = (batch_size, 1, 1, 1)
         return inp + var * out
+
+
+#=================================================================================
+# Building blocks (e.g., activation modules)
+#=================================================================================
+
+class Meancentering(nn.Module):
+    r"""
+    Module for meancentering the input tensor.
+    """
+    def __init__(self, offset=OFFSET):
+        super().__init__()
+        self.offset = offset
+
+    def forward(self, x):
+        return utils.meancenter(x, offset=self.offset)
 
 
 #=================================================================================
