@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set paths
-path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented.hdf5
+path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 path_to_models=/ceph/chercheurs/leterme231/models
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
