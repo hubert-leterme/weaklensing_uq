@@ -187,7 +187,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--nimgs", type=int,
         default=argparse.SUPPRESS,
-        help=f"Number of images to reconstruct. Default = {NIMGS}"
+        help=f"Number of input images. Default = {NIMGS}"
     )
     parser.add_argument(
         "-b", "--batch-size", type=int,
