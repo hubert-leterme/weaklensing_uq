@@ -80,6 +80,7 @@ def main(
         cnn_class = None
         scale_as_input = False
 
+    kwargs_model_order1 = None
     if order2:
         if path_to_pred_dataset is not None:
             kwargs.update(
@@ -88,10 +89,8 @@ def main(
         elif backend == 'tensorflow':
             raise NotImplementedError
         else:
-            # No mean centering, no offset, and only positive values in order-2 moment networks
-            offset_order1 = offset
+            # No mean centering and only positive values in order-2 moment networks
             kwargs_model_order1 = kwargs_model.copy()
-            offset = 0.
             kwargs_model.update(
                 meancentering=False, onlypositive=True
             )
@@ -212,7 +211,7 @@ def main(
         metric = wlcnn.torch.METRIC_DICT[loss]
         if order2 and path_to_pred_dataset is None:
             order1_model = cnn_class(
-                map_size=imgsize, offset=offset_order1, **kwargs_model_order1
+                map_size=imgsize, offset=offset, **kwargs_model_order1
             )
             checkpoint_order1_model = torch.load(path_to_order1_model)
             order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
