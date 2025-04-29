@@ -1,5 +1,5 @@
 """
-This module is a copy-paste of the `model/SUNet_detail_unembedded` module from:
+This module is a copy-paste of the model/SUNet_detail_unembedded.py file from:
 https://github.com/utsav-akhaury/SUNet
 """
 import torch
