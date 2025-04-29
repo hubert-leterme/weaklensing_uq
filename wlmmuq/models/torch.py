@@ -51,14 +51,16 @@ class ModelMixin:
             **kwargs
         )
         super().__init__(**kwargs)
+        if hasattr(self, 'additional_output'):
+            raise NotImplementedError("Attribute `additional_output` already exists.")
         if meancentering:
             if onlypositive:
                 warnings.warn("`onlypositive` is ignored when `meancentering` is True.")
-            self.output_layer = Meancentering(offset=offset)
+            self.additional_output = Meancentering(offset=offset)
         elif onlypositive:
-            self.output_layer = nn.ReLU()
+            self.additional_output = nn.ReLU()
         else:
-            self.output_layer = None
+            self.additional_output = None
 
 
     def _preprocess_kwargs(self, **kwargs):
@@ -67,8 +69,8 @@ class ModelMixin:
 
     def forward(self, inp, *args, **kwargs):
         out = super().forward(inp, *args, **kwargs)
-        if self.output_layer is not None:
-            out = self.output_layer(out)
+        if self.additional_output is not None:
+            out = self.additional_output(out)
         return out
 
 
