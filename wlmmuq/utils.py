@@ -3,6 +3,7 @@ import numpy as np
 from scipy import ndimage, signal, stats
 import matplotlib.pyplot as plt
 import torch
+import torch.nn.functional as F
 
 #from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
@@ -203,81 +204,72 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 
 
 def get_masked_and_noisy_shear(
-        gamma1: np.ndarray | torch.Tensor,
-        gamma2: np.ndarray | torch.Tensor,
-        std_noise: np.ndarray | torch.Tensor=None,
-        mask: np.ndarray | torch.Tensor=None,
-        ngal: np.ndarray | torch.Tensor=None,
-        shapedisp: float=None,
-        std_noise_mask: float=None,
-        multfact_std_noise: float=30.,
-        inpainting: bool=False
+        gamma: np.ndarray | torch.Tensor,
+        std_noise: np.ndarray | torch.Tensor,
+        mask: np.ndarray | torch.Tensor,
+        inpainting: bool=False,
+        output_shape_wider: tuple[int, int]=None,
+        std_noise_wider: np.ndarray | torch.Tensor=None,
+        mask_wider: np.ndarray | torch.Tensor=None
 ):
     """
     Parameters
     ----------
-    gamma1, gamma2 (numpy.ndarray, shape = (nimgs, nx, ny))
-    std_noise (numpy.ndarray, shape = (nx, ny), default=None)
+    gamma (numpy.ndarray | torch.tensor, shape = (nimgs, nx, ny), dtype=complex)
+    std_noise (numpy.ndarray, shape = (nx, ny))
         Array of noise standard deviation.
-        If none is given, then arguments `ngal` and `shapedisp` must be provided.
     mask (numpy.ndarray, shape = (nx, ny))
-        Array of masked data. If none is given, then argument `ngal` must be provided.
-    ngal (numpy.ndarray, shape = (nx, ny))
-        Number of measured galaxies per pixel
-    shapedisp (float)
-        Shape dispersion of galaxies
-    std_noise_mask (float, default=None)
-        For masked data, we set in practice a variance which makes the SNR very small,
-        such that the signal becomes dominated by the noise. This argument explicitly
-        provides the value of the standard deviation for masked data.
-    multfact_std_noise (float, default=30.)
-        Only used if `stdnoise_mask` is not provided. Then, the standard deviation for
-        masked data is set to `multfact_stdnoise` times the squared norm of the shear
-        map, divided by the number of pixels.
+        Array of masked data.
     inpainting (bool, default=False)
         If True, apply noise to the masked regions.
+    output_shape_wider (tuple, default=None)
+        If provided, also compute wider images with zero-padding.
+    std_noise_wider (numpy.ndarray, shape = output_shape_wider, default=None)
+    mask_wider (numpy.ndarray, shape = output_shape_wider, default=None)
 
     Returns
     -------
-    gamma1_noisy, gamma2_noisy (numpy.ndarray)
+    gamma_noisy, gamma_noisy_wider (numpy.ndarray | torch.Tensor)
         Noisy shear maps, affected by argument `inpainting`.
-    std (numpy.ndarray)
-        Noise standard deviation, unaffected by argument `inpainting`.
     
     """
-    shape = test_array_shape([gamma1, gamma2, std_noise, mask, ngal])
-    numel = count_elts(gamma1)
-    if torch.is_tensor(gamma1):
+    if torch.is_tensor(gamma):
         randn = torch.randn
     else:
         randn = np.random.randn
 
+    shape = test_array_shape([gamma, std_noise, mask])
+    *shape0, nx, ny = shape
+
     # Set masked values to 0
-    if mask is None:
-        mask = ngal > 0
+    check_mask(mask)
+    gamma_masked = mask * gamma
+
+    def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
+        noise = std_noise * (randn(*shape) + 1j * randn(*shape))
+        if not inpainting:
+            noise[..., ~mask] = 0.
+        return gamma_masked + noise
+
+    if output_shape_wider is None:
+        gamma_noisy = _get_noisy_shear(gamma_masked, std_noise, mask, shape)
+        gamma_noisy_wider = None
+
     else:
-        check_mask(mask)
-    gamma1_masked = mask * gamma1
-    gamma2_masked = mask * gamma2
+        gamma_masked_wider, (beg_x, beg_y) = pad_arr(
+            gamma_masked, new_shape=output_shape_wider
+        )
+        shape_wider = (*shape0, *output_shape_wider)
+        gamma_noisy_wider = _get_noisy_shear(
+            gamma_masked_wider, std_noise_wider, mask_wider, shape_wider
+        )
+        gamma_noisy = crop_arr(
+            gamma_noisy_wider,
+            beg_x, beg_x + nx,
+            beg_y, beg_y + ny
+        )
 
-    # Add noise
-    if std_noise is None:
-        if std_noise_mask is None:
-            sqnorm_gamma = (
-                np.linalg.norm(gamma1)**2 + np.linalg.norm(gamma2)**2
-            ) / numel # normalized squared norm
-            std_noise_mask = multfact_std_noise * (sqnorm_gamma / 2)**0.5
-        std_noise = get_std_noise(ngal, shapedisp, std_noise_mask)
-    noise1 = std_noise * randn(*shape)
-    noise2 = std_noise * randn(*shape)
-
-    if not inpainting:
-        noise1[..., ~mask] = 0.
-        noise2[..., ~mask] = 0.
-    gamma1_noisy = gamma1_masked + noise1
-    gamma2_noisy = gamma2_masked + noise2
-
-    return gamma1_noisy, gamma2_noisy, std_noise
+    return gamma_noisy, gamma_noisy_wider
 
 
 def get_std_ks(
@@ -544,6 +536,54 @@ def crop_arr(arr, beg_idx_x, end_idx_x, *args):
         end_idx_y = end_idx_x
 
     return arr[..., beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
+
+
+def pad_arr(
+        inp: np.ndarray | torch.Tensor, new_shape: tuple[int, int], **kwargs
+) -> tuple[
+    np.ndarray | torch.Tensor,
+    tuple[int, int]
+]:
+    """
+    Pad an array of shape (..., nx, ny) to (..., new_nx, new_ny).
+    
+    Parameters
+    ----------
+    inp: np.ndarray or torch.Tensor, shape = (..., nx, ny)
+    new_shape: tuple (new_nx, new_ny)
+        Desired spatial dimensions after padding
+    **kwargs
+        Additional arguments to be passed to `torch.nn.functional.pad`
+    
+    Returns
+    -------
+    out: np.ndarray or torch.Tensor, shape (..., new_nx, new_ny)
+    beg_x, beg_y: int
+        Number of pixels added to the beginning of the x and y axes, respectively.
+    """
+    nx, ny = inp.shape[-2:]
+    new_nx, new_ny = new_shape
+
+    if new_nx < nx or new_ny < ny:
+        raise ValueError(
+            "New shape must be greater than or equal to the original shape in both dimensions"
+        )
+
+    pad_x = new_nx - nx
+    pad_y = new_ny - ny
+    beg_x = pad_x // 2
+    beg_y = pad_y // 2
+
+    # Compute padding: (left, right, top, bottom)
+    pad_width = (
+        beg_y, pad_y - beg_y,  # left, right
+        beg_x, pad_x - beg_x   # top, bottom
+    )
+
+    # F.pad expects padding in the order (left, right, top, bottom)
+    out = pad(inp, pad_width, mode='constant', **kwargs)
+
+    return out, (beg_x, beg_y)
 
 
 def get_1d_powerspectrum(kappa):
@@ -936,4 +976,15 @@ def count_elts(arr: np.ndarray | torch.Tensor) -> int:
         out = arr.numel()
     else:
         out = arr.size
+    return out
+
+
+def pad(
+        arr: np.ndarray | torch.Tensor, pad_width: tuple[int, int, int, int],
+        **kwargs
+) -> np.ndarray | torch.Tensor:
+    if torch.is_tensor(arr):
+        out = F.pad(arr, pad_width, **kwargs)
+    else:
+        raise NotImplementedError
     return out
