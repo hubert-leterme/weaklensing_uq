@@ -17,7 +17,6 @@ setup(
         "scikit-image",
         "h5py",
         "tensorflow",
-        "pycs",
         "matplotlib",
         "astropy",
         "lenspack"

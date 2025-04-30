@@ -4,18 +4,24 @@
 
 #### Conda virtual environment
 
+For reproducibility.
+
 ```bash
 conda env create -f env.yml
 conda activate wlmmuq
 ```
 
+#### Installation
+
+Install `wlmmuq` library, provided in this repository, with `pip install .`.
+
 #### Additional packages
 
-Some packages must be installed manually.
+To run Wiener and MCALens algorithms, the following packages must be installed manually.
 
 - `pycs` library, from the `cosmostat` repository (https://github.com/CosmoStat/cosmostat). Tested with commit nb `3eff4935bc3cd2368844c67452e429e0f4e7a127`. If `python -m pip install .` fails, simply specify the path to the git repository in `config.yml` (see below). Otherwise, leave it blank.
 
-- `pysparse` Python bindings, from the `Sparse2D` repository (https://github.com/CosmoStat/Sparse2D). Tested with commit nb `3f9d54863765980299cfe92e0624ba93ed7ff02b`.
+- `pysparse` Python bindings, from the `Sparse2D` repository (https://github.com/CosmoStat/Sparse2D). Only needed for MCALens. Tested with commit nb `3f9d54863765980299cfe92e0624ba93ed7ff02b`.
 
 #### Configuration file
 
@@ -32,28 +38,18 @@ If you encounter the error `ImportError: libpython3.11.so.1.0: cannot open share
 
 ## Python scripts
 
+**TODO: update.**
+
 ### Mass mapping with uncertainty quantification
 
 #### Compute point estimates
 
 ```bash
-python massmapping.py wiener wiener.pred --ninpimgs 25 --seed 42 -v
+python scripts/massmapping.py wiener wiener_niter_12_nimgs_225_${datetime} /path/to/test/dataset.hdf5 --niter 12 --nimgs 225 -b 45 --seed 42 -v
 ```
 
 ```bash
-python massmapping.py mcalens mcalens.pred --Nsigma 4 --ninpimgs 25 --seed 42 -v
-```
-
-#### Apply UQ by propagating noise realizations
-
-**Note:** UQ before calibration.
-
-```bash
-python massmapping.py wiener wiener.uq --ninpimgs 25 -b 9 --uq --nsamples 25 --seed 42 -v
-```
-
-```bash
-python massmapping.py mcalens mcalens.uq --Nsigma 4 --ninpimgs 25 -b 9 --uq --nsamples 25 --seed 42 -v
+python scripts/massmapping.py mcalens mcalens_niter_${niter_mcalens}_Nsigma_5_nimgs_225_${datetime} /path/to/test/dataset.hdf5 --niter $niter_mcalens --Nsigma 5 --nimgs 225 -b 45 --seed 42 -v
 ```
 
 ### Creating an augmented dataset
@@ -70,13 +66,13 @@ python create_augmented_dataset.py path/to/destination/file.hdf5 --idx-lp 2 --ni
 python train.py path/to/augmented/dataset.hdf5 --input-method wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
 ```
 
-## Jupyter notebook
+## Jupyter notebooks
 
-Check `wlmmuq.ipynb`.
+Examples are provided in the Jupyter notebooks provided in the directory `./notebooks`.
 
 ## License
 
-Copyright 2024 Hubert Leterme
+Copyright 2025 Hubert Leterme
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
