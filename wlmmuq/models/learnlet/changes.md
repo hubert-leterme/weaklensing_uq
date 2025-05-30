@@ -1,0 +1,3 @@
+- Avoid using `.cuda()` within the class methods, use `self.register_buffer` instead.
+- In-place weight modifications: create a pre-forward hook, instead of doing it in the forward method (see https://discuss.pytorch.org/t/how-to-normalize-the-convolution-parameters-during-forward-pass/33908)
+- Raise exceptions when necessary

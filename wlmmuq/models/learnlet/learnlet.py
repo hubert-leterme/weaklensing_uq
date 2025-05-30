@@ -1,5 +1,5 @@
 """
-This module is a copy-paste of the learnlet.py file from the original repository:
+This module is adapted from the learnlet.py file, from the original repository:
 https://github.com/vicbonj/learnlet
 """
 import torch
@@ -47,8 +47,9 @@ class Learnlet(nn.Module):
         dilat = 1
         pad_A = int((kernel_size_A-1)/2)
         pad_S = int((kernel_size_S-1)/2)
-        self.id_filter = torch.zeros(kernel_size_A, kernel_size_A).cuda()
-        self.id_filter[pad_A, pad_A] = 1
+        id_filter = torch.zeros(kernel_size_A, kernel_size_A)
+        id_filter[pad_A, pad_A] = 1
+        self.register_buffer('id_filter', id_filter)
 
         if exact_rec is True:
             filters_s = filters
@@ -58,48 +59,66 @@ class Learnlet(nn.Module):
         self.convs_A = nn.ModuleList()
         self.convs_S = nn.ModuleList()
         for i in range(n_scales-1):
-            self.convs_A.append(nn.Conv2d(1, filters+1, kernel_size_A, bias=False, padding=pad_A*dilat, dilation=dilat, padding_mode='reflect'))
-            self.convs_S.append(nn.Conv2d(filters_s, filters_s, kernel_size_S, bias=False, padding=pad_S*dilat, dilation=dilat, padding_mode='reflect', groups=filters_s))
+            conv_a = nn.Conv2d(
+                1, filters+1, kernel_size_A, bias=False, padding=pad_A*dilat,
+                dilation=dilat, padding_mode='reflect'
+            )
+            conv_a.register_forward_pre_hook(self.update_conv_a_weights)
+            self.convs_A.append(conv_a)
+
+            conv_s = nn.Conv2d(
+                filters_s, filters_s, kernel_size_S, bias=False,
+                padding=pad_S*dilat, dilation=dilat,
+                padding_mode='reflect', groups=filters_s
+            )
+            self.convs_S.append(conv_s)
             dilat *= 2
+
+    def update_conv_a_weights(self, module, input):
+        with torch.no_grad():
+            if self.model == 'squared':
+                module.weight.data /= torch.sum(
+                    module.weight.data**2, axis=(1, 2, 3), keepdim=True
+                ).sqrt()
+            elif self.model == 'sum':
+                module.weight.data /= torch.sum(
+                    module.weight.data, axis=(1, 2, 3), keepdim=True
+                )
+            else:
+                raise ValueError
+            module.weight.data[0, 0] = self.id_filter
 
     def forward(self, x, ks):
         wt = []
-        for i in range(len(self.convs_A)):
+        for i, (conv_a, conv_s) in enumerate(zip(self.convs_A, self.convs_S)):
             x_in = x[:,i][:,None]
-            if self.model == 'squared':
-                self.convs_A[i].weight.data /= torch.sum(self.convs_A[i].weight.data**2, axis=(1, 2, 3), keepdim=True).sqrt()
-            elif self.model == 'sum':
-                self.convs_A[i].weight.data /= torch.sum(self.convs_A[i].weight.data, axis=(1, 2, 3), keepdim=True)
-            else:
-                print(error)
-            self.convs_A[i].weight.data[0,0] = torch.nn.Parameter(self.id_filter, requires_grad=False)
 
-            x_a = self.convs_A[i](x_in)
+            x_a = conv_a(x_in)
             if self.model == 'squared':
                 thresh = ks[:,i][:,None,None,None]*torch.var(x_in, axis=(1, 2, 3)).sqrt()[:,None,None,None]
             elif self.model == 'sum':
                 thresh = ks[:,i][:,None,None,None]*torch.var(x_a, axis=(2, 3)).sqrt()[:,:,None,None]
             else:
-                print(error)
+                raise ValueError
             if self.thresh == 'hard':
                 x_a_t = x_a * torch.sigmoid((torch.abs(x_a) - thresh) / 1e-3)
             elif self.thresh == 'soft':
                 x_a_t = torch.sign(x_a) * torch.relu(torch.abs(x_a) - thresh)
             else:
-                print('Not implemented thresholding')
+                raise NotImplementedError('Thresholding')
             if self.exact_rec is True:
                 x_in_t = x_a_t[:,0][:,None]
 
-                x_s = self.convs_S[i](x_a_t[:,1:])
+                x_s = conv_s(x_a_t[:,1:])
 
-                x_a_id = self.convs_A[i](x_in_t)
-                x_s_id = self.convs_S[i](x_a_id[:,1:])
+                x_a_id = conv_a(x_in_t)
+                x_s_id = conv_s(x_a_id[:,1:])
 
                 last_one = x_in_t - torch.sum(x_s_id, axis=1)[:,None]
 
                 x_s = torch.cat([last_one, x_s], axis=1)
             else:
-                x_s = self.convs_S[i](x_a_t)
+                x_s = conv_s(x_a_t)
 
             x_s = torch.sum(x_s, axis=1)[:,None]
             wt.append(x_s)
