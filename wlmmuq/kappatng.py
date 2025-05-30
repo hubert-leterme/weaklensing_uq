@@ -9,6 +9,7 @@ from . import CONFIG_DATA
 KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
 
 LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
+MAX_Z = 2.6
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
 LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 
@@ -220,34 +221,36 @@ def get_weights(redshifts):
         List of redshifts, for each measured galaxy. 1D array of shape (ngals,)
     
     """
-    if np.min(redshifts) < LIST_OF_Z[0] or np.max(redshifts) >= LIST_OF_Z[-1]:
-        raise ValueError("Out-of-bound values for argument `redshifts`")
-
     idxs_sup = np.digitize(redshifts, LIST_OF_Z) # shape = (ngals,)
     idxs_inf = idxs_sup - 1 # shape = (ngals,)
 
-    diff_redshifts = LIST_OF_Z[idxs_sup] - LIST_OF_Z[idxs_inf] # shape = (ngals,)
-    weights_sup = 1 - (LIST_OF_Z[idxs_sup] - redshifts) / diff_redshifts # shape = (ngals,)
-    weights_inf = 1 - (redshifts - LIST_OF_Z[idxs_inf]) / diff_redshifts # shape = (ngals,)
-    # Note that (weights_inf + weights_sup) are equal to one everywhere
+    redshifts_sup = np.array([
+        LIST_OF_Z[idx] if idx < len(LIST_OF_Z) else np.nan for idx in idxs_sup
+    ])
+    redshifts_inf = np.array([
+        LIST_OF_Z[idx] if idx >= 0 else np.nan for idx in idxs_inf
+    ])
+
+    diff_redshifts = redshifts_sup - redshifts_inf # shape = (ngals,)
+    weights_sup = 1 - (redshifts_sup - redshifts) / diff_redshifts # shape = (ngals,)
+    weights_inf = 1 - (redshifts - redshifts_inf) / diff_redshifts # shape = (ngals,)
+    # Note that `weights_inf + weights_sup` are equal to one everywhere,
+    # except when `redshifts` is below `LIST_OF_Z[0]` or above `LIST_OF_Z[-1]`, in which
+    # case the value of `weights_inf` and `weights_sup` is nan.
 
     idxs = np.concatenate([idxs_inf, idxs_sup])
     weights = np.concatenate([weights_inf, weights_sup])
+
+    # Galaxies with redshift below LIST_OF_Z[0] contribute entirely to the first bin
+    # Galaxies with redshift above LIST_OF_Z[-1] contribute entirely to the last bin
+    weights = weights[(idxs >= 0) & (idxs < len(LIST_OF_Z))]
+    idxs = idxs[(idxs >= 0) & (idxs < len(LIST_OF_Z))]
+    weights[np.isnan(weights)] = 1.
 
     out = np.bincount(idxs, weights=weights, minlength=len(LIST_OF_Z)) # shape = nz
     out /= np.sum(out) # normalize
 
     return out
-
-
-def filter_by_redshifts(cat_cosmos_bright):
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] >= np.min(LIST_OF_Z)
-    ]
-    cat_cosmos_bright = cat_cosmos_bright[
-        cat_cosmos_bright['zphot'] < np.max(LIST_OF_Z)
-    ]
-    return cat_cosmos_bright
 
 
 def get_data_from_cosmos_ktng(cat_cosmos, imgsize):

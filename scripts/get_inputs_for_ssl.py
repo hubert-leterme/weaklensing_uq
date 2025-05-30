@@ -31,7 +31,7 @@ def main(
     if verbose:
         print("Compute a map of number of galaxies per pixels and a binary mask")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
+    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
     data_dict = wlktng.get_data_from_cosmos_ktng(
         cat_cosmos_bright, imgsize
     )

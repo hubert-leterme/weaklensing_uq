@@ -143,3 +143,10 @@ def cosmos_boundaries(extent, width, boundaries=None):
     ra, dec = np.array(boundaries).T
 
     return cosmos_mask, ra, dec
+
+
+def filter_by_redshifts(cat_cosmos, max_z):
+    cat_cosmos = cat_cosmos[
+        cat_cosmos['zphot'] < max_z
+    ]
+    return cat_cosmos

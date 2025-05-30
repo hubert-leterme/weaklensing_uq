@@ -32,7 +32,7 @@ def get_stdnoise_mask(
     if verbose:
         print("Load COSMOS galaxy shape catalog")
     cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
+    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
     if cosmos_include_faint:
         cat_cosmos = aptable.vstack(
             [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
@@ -82,7 +82,7 @@ def create_dataset_from_kappatng(
     if verbose:
         print("Computing redshift weights from COSMOS...")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlktng.filter_by_redshifts(cat_cosmos_bright)
+    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
     weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
 
     # Get nb of pixels in output images and adjust opening angle accordingly
