@@ -683,7 +683,7 @@ def get_metrics(pred, res, truth, **kwargs):
 
 def plot_means_errs(
         list_of_means, list_of_stds, list_of_methods, xticklabels=None, sec_xticklabels=None,
-        xlabel=None, ylabel=None, drawtarget=True, alpha=None, drawbounds=True,
+        xlabel=None, ylabel=None, drawtarget=True, alpha=None, drawbounds=True, offset=0.15,
         y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None, loclegend=None,
         figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None
 ):
@@ -697,7 +697,6 @@ def plot_means_errs(
         nvals = len(xticklabels)
     else:
         nvals = 1
-    offset = 0.15  # Adjust the offset as needed
 
     _, ax = plt.subplots(figsize=figsize)
     for i, (means, stds, label) in enumerate(zip(list_of_means, list_of_stds, list_of_methods)):
@@ -737,7 +736,7 @@ def plot_means_errs(
     if drawbounds:
         plt.axhspan(
             y_lower, y_upper,
-            color='yellow', alpha=0.3, linewidth=0., label=r"Theoretical bounds for $\mathrm{\mathbb{E}}[L]$"
+            color='yellow', alpha=0.3, linewidth=0., label="Theoretical bounds"
         )
     plt.legend(loc=loclegend)
     if logscale:
