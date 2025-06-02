@@ -10,39 +10,6 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
-L2_LAMBDA = 1e-4
-
-class BaseL2RegLoss(keras.losses.Loss):
-
-    def __init__(self, l2_lambda=L2_LAMBDA, **kwargs):
-        super().__init__(**kwargs)
-        self.l2_lambda = l2_lambda
-
-    def call(self, y_true, y_pred):
-        df = self._data_fidelity(y_true, y_pred)
-        l2_output = tf.reduce_mean(tf.square(y_pred))
-        return df + self.l2_lambda * l2_output
-
-    def _data_fidelity(self, y_true, y_pred):
-        raise NotImplementedError
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "l2_lambda": self.l2_lambda
-        })
-        return config
-
-
-class L2RegMSE(BaseL2RegLoss):
-    def _data_fidelity(self, y_true, y_pred):
-        return tf.reduce_mean(tf.square(y_pred - y_true))
-
-
-class L2RegMAE(BaseL2RegLoss):
-    def _data_fidelity(self, y_true, y_pred):
-        return tf.reduce_mean(tf.abs(y_true - y_pred))
-
 
 class MeanCentering(keras.layers.Layer):
     def call(self, tensor):
@@ -237,23 +204,13 @@ def print_model(model):
 def compile_kerasmodel(model, loss, learning_rate=None, **kwargs):
     """
     :param model: keras model
-    :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
+    :param loss: loss function: 'mse' or 'mae'
     :param learning_rate: learning rate for the optimizer
-    :param l2_lambda: regularization parameter
     """
-    if loss in ('mse', 'mae'):
-        loss_fun = loss
-    elif loss == 'l2reg_mse':
-        loss_fun = L2RegMSE(**kwargs)
-    elif loss == 'l2reg_mae':
-        loss_fun = L2RegMAE(**kwargs)
-    else:
-        raise ValueError
-
     if learning_rate is None:
-        model.compile(optimizer='adam', loss=loss_fun)
+        model.compile(optimizer='adam', loss=loss)
     else:
         model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-            loss=loss_fun
+            loss=loss
         )

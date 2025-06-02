@@ -14,7 +14,6 @@ import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
 
 from wlmmuq.data import SCALE, NUM_WORKERS
-from wlmmuq.models import L2_LAMBDA
 
 IMGSIZE = 384
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
@@ -43,8 +42,7 @@ def main(
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, l2_lambda=L2_LAMBDA,
-        checkpoint_dir=None, save_freq=None, backup_dir=None,
+        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
 ):
@@ -169,8 +167,7 @@ def main(
 
         # Compile model
         wlcnn.tensorflow.compile_kerasmodel(
-            model, loss=loss, l2_lambda=l2_lambda,
-            learning_rate=learning_rate
+            model, loss=loss, learning_rate=learning_rate
         )
 
         # Define the checkpoint callback
@@ -477,16 +474,8 @@ if __name__ == "__main__":
         "--loss", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Training loss function, e.g., 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'. "
+            "Training loss function, e.g., 'mse' or 'mae'. "
             f"Default = {LOSS}"
-        )
-    )
-    parser.add_argument(
-        "--l2-lambda", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Regularization parameter for 'l2reg_mse' or 'l2reg_mae'. "
-            f"Default = {L2_LAMBDA}"
         )
     )
     parser.add_argument(
