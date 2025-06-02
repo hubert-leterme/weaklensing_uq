@@ -5,8 +5,6 @@ path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_a
 path_to_models=/ceph/chercheurs/leterme231/models
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
-backup_dir=/ceph/chercheurs/leterme231/backups
-stats_dir=/ceph/chercheurs/leterme231/stats
 
 current_date=$(date +"%Y%m%d_%H%M%S")
 
@@ -20,7 +18,7 @@ fi
 optional_args="${@:2}"
 
 # Set name of the denoiser
-optional_args_cleaned=$(echo "$optional_args" | sed 's/-m //g' | sed 's/-a //g' | sed 's/-s /--small-model /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--//g' | xargs | sed 's/ /_/g' | sed 's/\.keras//g')
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-m //g' | sed 's/-a //g' | sed 's/-s /--small-model /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--//g' | xargs | sed 's/ /_/g')
 name_denoiser=$(echo "denoiser_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
 # Check if argument `-m <model_filename>` is provided and
@@ -32,7 +30,7 @@ if [[ $optional_args == *"-m "* ]]; then
 fi
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_pe.csv --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

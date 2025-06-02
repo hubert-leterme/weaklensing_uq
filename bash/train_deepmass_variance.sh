@@ -4,8 +4,6 @@
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
-backup_dir=/ceph/chercheurs/leterme231/backups
-stats_dir=/ceph/chercheurs/leterme231/stats
 
 # Check if correct number of arguments are provided
 if [ "$#" -ne 5 ]; then
@@ -22,6 +20,4 @@ python scripts/train.py $path_to_augmented_dataset \
   --path-to-pred-dataset $3 \
   -lr $5 --lr-scheduler \
   --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${4} \
-  --save-freq $save_freq \
-  --backup-dir $backup_dir/backup_${2}_${4} \
-  --path-to-csv-log $stats_dir/log_${2}_${4}_var.csv --seed 42 -v
+  --seed 42 -v

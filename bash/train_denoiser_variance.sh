@@ -4,8 +4,6 @@
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
-backup_dir=/ceph/chercheurs/leterme231/backups
-stats_dir=/ceph/chercheurs/leterme231/stats
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
@@ -25,7 +23,7 @@ if [[ $optional_args == *"-o1 "* ]]; then
 fi
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser --order2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --save-freq ${save_freq} --backup-dir ${backup_dir}/${name_denoiser} --path-to-csv-log ${stats_dir}/log_${name_denoiser}_var.csv --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --denoiser --order2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

@@ -4,8 +4,6 @@
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
-backup_dir=/ceph/chercheurs/leterme231/backups
-stats_dir=/ceph/chercheurs/leterme231/stats
 
 current_date=$(date +"%Y%m%d_%H%M%S")
 
@@ -22,6 +20,4 @@ python scripts/train.py $path_to_augmented_dataset \
   --input-method $2 \
   -lr $3 --lr-scheduler \
   --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${current_date} \
-  --save-freq $save_freq \
-  --backup-dir $backup_dir/backup_${2}_${current_date} \
-  --path-to-csv-log $stats_dir/log_${2}_${current_date}_pe.csv --seed 42 -v
+  --seed 42 -v
