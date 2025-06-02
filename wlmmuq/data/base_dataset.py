@@ -3,7 +3,6 @@ import numpy as np
 import h5py
 import torch
 
-from ..iterativemm import iterativemm
 try:
     import pycs.astro.wl.mass_mapping as csmm
 except ImportError:
@@ -45,7 +44,7 @@ class BaseHDF5Dataset:
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
         input_method: str, optional
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            Input mass mapping method: 'ks' or 'wiener'. Only if already
             registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
@@ -362,7 +361,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
             self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
-            step_size=None, niter=1, complexconjugate=False, return_complex=False,
+            niter=1, complexconjugate=False, return_complex=False,
             output_shape_wider: int | tuple[int, int]=None, **kwargs
     ):
         """
@@ -385,10 +384,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             If True, then apply noise in masked regions of the shear. Otherwise, set masked
             values to 0. Default is False.
         input_method: str, optional
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'.
-            If set to 'ks' or 'wiener', the implementations from
-            `pycs.astro.wl.mass_mapping` will be used. If set to 'wiener_pgd, the
-            implementation from `iterativemm.PGDMassMapping` will be used. Default is None.
+            Input mass mapping method: 'ks' or 'wiener'. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -413,11 +409,8 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         powerspectrum_1d: np.ndarray, optional
             If `input_method` is set to 'wiener' or 'wiener_pdg', 1D power spectrum.
             Its length must be half the image size. Default is None.
-        step_size: If `input_method` is set to 'wiener_pgd', step size of the gradient descent
-            operator. If `input_method` is set to 'wiener', the step size if inferred
-            automatically from `std_noise`. Default is None.
         niter: int, optional
-            If `input_method` is set to 'wiener' or 'wiener_pgd', number of iterations.
+            If `input_method` is set to 'wiener', number of iterations.
             Default is 1.
         complexconjugate (bool, default=True)   
             Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
@@ -441,7 +434,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         self.inpainting = inpainting
         self.std_gaussianfilter = std_gaussianfilter
         self.powerspectrum_1d = powerspectrum_1d
-        self.step_size = step_size
         self.niter = niter
         self.complexconjugate = complexconjugate
         self.return_complex = return_complex
@@ -547,19 +539,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
                     self.sheardata, self.powerspectrum_1d, niter=self.niter,
                     **self.kwargs_wiener
                 )
-            elif self.input_method == 'wiener_pgd':
-                nx, ny = kappa_true.shape[-2:]
-                assert nx == ny
-                imgsize = nx
-                prox_wiener = iterativemm.ProximalWiener(
-                    imgsize, self.powerspectrum_1d, self.step_size
-                )
-                wiener_pdg = iterativemm.BayesianPGDMassMappingNoPrecond(
-                    std_noise=self.std_noise, step_size=self.step_size,
-                    niter=self.niter, backward=prox_wiener, mask=self.mask,
-                    verbose=self.verbose
-                )
-                kappa_inp = wiener_pdg(gamma_noisy)
             else:
                 raise ValueError
 
@@ -608,7 +587,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
         batch_size : int, optional
             Number of images per batch. Default is None.
         input_method: str, optional
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            Input mass mapping method: 'ks' or 'wiener'. Only if already
             registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
@@ -730,7 +709,7 @@ class InputTargetMixin:
         batch_size : int, optional
             Number of images per batch. Default is None.
         input_method: str, optional
-            Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
+            Input mass mapping method: 'ks' or 'wiener'. Only if already
             registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.

@@ -3,7 +3,7 @@ import torch
 from torch import nn
 import deepinv as dinv
 
-from .. import utils
+from . import utils
 
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
 def fake_which(cmd):

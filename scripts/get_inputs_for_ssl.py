@@ -53,7 +53,7 @@ def main(
             std_gaussianfilter = std_gaussianfilter_arcmin / resolution # pixels
             kwargs.update(std_gaussianfilter=std_gaussianfilter)
 
-    elif input_method in ('wiener', 'wiener_pgd'):
+    elif input_method == 'wiener':
         if path_to_powerspectrum is None:
             if verbose:
                 print("Estimate the power spectrum for Wiener filtering")
@@ -133,7 +133,7 @@ if __name__ == "__main__":
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
+            "Weak lensing method used as input ('ks' or 'wiener'). "
             f"Default = '{INPUT_METHOD}'"
         )
     )
@@ -151,28 +151,16 @@ if __name__ == "__main__":
         help=(
             "Path to the .npy file containing the 1D power spectrum. "
             "If not provided, and if argument --input-method is set to "
-            "'wiener' or 'wiener_pgd', then the power spectrum will be inferred "
+            "'wiener', then the power spectrum will be inferred "
             "from the dataset. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--step-size", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "If the selected method is 'wiener_pgd', step size of "
-            "the gradient descent step. Should be smaller than `2 * stdmin**2`, "
-            "where `std_min` denotes the smallest noise standard deviation, "
-            "corresponding to the pixel with the largest number of measured galaxies. "
-            "Default = None"
         )
     )
     parser.add_argument(
         "--niter", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "If the selected method is 'wiener' or 'wiener_pgd', "
-            "number of iterations. Required for 'wiener_pgd'. Default is 1 "
-            "for 'wiener'."
+            "If the selected method is 'wiener', number of iterations. "
+            "Default = 1"
         )
     )
     parser.add_argument(

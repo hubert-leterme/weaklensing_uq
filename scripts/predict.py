@@ -232,7 +232,7 @@ if __name__ == "__main__":
         "--input-method", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Weak lensing method used as input ('ks', 'wiener' or 'wiener_pgd'). "
+            "Weak lensing method used as input ('ks', 'wiener'). "
             "Only used if option `--denoiser` is not activated. Default = None"
         )
     )
