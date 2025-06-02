@@ -5,7 +5,6 @@ import numpy as np
 
 import _commons
 
-import wlmmuq as wl
 import wlmmuq.utils as wlutils
 import wlmmuq.data.torch as wldata
 
@@ -161,8 +160,7 @@ def main(
     rec = np.concatenate(recs, axis=0) # shape = (nimgs, nx, ny)
 
     # Pickle data
-    pickle_dir = os.path.expanduser(wl.CONFIG_DATA['pickle_dir'])
-    np.save(f"{os.path.join(pickle_dir, picklename)}.npy", rec)
+    np.save(os.path.expanduser(picklename), rec)
 
 
 if __name__ == "__main__":
@@ -173,7 +171,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "picklename", type=str,
-        help="File name for the saved object"
+        help=(
+            "Path to the output file where the reconstructed maps will be saved "
+            "(in .npy format)"
+        )
     )
     parser.add_argument(
         "path_to_test_dataset", type=str,
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cosmos-include-faint", action='store_true',
         default=argparse.SUPPRESS,
-        help="Include the faint galaxies from the COSMOS S10 shear catalog."
+        help="Include the faint galaxies from the COSMOS S10 shear catalog"
     )
     parser.add_argument(
         "--nimgs", type=int,

@@ -4,6 +4,13 @@ import random
 import numpy as np
 import torch
 
+from wlmmuq import USE_TENSORFLOW
+if not USE_TENSORFLOW:
+    raise ImportError(
+        "This script requires TensorFlow to be imported. "
+        "Please set 'use_tensorflow' to True in the configuration file."
+    )
+
 import wlmmuq.data.tensorflow as wlbl
 
 MOMENT_ORDER = 1

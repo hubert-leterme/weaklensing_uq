@@ -4,9 +4,7 @@ import numpy as np
 import h5py
 
 from . import utils, cosmos, dataaugm
-from . import CONFIG_DATA
-
-KTNG_DIR = os.path.expanduser(CONFIG_DATA['ktng_dir'])
+from . import KTNG_DIR
 
 LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
 MAX_Z = 2.6

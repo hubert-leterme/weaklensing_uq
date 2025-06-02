@@ -2,15 +2,12 @@
 Data available at https://archive.stsci.edu/hlsp/candels/cosmos-catalogs
 
 """
-import os
 import numpy as np
 import matplotlib.path as mpath
 
 import astropy.table as aptable
 
-from . import CONFIG_DATA
-
-COSMOS_DIR = os.path.expanduser(CONFIG_DATA['cosmos_dir'])
+from . import COSMOS_DIR
 
 COSMOS_VERTICES = [(149.508, 2.880),
                    (149.767, 2.836),

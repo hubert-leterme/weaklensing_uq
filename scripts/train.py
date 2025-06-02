@@ -5,15 +5,18 @@ import cProfile
 import threading
 
 import torch
-import tensorflow as tf
 import deepinv as dinv
 
 import _commons
 
 import wlmmuq.data as wlds
-import wlmmuq.models as wlcnn
+import wlmmuq.models as wlnn
 
+from wlmmuq import USE_TENSORFLOW
 from wlmmuq.data import SCALE, NUM_WORKERS
+
+if USE_TENSORFLOW:
+    import tensorflow as tf
 
 IMGSIZE = 384
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
@@ -25,13 +28,6 @@ LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
-
-MODEL_CLASSES = {
-    "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
-    "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
-    "torch.DRUNet": (wlcnn.torch.DRUNet, True),
-    "torch.SUNet": (wlcnn.torch.SUNet, False)
-} # (model_class, scale_as_input)
 
 def main(
         path_to_augmented_dataset, path_to_pretrained_model=None,
@@ -68,12 +64,18 @@ def main(
 
     if arch is not None:
         backend = arch.split(".")[0]
-        cnn_class, scale_as_input = MODEL_CLASSES[arch]
+        cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
         if scale_as_input:
             kwargs.update(scale_as_input=scale_as_input)
     else:
         cnn_class = None
         scale_as_input = False
+
+    if backend == 'tensorflow' and not USE_TENSORFLOW:
+        raise ImportError(
+            "This script requires TensorFlow to be imported. "
+            "Please set 'use_tensorflow' to True in the configuration file."
+        )
 
     kwargs_model_order1 = None
     if order2:
@@ -92,10 +94,10 @@ def main(
 
     if backend == 'tensorflow': # Use Keras (TensorFlow backend)
         data_module = wlds.tensorflow
-        model_module = wlcnn.tensorflow
+        model_module = wlnn.tensorflow
     elif backend == 'torch': # Use DeepInverse (PyTorch backend)
         data_module = wlds.torch
-        model_module = wlcnn.torch
+        model_module = wlnn.torch
     else:
         raise ValueError
 
@@ -166,7 +168,7 @@ def main(
     if backend == 'tensorflow':
 
         # Compile model
-        wlcnn.tensorflow.compile_kerasmodel(
+        wlnn.tensorflow.compile_kerasmodel(
             model, loss=loss, learning_rate=learning_rate
         )
 
@@ -223,7 +225,7 @@ def main(
     elif backend == 'torch':
 
         # Set loss function
-        metric = wlcnn.torch.METRIC_DICT[loss]
+        metric = wlnn.torch.METRIC_DICT[loss]
         if order2 and path_to_pred_dataset is None:
             order1_model = cnn_class(
                 map_size=imgsize, **kwargs_model_order1
@@ -231,7 +233,7 @@ def main(
             checkpoint_order1_model = torch.load(path_to_order1_model)
             order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
 
-            loss_fun = wlcnn.torch.Order2SupLoss(
+            loss_fun = wlnn.torch.Order2SupLoss(
                 order1_model=order1_model, metric=metric
             )
         else:
@@ -253,7 +255,7 @@ def main(
             print(f"Device: {device}")
         model.to(device)
         loss_fun.to(device)
-        trainer = wlcnn.torch.Trainer(
+        trainer = wlnn.torch.Trainer(
             model,
             device=device,
             save_path=checkpoint_dir,
@@ -306,7 +308,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Architecture of the model. Possible values are: "
-            f"{' | '.join(MODEL_CLASSES.keys())}. Default = None"
+            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
         )
     )
     parser.add_argument(

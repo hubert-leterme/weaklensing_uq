@@ -7,8 +7,9 @@ import torch
 import _commons
 
 import wlmmuq.data as wlds
-import wlmmuq.models as wlcnn
+import wlmmuq.models as wlnn
 
+from wlmmuq import USE_TENSORFLOW
 from wlmmuq.data import SCALE, NUM_WORKERS
 
 MOMENT_ORDER = 1
@@ -16,13 +17,6 @@ IMGSIZE = 384
 NIMGS = 72000
 BATCH_SIZE = 256
 IDX_DATASET = 'kappa_pred'
-
-MODEL_CLASSES = {
-    "tensorflow.UNet": (wlcnn.tensorflow.UNet, False),
-    "tensorflow.UNetScoreMatching": (wlcnn.tensorflow.UNetScoreMatching, True),
-    "torch.DRUNet": (wlcnn.torch.DRUNet, True),
-    "torch.SUNet": (wlcnn.torch.SUNet, False)
-} # (model_class, scale_as_input)
 
 def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
@@ -52,19 +46,25 @@ def main(
 
     if arch is not None:
         backend = arch.split(".")[0]
-        cnn_class, scale_as_input = MODEL_CLASSES[arch]
+        cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
         if scale_as_input:
             kwargs.update(scale_as_input=scale_as_input)
     else:
         cnn_class = None
         scale_as_input = False
 
+    if backend == 'tensorflow' and not USE_TENSORFLOW:
+        raise ImportError(
+            "This script requires TensorFlow to be imported. "
+            "Please set 'use_tensorflow' to True in the configuration file."
+        )
+
     if backend == 'tensorflow': # Use Keras (TensorFlow backend)
         data_module = wlds.tensorflow
-        model_module = wlcnn.tensorflow
+        model_module = wlnn.tensorflow
     elif backend == 'torch': # Use DeepInverse (PyTorch backend)
         data_module = wlds.torch
-        model_module = wlcnn.torch
+        model_module = wlnn.torch
     else:
         raise ValueError
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Architecture of the model. Possible values are: "
-            f"{' | '.join(MODEL_CLASSES.keys())}. Default = None"
+            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
         )
     )
     parser.add_argument(

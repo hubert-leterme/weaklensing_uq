@@ -5,6 +5,13 @@ import h5py
 import numpy as np
 import torch
 
+from wlmmuq import USE_TENSORFLOW
+if not USE_TENSORFLOW:
+    raise ImportError(
+        "This script requires TensorFlow to be imported. "
+        "Please set 'use_tensorflow' to True in the configuration file."
+    )
+
 import wlmmuq.kappatng as wlktng
 import wlmmuq.cosmos as wlcosmos
 import wlmmuq.utils as wlutils

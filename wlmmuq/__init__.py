@@ -26,9 +26,15 @@ while CONFIGFILE is None:
 
 if CONFIGFILE is None:
     warnings.warn("No configuration file provided.")
-    CONFIG_DATA = None
+    CONFIG_DATA = {}
 else:
     with open(CONFIGFILE, 'r', encoding='utf-8') as stream:
         CONFIG_DATA = yaml.safe_load(stream)
     if CONFIG_DATA['verbose']:
         print(f"Configuration file found in {configdir}")
+
+USE_PYCS = CONFIG_DATA.get('use_pycs', False)
+USE_TENSORFLOW = CONFIG_DATA.get('use_tensorflow', False)
+
+COSMOS_DIR = os.path.expanduser(CONFIG_DATA.get('cosmos_dir', None))
+KTNG_DIR = os.path.expanduser(CONFIG_DATA.get('ktng_dir', None))
