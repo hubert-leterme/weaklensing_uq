@@ -140,6 +140,35 @@ def main(
     if verbose:
         model_module.print_model(model)
 
+    # Set directories
+    if not order2:
+        output_type = "pe" # Point estimate
+    else:
+        output_type = "var" # Variance
+
+    if checkpoint_dir is not None:
+        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
+        checkpoint_dir = os.path.normpath(checkpoint_dir)
+
+    if backup_dir is not None: 
+        backup_dir = os.path.join(backup_dir, output_type)
+        backup_dir = os.path.normpath(backup_dir)
+
+    # Start profiling
+    def print_stats():
+        while True:
+            time.sleep(15)
+            filename_stats = 'profile_results.txt'
+            if checkpoint_dir is not None:
+                filename_stats = os.path.join(checkpoint_dir, filename_stats)
+            if os.path.exists(checkpoint_dir): # Will be created during training
+                profiler.dump_stats(filename_stats)
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    stats_thread = threading.Thread(target=print_stats, daemon=True)
+    stats_thread.start()
+
     if backend == 'tensorflow':
 
         # Compile model
@@ -251,6 +280,7 @@ def main(
 
     train_dataset.close()
     val_dataset.close()
+    profiler.disable()
 
 
 if __name__ == "__main__":
@@ -533,42 +563,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     kwargs = vars(args).copy()
 
-    if not hasattr(args, 'order2'):
-        output_type = "pe" # Point estimate
-    else:
-        output_type = "var" # Variance
-
-    try:
-        checkpoint_dir = args.checkpoint_dir
-    except AttributeError:
-        checkpoint_dir = None
-    else:  
-        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
-        checkpoint_dir = os.path.normpath(checkpoint_dir)
-        kwargs.update(checkpoint_dir=checkpoint_dir)
-
-    try:
-        backup_dir = args.backup_dir
-    except AttributeError:
-        pass
-    else:  
-        backup_dir = os.path.join(backup_dir, output_type)
-        backup_dir = os.path.normpath(backup_dir)
-        kwargs.update(backup_dir=backup_dir)
-
-    def print_stats():
-        while True:
-            time.sleep(15)
-            filename_stats = 'profile_results.txt'
-            if checkpoint_dir is not None:
-                filename_stats = os.path.join(checkpoint_dir, filename_stats)
-            profiler.dump_stats(filename_stats)
-
-    profiler = cProfile.Profile()
-    profiler.enable()
-    stats_thread = threading.Thread(target=print_stats, daemon=True)
-    stats_thread.start()
-
     main(**kwargs)
-
-    profiler.disable()
