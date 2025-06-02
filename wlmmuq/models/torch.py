@@ -5,7 +5,6 @@ import deepinv as dinv
 
 from .sunet import sunet
 from .. import utils
-from .. import OFFSET
 
 METRIC_DICT = {
     'mse': dinv.metric.MSE(),
@@ -43,8 +42,7 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            meancentering: bool=False, offset: float=OFFSET,
-            onlypositive: bool=False, **kwargs
+            meancentering: bool=True, onlypositive: bool=False, **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
@@ -56,10 +54,11 @@ class ModelMixin:
         if meancentering:
             if onlypositive:
                 warnings.warn("`onlypositive` is ignored when `meancentering` is True.")
-            self.additional_output = Meancentering(offset=offset)
+            self.additional_output = Meancentering()
         elif onlypositive:
             self.additional_output = nn.ReLU()
         else:
+            warnings.warn("No meancentering or positivity constraint applied.")
             self.additional_output = None
 
 
@@ -162,12 +161,8 @@ class Meancentering(nn.Module):
     r"""
     Module for meancentering the input tensor.
     """
-    def __init__(self, offset=OFFSET):
-        super().__init__()
-        self.offset = offset
-
     def forward(self, x):
-        return utils.meancenter(x, offset=self.offset)
+        return utils.meancenter(x)
 
 
 #=================================================================================

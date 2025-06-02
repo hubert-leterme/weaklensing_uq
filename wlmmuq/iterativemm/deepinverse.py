@@ -70,36 +70,6 @@ class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
         self.d = MahalanobisDistance(sigma=sigma)
 
 
-class PnP(dinv.optim.PnP):
-    r"""
-    Plug-and-play prior with offset and output mean centering:
-    
-    :math:`\operatorname{prox}_{\gamma \regname}(x) = \operatorname{D}_{\sigma}(x + c) - c`.
-
-
-    :param Callable denoiser: Denoiser :math:`\operatorname{D}_{\sigma}`.
-    """
-
-    def __init__(
-            self, denoiser, *args, offset: float=0., offset_out=True,
-            meancentering=False, **kwargs
-    ):
-        super().__init__(denoiser, *args, **kwargs)
-        self.offset = offset
-        self.offset_out = offset_out
-        self.meancentering = meancentering
-
-
-    def prox(self, x, sigma_denoiser, *args, **kwargs):
-
-        out = utils.forward_offset_meancentering(
-            x, sigma_denoiser, *args, forward=super().prox,
-            offset=self.offset, offset_out=self.offset_out,
-            meancentering=self.meancentering, **kwargs
-        )
-        return out
-
-
 class MassMapping(dinv.physics.LinearPhysics):
 
     def __init__(
@@ -131,7 +101,7 @@ class MassMapping(dinv.physics.LinearPhysics):
 class MSE(dinv.metric.MSE):
 
     def __init__(
-            self, mask: torch.Tensor=None, meancentering: bool=False,
+            self, mask: torch.Tensor=None, meancentering: bool=True,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -155,37 +125,6 @@ class MSE(dinv.metric.MSE):
 class RMSE(MSE):
     def metric(self, x_net, x, *args, **kwargs):
         return super().metric(x_net, x, *args, **kwargs) ** 0.5
-
-
-class OffsetMeancenteringWrapper(nn.Module):
-    r"""
-    Wrapper to add an offset to the input of a model and remove it from the output.
-    It also allows for mean centering the output.
-
-    :param torch.nn.Module model: Model to be wrapped.
-    :param float offset: Offset to be added to the input. Default: 0.
-    :param bool offset_out: If True, the offset is removed from the output. Default: True.
-    :param bool meancentering: If True, the output is mean centered. Default: False.
-    """
-
-    def __init__(
-            self, model: nn.Module, offset: float=0., offset_out: bool=True,
-            meancentering: bool=False
-    ):
-        super().__init__()
-        self.model = model
-        self.offset = offset
-        self.offset_out = offset_out
-        self.meancentering = meancentering
-
-    def forward(self, inp, *args, **kwargs):
-
-        out = utils.forward_offset_meancentering(
-            inp, *args, forward=self.model.forward,
-            offset=self.offset, offset_out=self.offset_out,
-            meancentering=self.meancentering, **kwargs
-        )
-        return out
 
 
 class MetricDict(dict):

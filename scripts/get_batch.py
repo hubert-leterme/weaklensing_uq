@@ -5,7 +5,6 @@ import numpy as np
 import torch
 
 import wlmmuq.data.tensorflow as wlbl
-from wlmmuq import OFFSET
 
 MOMENT_ORDER = 1
 IMGSIZE = 384
@@ -18,7 +17,7 @@ def main(
         path_to_augmented_dataset, denoiser=False, moment_order=MOMENT_ORDER,
         path_to_pred_dataset=None, imgsize=IMGSIZE, nimgs=NIMGS_TRAIN,
         batch_size=BATCH_SIZE, keep_unsorted=None,
-        offset=OFFSET, output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
+        output_dir=OUTPUT_DIR, seed=None, verbose=False, **kwargs
 ):
     if seed is not None:
         random.seed(seed)
@@ -42,7 +41,7 @@ def main(
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs, batch_size=batch_size,
         output_shape=imgsize,
-        offset=offset, newaxis=True, **kwargs
+        newaxis=True, **kwargs
     )
     if verbose:
         print("Get one batch")
@@ -129,13 +128,6 @@ if __name__ == "__main__":
         help=(
             "Do not sort by filename in the original dataset. Useful to avoid IndexError "
             "when the dataset is incomplete."
-        )
-    )
-    parser.add_argument(
-        "--offset", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Default convergence value for a perfectly uniform universe. Default = {OFFSET:.2f}"
         )
     )
     parser.add_argument(

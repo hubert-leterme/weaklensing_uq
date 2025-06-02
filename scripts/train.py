@@ -13,7 +13,6 @@ import _commons
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
 
-from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
@@ -45,15 +44,13 @@ def main(
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, l2_lambda=L2_LAMBDA,
-        offset=OFFSET, checkpoint_dir=None, save_freq=None, backup_dir=None,
+        checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
         verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
 
-    keys_model = [
-        'meancentering', 'sigmoid_activation', 'small_model', 'pretrained'
-    ]
+    keys_model = ['small_model', 'pretrained']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
         no_bias = kwargs.pop("no_bias")
@@ -115,22 +112,21 @@ def main(
         hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
-        offset=offset, newaxis=True,
-        nreal_per_img=nreal_per_img, **kwargs
+        newaxis=True, nreal_per_img=nreal_per_img, **kwargs
     )
     train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
         hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, offset=offset, newaxis=True, **kwargs
+        output_shape=imgsize, newaxis=True, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()
 
     # Initialize model
     if path_to_pretrained_model is None:
         model = cnn_class(
-            map_size=imgsize, offset=offset, **kwargs_model
+            map_size=imgsize, **kwargs_model
         )
     else:
         model = model_module.load_model(
@@ -173,7 +169,7 @@ def main(
 
         # Compile model
         wlcnn.tensorflow.compile_kerasmodel(
-            model, loss=loss, l2_lambda=l2_lambda, offset=offset,
+            model, loss=loss, l2_lambda=l2_lambda,
             learning_rate=learning_rate
         )
 
@@ -233,7 +229,7 @@ def main(
         metric = wlcnn.torch.METRIC_DICT[loss]
         if order2 and path_to_pred_dataset is None:
             order1_model = cnn_class(
-                map_size=imgsize, offset=offset, **kwargs_model_order1
+                map_size=imgsize, **kwargs_model_order1
             )
             checkpoint_order1_model = torch.load(path_to_order1_model)
             order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
@@ -294,8 +290,8 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Path to the pretrained model. If none is given, then the model is "
-            "initialized and trained from scratch. If provided, then arguments "
-            "`--meancentering` and `--no-bias` are ineffective; "
+            "initialized and trained from scratch. If provided, then argument "
+            "`--no-bias` is ineffective; "
             "moreover, `--imgsize` must be compatible with the provided model. "
             "Default = None"
         )
@@ -432,24 +428,12 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--meancentering", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Apply a meancentering operator at the output of the network."
-        )
-    )
-    parser.add_argument(
         "--no-bias", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers."
         )
-    )
-    parser.add_argument(
-        "--sigmoid-activation", action='store_true',
-        default=argparse.SUPPRESS,
-        help="Use sigmoid activation function in the output layer."
     )
     parser.add_argument(
         "-e", "--nepochs", type=int,
@@ -503,13 +487,6 @@ if __name__ == "__main__":
         help=(
             "Regularization parameter for 'l2reg_mse' or 'l2reg_mae'. "
             f"Default = {L2_LAMBDA}"
-        )
-    )
-    parser.add_argument(
-        "--offset", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Default convergence value for a perfectly uniform universe. Default = {OFFSET:.2f}"
         )
     )
     parser.add_argument(

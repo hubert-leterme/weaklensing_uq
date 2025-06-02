@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from lenspack.utils import bin2d
 
 from . import ks93
-from . import OFFSET
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -432,7 +431,7 @@ def mean_predinterv(kappa_lo, kappa_hi, mask=None):
     return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
 
 
-def normalized_mse(kappa_pred, kappa, mask=None, meancentering=False):
+def normalized_mse(kappa_pred, kappa, mask=None, meancentering=True):
     if meancentering:
         kappa_pred = meancenter(kappa_pred, mask=mask)
         kappa = meancenter(kappa, mask=mask)
@@ -616,27 +615,9 @@ def check_mask(mask: np.ndarray | torch.Tensor):
         raise ValueError("mask must be a boolean array")
 
 
-def forward_offset_meancentering(
-        inp: np.ndarray | torch.Tensor, *args, forward: callable=None,
-        offset: float=0., offset_out: bool=True, meancentering: bool=False,
-        **kwargs
-) -> np.ndarray | torch.Tensor:
-
-    # TODO: replace by a decorator?
-    inp = inp + offset
-    if forward is not None:
-        out = forward(inp, *args, **kwargs)
-    if meancentering:
-        out = meancenter(out, offset=offset)
-    if offset_out:
-        out = out - offset
-
-    return out
-
-
 def meancenter(
         arr: np.ndarray | torch.Tensor, axis: int | tuple=(-2, -1),
-        offset: float=None, mask: np.ndarray | torch.Tensor=None
+        mask: np.ndarray | torch.Tensor=None
 ) -> np.ndarray | torch.Tensor:
 
     if torch.is_tensor(arr):
@@ -644,10 +625,7 @@ def meancenter(
     else:
         unsqueeze = lambda x: np.expand_dims(x, axis=-1)
 
-    if offset is not None:
-        arr0 = arr - offset
-    else:
-        arr0 = arr
+    arr0 = arr
     if mask is not None:
         arr0 = arr0 * mask
     mean = arr0.mean(axis=axis)
@@ -757,9 +735,9 @@ def plot_means_errs(
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, offset=OFFSET, **kwargs
+        printxticks=True, printyticks=True, **kwargs
 ):
-    out = plt.imshow(img - offset, origin='lower', **kwargs)
+    out = plt.imshow(img, origin='lower', **kwargs)
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
     if printxylabels:
         plt.xlabel("Right ascension")
@@ -784,12 +762,11 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, extent, boundaries, offset=0., vmin=None, vmax=None,
+            self, extent, boundaries, vmin=None, vmax=None,
             vmax_bounds=None, plot_colorbar=False
     ):
         self.extent = extent
         self.boundaries = boundaries
-        self.offset = offset
         self.plot_colorbar = plot_colorbar
         self.vmin = vmin
         self.vmax = vmax
@@ -804,7 +781,7 @@ class KappamapVisualizer:
         out = skyshow(
             pred, vmin=self.vmin, vmax=self.vmax, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
-            printxticks=False, printyticks=False, printcolorbar=False, offset=self.offset,
+            printxticks=False, printyticks=False, printcolorbar=False,
             **kwargs
         )
         if self.plot_colorbar:

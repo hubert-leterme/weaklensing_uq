@@ -10,7 +10,6 @@ except ImportError:
     warnings.warn("Module `pycs` not found.")
 
 from .. import utils
-from .. import OFFSET
 
 ############################################################################
 # PGD mass mapping
@@ -294,7 +293,7 @@ class ShowIntermediateMaps(Callback):
 class RMSE(Callback):
 
     def __init__(
-            self, niter, kappa_true=None, mask=None, meancentering=False,
+            self, niter, kappa_true=None, mask=None, meancentering=True,
             path_to_saved_stats=None
     ):
         """
@@ -415,14 +414,10 @@ class ProximalWiener:
 class BaseDeepDenoiser:
 
     def __init__(
-            self, list_of_models, sigma: float=None,
-            offset=OFFSET, offset_out=True, meancentering=False, **kwargs
+            self, list_of_models, sigma: float=None, **kwargs
     ):
         self.list_of_models = list_of_models
         self.sigma = sigma
-        self.offset = offset
-        self.offset_out = offset_out
-        self.meancentering = meancentering
         self.kwargs = kwargs
 
 
@@ -430,17 +425,13 @@ class BaseDeepDenoiser:
 
         list_of_outputs = []
         inp = self._convert_to_tensor(inp) # np.ndarray or torch.Tensor
-        inp = self._add_channelaxis(inp) + self.offset
+        inp = self._add_channelaxis(inp)
         inp = self._preprocess(inp)
         for model in self.list_of_models:
             out = self._predict(inp, model)
             out = self._remove_channelaxis(out)
-            if self.offset_out:
-                out -= self.offset
             # Projection onto the subspace orthogonal to the kernel of the
             # Kaiser-Squires operator
-            if self.meancentering:
-                out = self._meancentering(out)
             out = self._convert_to_ndarray(out)
             list_of_outputs.append(out)
 
@@ -463,9 +454,6 @@ class BaseDeepDenoiser:
         raise NotImplementedError
 
     def _predict(self, inp, model):
-        raise NotImplementedError
-
-    def _meancentering(self, out):
         raise NotImplementedError
 
 
@@ -492,9 +480,6 @@ class BaseKerasDenoiser(BaseDeepDenoiser):
 
     def _predict(self, inp, model):
         return model.predict(inp, **self.kwargs)
-
-    def _meancentering(self, out):
-        return out - np.mean(out, axis=(-2, -1))[..., np.newaxis, np.newaxis]
 
 
 class BaseTorchDenoiser(BaseDeepDenoiser):
@@ -546,9 +531,6 @@ class BaseTorchDenoiser(BaseDeepDenoiser):
             out = model(*inp) # inp = (y, sigma)
         return out
 
-    def _meancentering(self, out):
-        return out - torch.mean(out, dim=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-
 
 class Order1MomentNetworkMixin:
     """To be used for order-1 moment networks"""
@@ -560,7 +542,7 @@ class Order1MomentNetworkMixin:
 class Order2MomentNetworkMixin:
     """To be used for order-2 moment networks"""
     def __init__(self, model, *args, **kwargs):
-        super().__init__([model], *args, offset_out=False, **kwargs)
+        super().__init__([model], *args, **kwargs)
     def __call__(self, inp):
         return super().__call__(inp)[0]
 

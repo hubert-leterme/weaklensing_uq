@@ -10,7 +10,6 @@ except ImportError:
     warnings.warn("Module `pycs` not found.")
 
 from .. import utils
-from .. import OFFSET
 
 SCALE = 1.
 
@@ -21,7 +20,7 @@ class BaseHDF5Dataset:
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, input_method=None,
-            offset=OFFSET, beg_idx=0, shuffle=True, output_shape=None,
+            beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
@@ -48,8 +47,6 @@ class BaseHDF5Dataset:
         input_method: str, optional
             Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
             registered in the HDF5 dataset. Default is None.
-        offset: float, optional
-            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -89,7 +86,6 @@ class BaseHDF5Dataset:
         self.std_noise = std_noise
         self.mask = mask
         self.input_method = input_method
-        self.offset = offset
         self.beg_idx = beg_idx
         self.shuffle = shuffle
         self.output_shape = output_shape
@@ -224,7 +220,7 @@ class BaseHDF5Dataset:
         if transform is not None:
             transforms.append(transform)
         transforms.append(self._convert_to_tensor) # Identity by default
-        transforms.append(self._meancenter_offset)
+        transforms.append(utils.meancenter)
 
         transform = _pipe(*transforms)
 
@@ -253,10 +249,6 @@ class BaseHDF5Dataset:
 
     def _convert_to_tensor(self, arr):
         return arr # By default, no conversion
-
-
-    def _meancenter_offset(self, arr):
-        return utils.meancenter(arr) + self.offset
 
 
     def _postprocess(self, out_dict, _):
@@ -397,8 +389,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             If set to 'ks' or 'wiener', the implementations from
             `pycs.astro.wl.mass_mapping` will be used. If set to 'wiener_pgd, the
             implementation from `iterativemm.PGDMassMapping` will be used. Default is None.
-        offset: float, optional
-            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -497,7 +487,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         out_dict = super()._postprocess(out_dict, idx)
 
         # Generate noisy shear maps
-        kappa_true = out_dict["kappa_true"] - self.offset
+        kappa_true = out_dict["kappa_true"]
         gamma = utils.get_shear_from_convergence(
             kappa_true, complexconjugate=self.complexconjugate, return_complex=True
         )
@@ -574,7 +564,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
                 raise ValueError
 
             out_dict.update({
-                "kappa_inp": kappa_inp + self.offset
+                "kappa_inp": kappa_inp
             })
 
         return out_dict
@@ -620,8 +610,6 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
         input_method: str, optional
             Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
             registered in the HDF5 dataset. Default is None.
-        offset: float, optional
-            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -744,8 +732,6 @@ class InputTargetMixin:
         input_method: str, optional
             Input mass mapping method: 'ks', 'wiener' or 'wiener_pgd'. Only if already
             registered in the HDF5 dataset. Default is None.
-        offset: float, optional
-            Mean value of the convergence field (mass-sheet degeneracy). Default is 0.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,

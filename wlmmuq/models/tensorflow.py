@@ -10,20 +10,17 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv2D, UpSampling2D, BatchNormalization
 from tensorflow.keras.layers import concatenate, AveragePooling2D, Add, Multiply
 
-from .. import OFFSET
-
 L2_LAMBDA = 1e-4
 
 class BaseL2RegLoss(keras.losses.Loss):
 
-    def __init__(self, l2_lambda=L2_LAMBDA, offset=OFFSET, **kwargs):
+    def __init__(self, l2_lambda=L2_LAMBDA, **kwargs):
         super().__init__(**kwargs)
         self.l2_lambda = l2_lambda
-        self.offset = offset
 
     def call(self, y_true, y_pred):
         df = self._data_fidelity(y_true, y_pred)
-        l2_output = tf.reduce_mean(tf.square(y_pred - self.offset))
+        l2_output = tf.reduce_mean(tf.square(y_pred))
         return df + self.l2_lambda * l2_output
 
     def _data_fidelity(self, y_true, y_pred):
@@ -32,8 +29,7 @@ class BaseL2RegLoss(keras.losses.Loss):
     def get_config(self):
         config = super().get_config()
         config.update({
-            "l2_lambda": self.l2_lambda,
-            "offset": self.offset
+            "l2_lambda": self.l2_lambda
         })
         return config
 
@@ -49,23 +45,8 @@ class L2RegMAE(BaseL2RegLoss):
 
 
 class MeanCentering(keras.layers.Layer):
-
-    def __init__(self, offset=OFFSET, **kwargs):
-        super().__init__(**kwargs)
-        self.offset = offset
-
     def call(self, tensor):
-        tensor -= self.offset
-        tensor -= tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
-        tensor += self.offset
-        return tensor
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "offset": self.offset
-        })
-        return config
+        return tensor - tf.reduce_mean(tensor, axis=[1, 2], keepdims=True)
 
 
 class Square(keras.layers.Layer):
@@ -75,54 +56,24 @@ class Square(keras.layers.Layer):
 
 class BaseModel(keras.models.Model):
 
-    def __init__(self, map_size, offset=OFFSET, **kwargs):
+    def __init__(self, map_size, **kwargs):
         """
         Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels)
-        :param offset: mean value of the convergence maps (for mean centering).
-            Default = 0.
+        :param map_size: size of square image (there are map_size**2 pixels).
         """
         self.map_size = map_size
-        self.offset = offset
         kwargs.update(**self._init_model())
         super().__init__(**kwargs)
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "map_size": self.map_size,
-            "offset": self.offset
+            "map_size": self.map_size
         })
         return config
 
     def _init_model(self, **kwargs) -> dict:
         raise NotImplementedError
-
-
-class SimpleModel(BaseModel):
-    """
-    A CNN class that creates a simple denoiser
-    """
-
-    def _init_model(self) -> dict:
-
-        inp = Input(shape=(self.map_size, self.map_size, 1))
-
-        filters = 32
-
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(inp)
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(x)
-        x = BatchNormalization()(x)
-
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(x)
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(x)
-        x = BatchNormalization()(x)
-
-        final = Conv2D(1, (3, 3), activation='sigmoid', padding='same', kernel_initializer='he_normal')(x)
-
-        out_dict = {'inputs': inp, 'outputs': final}
-
-        return out_dict
 
 
 class UNet(BaseModel):
@@ -131,31 +82,23 @@ class UNet(BaseModel):
     """
 
     def __init__(
-            self, *args, in_channels=1, out_channels=1, meancentering=False,
-            use_bias=True, sigmoid_activation=False, **kwargs
+            self, *args, in_channels=1, out_channels=1, meancentering=True,
+            use_bias=True, **kwargs
     ):
         """
         Initialisation
-        :param map_size: size of square image (there are map_size**2 pixels)
-        :param offset: mean value of the convergence maps (for mean centering).
-            Default = 0.
+        :param map_size: size of square image (there are map_size**2 pixels).
         :param in_channels: number of input channels. Default = 1
         :param out_channels: number of output channels. Default = 1
         :param meancentering: whether to apply mean centering at the output.
-            Default = False
+            Default = True
         :param use_bias: whether to use bias in the convolutional and batch
             normalization layers. Default = True
-        :param sigmoid_activation: whether to apply a sigmoid activation function
-            at the output. Default = False
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.meancentering = meancentering
         self.use_bias = use_bias
-        if sigmoid_activation:
-            self.activation = 'sigmoid'
-        else:
-            self.activation = None
         super().__init__(*args, **kwargs)
 
 
@@ -165,8 +108,7 @@ class UNet(BaseModel):
             "in_channels": self.in_channels,
             "out_channels": self.out_channels,
             "meancentering": self.meancentering,
-            "use_bias": self.use_bias,
-            "activation": self.activation
+            "use_bias": self.use_bias
         })
         return config
 
@@ -244,12 +186,12 @@ class UNet(BaseModel):
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
             use_bias=self.use_bias
         )(merge7)
-        out = Conv2D(self.out_channels, 1, activation=self.activation)(x7)
+        out = Conv2D(self.out_channels, 1, activation=None)(x7)
 
         inp, out = self._postprocess(inp, out)
 
         if self.meancentering:
-            out = MeanCentering(self.offset)(out)
+            out = MeanCentering()(out)
 
         out_dict = {'inputs': inp, 'outputs': out}
 
@@ -272,8 +214,6 @@ class UNetScoreMatching(UNet):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.activation == 'sigmoid':
-            warnings.warn("Sigmoid activation will lead to unexpected behavior")
 
     def _postprocess(self, inp, out):
         # Argument out estimates the score of the log-prior PDF of the noisy images
@@ -300,8 +240,6 @@ def compile_kerasmodel(model, loss, learning_rate=None, **kwargs):
     :param loss: loss function: 'mse', 'mae', 'l2reg_mse' or 'l2reg_mae'
     :param learning_rate: learning rate for the optimizer
     :param l2_lambda: regularization parameter
-    :param offset: mean value of the convergence maps (for mean centering).
-        Default = 0.
     """
     if loss in ('mse', 'mae'):
         loss_fun = loss

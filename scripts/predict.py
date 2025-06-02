@@ -9,7 +9,6 @@ import _commons
 import wlmmuq.data as wlds
 import wlmmuq.models as wlcnn
 
-from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 
 MOMENT_ORDER = 1
@@ -29,14 +28,12 @@ def main(
         path_to_trained_model, path_to_augmented_dataset, path_to_output_dataset,
         cosmos_include_faint=False, backend=None, arch=None, denoiser=False,
         use_stdnoise_mask=False, moment_order=MOMENT_ORDER, path_to_pred_dataset=None,
-        imgsize=IMGSIZE, nimgs=NIMGS, batch_size=BATCH_SIZE, offset=OFFSET,
+        imgsize=IMGSIZE, nimgs=NIMGS, batch_size=BATCH_SIZE,
         idx_dataset=IDX_DATASET, seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
 
-    keys_model = [
-        'meancentering', 'sigmoid_activation', 'small_model'
-    ]
+    keys_model = ['small_model']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
         no_bias = kwargs.pop("no_bias")
@@ -88,8 +85,7 @@ def main(
         pred_filepath=path_to_pred_dataset,
         nimgs=nimgs, batch_size=batch_size,
         sort_by_filename_ori=False, shuffle=False,
-        output_shape=imgsize,
-        offset=offset, newaxis=True, **kwargs
+        output_shape=imgsize, newaxis=True, **kwargs
     )
     kwargs_dataloader = {}
     if backend == 'tensorflow':
@@ -104,7 +100,7 @@ def main(
         )
     elif backend == 'torch':
         model = cnn_class(
-            map_size=imgsize, offset=offset, **kwargs_model
+            map_size=imgsize, **kwargs_model
         )
         checkpoint = torch.load(path_to_trained_model)
         model.load_state_dict(checkpoint['state_dict'])
@@ -274,24 +270,12 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--meancentering", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Apply a meancentering operator at the output of the network."
-        )
-    )
-    parser.add_argument(
         "--no-bias", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers."
         )
-    )
-    parser.add_argument(
-        "--sigmoid-activation", action='store_true',
-        default=argparse.SUPPRESS,
-        help="Use sigmoid activation function in the output layer."
     )
     parser.add_argument(
         "-b", "--batch-size", type=int,
@@ -307,13 +291,6 @@ if __name__ == "__main__":
         help=(
             "Number of workers for parallel processing. Only work for PyTorch datasets. "
             f"Default = {NUM_WORKERS}"
-        )
-    )
-    parser.add_argument(
-        "--offset", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Default convergence value for a perfectly uniform universe. Default = {OFFSET:.2f}"
         )
     )
     parser.add_argument(
