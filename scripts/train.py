@@ -140,16 +140,6 @@ def main(
     if verbose:
         model_module.print_model(model)
 
-    if checkpoint_dir is not None:
-        if not order2:
-            output_type = "pe" # Point estimate
-        else:
-            output_type = "var" # Variance
-        filename = f"{os.path.basename(checkpoint_dir)}_{output_type}_e" + \
-            "{epoch:02d}.keras"
-        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
-        filepath = os.path.join(checkpoint_dir, filename)
-
     if backend == 'tensorflow':
 
         # Compile model
@@ -161,6 +151,9 @@ def main(
         # Define the checkpoint callback
         callbacks = []
         if checkpoint_dir is not None:
+            model_name, output_type = checkpoint_dir.split(os.sep)[-2:]
+            filename = f"{model_name}_{output_type}_e" + "{epoch:02d}.keras"
+            filepath = os.path.join(checkpoint_dir, filename)
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                 filepath=filepath,
                 save_weights_only=False,
@@ -170,7 +163,7 @@ def main(
             callbacks.append(checkpoint_callback)
         if backup_dir is not None:
             backup_callback = tf.keras.callbacks.BackupAndRestore(
-                backup_dir=os.path.join(backup_dir, output_type), save_freq="epoch"
+                backup_dir=backup_dir, save_freq="epoch"
             )
             callbacks.append(backup_callback)
         if path_to_csv_log is not None:
@@ -540,10 +533,36 @@ if __name__ == "__main__":
     args = parser.parse_args()
     kwargs = vars(args).copy()
 
+    if not hasattr(args, 'order2'):
+        output_type = "pe" # Point estimate
+    else:
+        output_type = "var" # Variance
+
+    try:
+        checkpoint_dir = args.checkpoint_dir
+    except AttributeError:
+        checkpoint_dir = None
+    else:  
+        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
+        checkpoint_dir = os.path.normpath(checkpoint_dir)
+        kwargs.update(checkpoint_dir=checkpoint_dir)
+
+    try:
+        backup_dir = args.backup_dir
+    except AttributeError:
+        pass
+    else:  
+        backup_dir = os.path.join(backup_dir, output_type)
+        backup_dir = os.path.normpath(backup_dir)
+        kwargs.update(backup_dir=backup_dir)
+
     def print_stats():
         while True:
             time.sleep(15)
-            profiler.dump_stats('profile_results.prof')
+            filename_stats = 'profile_results.txt'
+            if checkpoint_dir is not None:
+                filename_stats = os.path.join(checkpoint_dir, filename_stats)
+            profiler.dump_stats(filename_stats)
 
     profiler = cProfile.Profile()
     profiler.enable()
