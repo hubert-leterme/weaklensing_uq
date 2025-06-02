@@ -13,7 +13,7 @@ from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 
 MOMENT_ORDER = 1
-IMGSIZE = 304
+IMGSIZE = 384
 NIMGS = 72000
 BATCH_SIZE = 256
 IDX_DATASET = 'kappa_pred'

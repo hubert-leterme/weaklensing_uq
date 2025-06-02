@@ -13,7 +13,7 @@ import pycs.astro.wl.mass_mapping as csmm
 
 from wlmmuq.data import NUM_WORKERS
 
-IMGSIZE = 304
+IMGSIZE = 384
 CONFIDENCE = 2 # number of sigmas
 NIMGS = 225
 NIMGS_PS = 256 # images used to compute the power spectrum

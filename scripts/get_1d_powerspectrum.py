@@ -6,7 +6,7 @@ import torch
 import wlmmuq.utils as wlutils
 import wlmmuq.data.tensorflow as wlbl
 
-IMGSIZE = 304
+IMGSIZE = 384
 NIMGS = 2048
 BATCH_SIZE = 256
 

@@ -17,7 +17,7 @@ from wlmmuq import OFFSET
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models import L2_LAMBDA
 
-IMGSIZE = 304
+IMGSIZE = 384
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
 NREAL_PER_IMG = 1
