@@ -18,7 +18,10 @@ setup(
         "h5py",
         "matplotlib",
         "astropy",
-        "lenspack"
+        "lenspack",
+        "deepinv",
+        "torch",
+        "torchinfo"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
