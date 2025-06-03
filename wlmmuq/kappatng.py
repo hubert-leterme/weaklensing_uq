@@ -16,7 +16,7 @@ WIDTH_ORI = 1024 # size of the simulated convergence maps (nb pixels)
 SIZE_ORI = 5. # opening angle of the simulated convergence maps (deg)
 N_SAMPLES_PER_SIDE = 3
 RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
-OPENINGANGLE = 1.5 # opening angle of the target convergence maps (deg)
+OPENINGANGLE = 1.875 # opening angle of the target convergence maps (deg)
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 
