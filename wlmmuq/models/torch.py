@@ -1,6 +1,7 @@
 import warnings
 import torch
 from torch import nn
+import torchinfo
 import deepinv as dinv
 
 from .sunet import sunet
@@ -61,6 +62,12 @@ class ModelMixin:
             warnings.warn("No meancentering or positivity constraint applied.")
             self.additional_output = None
 
+        # For printing summary
+        fake_input_data = self._get_fake_input_data(map_size, in_channels)
+        self._n_inputs = len(fake_input_data)
+        for i, inp in enumerate(fake_input_data):
+            self.register_buffer(f"_fake_input_data_{i}", inp, persistent=False)
+
 
     def _preprocess_kwargs(self, **kwargs):
         raise NotImplementedError
@@ -71,6 +78,17 @@ class ModelMixin:
         if self.additional_output is not None:
             out = self.additional_output(out)
         return out
+
+
+    def _get_fake_input_data(self, map_size, in_channels):
+        raise NotImplementedError
+
+
+    def summary(self):
+        fake_input_data = tuple(
+            self._buffers[f"_fake_input_data_{i}"] for i in range(self._n_inputs)
+        )
+        print(torchinfo.summary(self, input_data=fake_input_data))
 
 
 class DRUNet(ModelMixin, dinv.models.DRUNet):
@@ -94,6 +112,10 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         )
 
         return kwargs
+
+
+    def _get_fake_input_data(self, map_size, in_channels):
+        return (torch.randn(1, in_channels, map_size, map_size), torch.randn(1,))
 
 
 class SUNet(ModelMixin, sunet.SUNet):
@@ -142,6 +164,10 @@ class SUNet(ModelMixin, sunet.SUNet):
         # The signature of this forward method follows the specifications of DeepInverse,
         # to be able to use the `Trainer` class for training.
         return super().forward(inp, **kwargs)
+
+
+    def _get_fake_input_data(self, map_size, in_channels):
+        return (torch.randn(1, in_channels, map_size, map_size),)
 
 
 class ScoreMatchingMixin:
@@ -231,6 +257,3 @@ class Order2SupLoss(dinv.loss.SupLoss):
 
 def load_model(path_to_pretrained_model, **kwargs):
     raise NotImplementedError
-
-def print_model(model):
-    print(model)

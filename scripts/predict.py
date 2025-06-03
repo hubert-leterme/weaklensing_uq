@@ -112,7 +112,7 @@ def main(
         raise ValueError
 
     if verbose:
-        model_module.print_model(model)
+        model.summary()
 
     with h5py.File(path_to_output_dataset, 'w') as file:
         try:

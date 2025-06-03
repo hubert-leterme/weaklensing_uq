@@ -197,9 +197,6 @@ def load_model(path_to_pretrained_model, **kwargs):
         path_to_pretrained_model, compile=False, **kwargs
     )
 
-def print_model(model):
-    model.summary()
-
 
 def compile_kerasmodel(model, loss, learning_rate=None, **kwargs):
     """

@@ -735,9 +735,30 @@ def plot_means_errs(
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, **kwargs
+        printxticks=True, printyticks=True, imgsize: int | tuple[int]=None,
+        extent: list[float]=None, **kwargs
 ):
-    out = plt.imshow(img, origin='lower', **kwargs)
+    if imgsize is not None:
+        if isinstance(imgsize, int):
+            imgsize = (imgsize, imgsize)
+        imgsize_ori = img.shape
+        beg_i = (imgsize_ori[0] - imgsize[0]) // 2
+        beg_j = (imgsize_ori[1] - imgsize[1]) // 2
+        end_i = beg_i + imgsize[0]
+        end_j = beg_j + imgsize[1]
+        img = crop_arr(img, beg_i, end_i, beg_j, end_j)
+        if extent is not None:
+            x_min, x_max, y_min, y_max = extent
+            dx = (x_max - x_min) / imgsize_ori[1]
+            dy = (y_max - y_min) / imgsize_ori[0]
+            extent = [
+                x_min + beg_j * dx,
+                x_min + end_j * dx,
+                y_min + beg_i * dy,
+                y_min + end_i * dy,
+            ]
+
+    out = plt.imshow(img, origin='lower', extent=extent, **kwargs)
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
     if printxylabels:
         plt.xlabel("Right ascension")

@@ -2,6 +2,7 @@ import os
 import random
 import numpy as np
 import h5py
+import tqdm
 
 from . import utils, cosmos, dataaugm
 from . import KTNG_DIR
@@ -309,12 +310,14 @@ def create_cropped_dataset(
     if batch_size is None:
         batch_size = ninpimgs
 
-    end_idx = 0
-    while end_idx < ninpimgs:
-        beg_idx = end_idx
+    pbar = tqdm.tqdm(
+        range(-(-ninpimgs // batch_size)),
+        disable=not verbose,
+    )
+    for i in pbar:
+        beg_idx = i * batch_size
         end_idx = min(beg_idx + batch_size, ninpimgs)
-        if verbose:
-            print(f"Processing images {beg_idx} to {end_idx}...")
+        pbar.set_description(f"Images {beg_idx + 1}-{end_idx}/{ninpimgs}")
 
         # Load $\kappa$-TNG dataset and combine redshifts
         kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
@@ -359,17 +362,18 @@ def create_augmented_dataset(
     while end_idx < nimgs:
         beg_idx = end_idx
         end_idx = min(beg_idx + batch_size, nimgs)
-        if verbose:
-            print(f"Processing images {beg_idx} to {end_idx}...")
 
         # Load $\kappa$-TNG dataset and combine redshifts
         kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
         imgsize0 = kappa.shape[-1]
         assert kappa.shape[-2] == imgsize0
 
-        end_angle = 0
-        while end_angle < 360:
-            beg_angle = end_angle
+        pbar = tqdm.tqdm(
+            range(int(np.ceil(360 / (angle_batch_size * angle_step)))),
+            disable=not verbose,
+        )
+        for i in pbar:
+            beg_angle = i * angle_batch_size * angle_step
             end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
             nangles = int((end_angle - beg_angle) / angle_step)
             angles = beg_angle + angle_step * np.arange(nangles)
@@ -379,8 +383,7 @@ def create_augmented_dataset(
             list_of_idx_rows = []
             list_of_idx_cols = []
             for angle in angles:
-                if verbose:
-                    print(f"\tAngle = {angle}...")
+                pbar.set_description(f"Images {beg_idx + 1}-{end_idx}/{nimgs}, Angle = {angle:.1f}")
                 kappa_rot, rows, cols = dataaugm.rotate_and_crop(
                     kappa, angle, imgsize, niter=niter_per_angle
                 )

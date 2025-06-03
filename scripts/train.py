@@ -134,7 +134,7 @@ def main(
         )
 
     if verbose:
-        model_module.print_model(model)
+        model.summary()
 
     # Set directories
     if not order2:
