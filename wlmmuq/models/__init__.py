@@ -6,7 +6,8 @@ if USE_TENSORFLOW:
 
 MODEL_CLASSES = {
     "torch.DRUNet": (torch.DRUNet, True),
-    "torch.SUNet": (torch.SUNet, False)
+    "torch.SUNet": (torch.SUNet, False),
+    "torch.SUNetNoiseAware": (torch.SUNetNoiseAware, True),
 } # (model_class, scale_as_input)
 if USE_TENSORFLOW:
     MODEL_CLASSES.update({

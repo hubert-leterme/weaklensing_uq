@@ -127,7 +127,42 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         return (torch.randn(1, in_channels, map_size, map_size), torch.randn(1,))
 
 
-class SUNet(ModelMixin, sunet.SUNet):
+class BaseSUNetNoiseAware(sunet.SUNet):
+
+    def __init__(self, in_chans=3, **kwargs):
+        # On additional input channel for noise level
+        super().__init__(in_chans=in_chans + 1, **kwargs)
+
+
+    def forward(self, x, sigma):
+        r"""
+        Run the denoiser on image with noise level :math:`\sigma`, similar to DRUNet.
+
+        :param torch.Tensor x: noisy image
+        :param float, torch.Tensor sigma: noise level. If ``sigma`` is a float, it is used for all images in the batch.
+            If ``sigma`` is a tensor, it must be of shape ``(batch_size,)``.
+        """
+        # This code block is copy-pasted from the original SUNet implementation
+        if isinstance(sigma, torch.Tensor):
+            if sigma.ndim > 0:
+                noise_level_map = sigma.view(x.size(0), 1, 1, 1)
+                noise_level_map = noise_level_map.expand(-1, 1, x.size(2), x.size(3))
+            else:
+                noise_level_map = torch.ones(
+                    (x.size(0), 1, x.size(2), x.size(3)), device=x.device
+                ) * sigma[None, None, None, None].to(x.device)
+        else:
+            noise_level_map = (
+                torch.ones((x.size(0), 1, x.size(2), x.size(3)), device=x.device)
+                * sigma
+            )
+        x = torch.cat((x, noise_level_map), 1)
+        # End of copy-pasted code block
+
+        return super().forward(x)
+
+
+class SUNetMixin(ModelMixin):
 
     def _preprocess_kwargs(
             self, map_size=None, in_channels=1, out_channels=1,
@@ -163,6 +198,8 @@ class SUNet(ModelMixin, sunet.SUNet):
         return kwargs
 
 
+class SUNet(SUNetMixin, sunet.SUNet):
+
     def forward(self, inp, sigma=None, **kwargs):
         r"""
         Run the denoiser on noisy image. The noise level is not used in this denoiser.
@@ -177,6 +214,12 @@ class SUNet(ModelMixin, sunet.SUNet):
 
     def _get_fake_input_data(self, map_size, in_channels):
         return (torch.randn(1, in_channels, map_size, map_size),)
+
+
+class SUNetNoiseAware(SUNetMixin, BaseSUNetNoiseAware):
+
+    def _get_fake_input_data(self, map_size, in_channels):
+        return (torch.randn(1, in_channels, map_size, map_size), torch.randn(1,))
 
 
 class ScoreMatchingMixin:
