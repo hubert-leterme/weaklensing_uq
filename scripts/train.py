@@ -312,7 +312,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "-s", "--model-size", type='str',
+        "-s", "--model-size", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Size of the model (DRUNet only). Possible values are: "
