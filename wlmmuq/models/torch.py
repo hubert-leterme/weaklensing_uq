@@ -88,7 +88,7 @@ class ModelMixin:
         fake_input_data = tuple(
             self._buffers[f"_fake_input_data_{i}"] for i in range(self._n_inputs)
         )
-        print(torchinfo.summary(self, input_data=fake_input_data))
+        torchinfo.summary(self, input_data=fake_input_data)
 
 
 class DRUNet(ModelMixin, dinv.models.DRUNet):
