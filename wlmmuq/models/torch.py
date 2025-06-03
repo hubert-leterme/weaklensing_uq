@@ -13,7 +13,11 @@ METRIC_DICT = {
 }
 
 # Default parameters for DRUNet
-NC_DRUNET = [16, 32, 64, 64] # Number of channels
+MODEL_SIZE_DRUNET = {
+    'small': [16, 32, 64, 64],
+    'medium': [32, 64, 128, 256],
+    'large': [64, 128, 256, 512], # Default value
+}
 ACT_MODE_DRUNET = 'BR' # Activation mode: BatchNorm + ReLU
 DOWNSAMPLE_MODE_DRUNET = 'avgpool'
 
@@ -94,14 +98,19 @@ class ModelMixin:
 class DRUNet(ModelMixin, dinv.models.DRUNet):
 
     def _preprocess_kwargs(
-            self, map_size=None, small_model=False,
+            self, map_size=None, model_size: str=None,
             act_mode: str=ACT_MODE_DRUNET,
             downsample_mode: str=DOWNSAMPLE_MODE_DRUNET,
             pretrained=False, **kwargs
     ):
         # map_size is discarded
-        if small_model:
-            kwargs.update(nc=NC_DRUNET)
+        if model_size is not None:
+            if model_size not in MODEL_SIZE_DRUNET:
+                raise ValueError(
+                    f"Unknown model size: {model_size}. "
+                    f"Available sizes: {list(MODEL_SIZE_DRUNET.keys())}."
+                )
+            kwargs.update(nc=MODEL_SIZE_DRUNET[model_size])
         if not pretrained:
             pretrained = None
         else:

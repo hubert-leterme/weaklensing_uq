@@ -44,7 +44,7 @@ def main(
 ):
     _commons.set_seed(seed)
 
-    keys_model = ['small_model', 'pretrained']
+    keys_model = ['model_size', 'pretrained']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
         no_bias = kwargs.pop("no_bias")
@@ -312,10 +312,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "-s", "--small-model", action='store_true',
+        "-s", "--model-size", type='str',
         default=argparse.SUPPRESS,
         help=(
-            "Whether to use a small model. Only available for PyTorch models."
+            "Size of the model (DRUNet only). Possible values are: "
+            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
         )
     )
     parser.add_argument(
@@ -323,7 +324,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Whether to use a pretrained network. Only available for PyTorch models. "
-            "Not available if `--small-model` is used."
+            "Not available if `--model-size` is used."
         )
     )
     parser.add_argument(
