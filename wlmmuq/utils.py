@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from scipy import ndimage, signal, stats
+from scipy import ndimage, signal, stats, sparse, linalg
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
@@ -585,7 +585,25 @@ def pad_arr(
     return out, (beg_x, beg_y)
 
 
-def get_1d_powerspectrum(kappa):
+def get_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
+    """
+    Estimate the 2D powerspectrum over a set of isotropic images.
+
+    Parameters
+    ----------
+    kappa: numpy.ndarray, shape = (nimgs, imgsize, imgsize)
+        Set of square images. CAUTION: `imgsize` must be even.
+
+    """
+    _, imgsize, imgsize0 = kappa.shape
+    assert imgsize0 == imgsize
+    powerspectrum = absolute(fft2(kappa) / imgsize)**2
+    powerspectrum = powerspectrum.mean(axis=0)
+
+    return powerspectrum
+
+
+def get_1d_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
     """
     Estimate the 1D powerspectrum over a set of isotropic images.
 
@@ -597,9 +615,7 @@ def get_1d_powerspectrum(kappa):
     """
     _, imgsize, imgsize0 = kappa.shape
     assert imgsize0 == imgsize
-    powerspectrum = np.mean(
-        absolute(np.fft.fft2(kappa) / imgsize)**2, axis=0
-    )
+    powerspectrum = get_powerspectrum(kappa)
     powerspectrum = powerspectrum[:imgsize//2, :imgsize//2] # Only positive frequencies, by symmetry
     powerspectrum_1d = (powerspectrum[0, :] + powerspectrum[:, 0]) / 2 # Assumed isotropic
 
@@ -916,6 +932,29 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         plt.show()
 
 
+def get_sup_step_size(std_noise, mask=None, its=20):
+    """
+    Get the upper bound for the step size in PGD algorithms where the data
+    fidelity term is the negative log-likelihood. This function used the power
+    iteration method.
+    """
+    nx, ny = std_noise.shape
+
+    def matvec(kappa_flattened):
+        kappa = kappa_flattened.reshape(nx, ny)
+        gamma = get_shear_from_convergence(kappa, mask=mask, return_complex=True)
+        gamma /= std_noise**2
+        out = get_convergence_from_shear(gamma, mask=mask, return_complex=True)
+        return out.flatten()
+
+    linearop = sparse.linalg.LinearOperator(
+        shape=(nx*ny, nx*ny), matvec=matvec, rmatvec=matvec
+    )
+    spectrnorm = linalg.interpolative.estimate_spectral_norm(linearop, its=its)
+
+    return 2 / spectrnorm
+
+
 #=================================================================================
 # Functions on torch tensors or numpy arrays
 #=================================================================================
@@ -984,4 +1023,14 @@ def pad(
         out = F.pad(arr, pad_width, **kwargs)
     else:
         raise NotImplementedError
+    return out
+
+
+def fft2(
+        arr: np.ndarray | torch.Tensor, **kwargs
+) -> np.ndarray | torch.Tensor:
+    if torch.is_tensor(arr):
+        out = torch.fft.fft2(arr, **kwargs)
+    else:
+        out = np.fft.fft2(arr, **kwargs)
     return out
