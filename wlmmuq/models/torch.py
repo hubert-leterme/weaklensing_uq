@@ -5,6 +5,7 @@ import torchinfo
 import deepinv as dinv
 
 from .sunet import sunet
+from . import iterativemm
 from .. import utils
 
 METRIC_DICT = {
@@ -425,6 +426,61 @@ class Order2SupLoss(dinv.loss.SupLoss):
             x_pred = self.order1_model(y, physics) # physics = sigma in the case of DRUNet
         x = (x - x_pred)**2
         return super().forward(x_net, x, **kwargs)
+
+
+#=================================================================================
+# DeepMass with Wiener initialization
+#=================================================================================
+
+class IterativeWiener(nn.Module):
+
+    def __init__(
+            self, step_size: float,
+            powerspectrum: torch.Tensor, std_noise: torch.Tensor,
+            mask:torch.Tensor=None, niter: int=1
+    ):
+        super().__init__()
+        data_fidelity = iterativemm.Mahalanobis(sigma=std_noise)
+        prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
+
+        self.optim = iterativemm.optim_builder(
+            iteration="PGD", prior=prior,
+            data_fidelity=data_fidelity,
+            early_stop=False, max_iter=niter, custom_init=zero_init,
+            params_algo={"stepsize": step_size, "g_param": step_size},
+        )
+        self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
+
+
+    def forward(self, gamma_noisy):
+        return self.optim(gamma_noisy, self.physics)
+
+
+class WienerInitMixin:
+
+    def __init__(
+            self, args_wienerinit: dict, *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.wiener_init = IterativeWiener(**args_wienerinit)
+
+
+    def forward(self, inp, *args, **kwargs):
+        inp = self.wiener_init(inp)
+        out = super().forward(inp, *args, **kwargs)
+        return out
+
+
+class UNetWienerInit(WienerInitMixin, UNet):
+    def _get_fake_input_data(self, map_size, in_channels):
+        return (torch.randn(1, in_channels, map_size, map_size, dtype=torch.complex64),)
+
+
+def zero_init(y: torch.Tensor, _unused_physics):
+    """The optimization algorithm is initialized with zero-valued tensors"""
+    x_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
+    z_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
+    return {"est": (x_init, z_init)}
 
 
 #=================================================================================

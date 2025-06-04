@@ -2,10 +2,14 @@ import shutil
 import torch
 from torch import nn
 import deepinv as dinv
+import pycs.astro.wl.mass_mapping as csmm
 
-from . import utils
+from .. import utils
 
+#########################################################################
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
+#########################################################################
+
 def fake_which(cmd):
     if cmd == "latex":
         return None
@@ -13,6 +17,10 @@ def fake_which(cmd):
 
 shutil.which = fake_which
 
+
+#########################################################################
+# Custom classes for PnPMass
+#########################################################################
 
 class MahalanobisDistance(dinv.optim.Distance):
     r"""
@@ -98,6 +106,29 @@ class MassMapping(dinv.physics.LinearPhysics):
         ).real # E-mode only
 
 
+#########################################################################
+# Custom classes for Wiener iterative filtering
+#########################################################################
+
+class ProximalWiener(nn.Module):
+
+    def __init__(self, powerspectrum):
+        super().__init__()
+        self.register_buffer("powerspectrum", powerspectrum)
+
+
+    def forward(self, inp, step_size):
+        out = torch.fft.fft2(inp)
+        out /= (1 + step_size / self.powerspectrum)
+        out = torch.fft.ifft2(out)
+
+        return out.real
+
+
+#########################################################################
+# Metrics
+#########################################################################
+
 class MSE(dinv.metric.MSE):
 
     def __init__(
@@ -127,6 +158,10 @@ class RMSE(MSE):
         return super().metric(x_net, x, *args, **kwargs) ** 0.5
 
 
+#########################################################################
+# Improve the BaseOptim class from deepinv.optim
+#########################################################################
+
 class MetricDict(dict):
 
     def __init__(
@@ -149,6 +184,24 @@ class MetricDict(dict):
         self[metric_name] = torch.cat(
             [self[metric_name], metric], dim=1
         ) # Shape = (batch_size, niter + 1)
+
+
+class FixedPointUQ(nn.Module):
+    def __init__(self, fixed_point:dinv.optim.FixedPoint):
+        super().__init__()
+        self.fixed_point = fixed_point
+
+    def forward(self, *args, compute_metrics=False, x_gt=None, **kwargs):
+        X, metrics = self.fixed_point.forward(
+            *args, compute_metrics=compute_metrics, x_gt=x_gt, **kwargs
+        )
+        X_uq = self.fixed_point.single_iteration(
+            X,
+            self.fixed_point.max_iter,
+            *args,
+            **kwargs,
+        )
+        return (X, X_uq), metrics
 
 
 class BaseOptim(dinv.optim.BaseOptim):
@@ -253,24 +306,6 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             raise ValueError
         return cur_prior
-
-
-class FixedPointUQ(nn.Module):
-    def __init__(self, fixed_point:dinv.optim.FixedPoint):
-        super().__init__()
-        self.fixed_point = fixed_point
-
-    def forward(self, *args, compute_metrics=False, x_gt=None, **kwargs):
-        X, metrics = self.fixed_point.forward(
-            *args, compute_metrics=compute_metrics, x_gt=x_gt, **kwargs
-        )
-        X_uq = self.fixed_point.single_iteration(
-            X,
-            self.fixed_point.max_iter,
-            *args,
-            **kwargs,
-        )
-        return (X, X_uq), metrics
 
 
 def optim_builder(
