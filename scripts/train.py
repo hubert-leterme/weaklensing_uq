@@ -30,7 +30,7 @@ DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
 
 def main(
-        path_to_augmented_dataset, path_to_pretrained_model=None,
+        path_to_augmented_dataset,
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
         order2=False, path_to_pred_dataset=None,
@@ -124,14 +124,9 @@ def main(
     val_dataloader = val_dataset.to_dataloader()
 
     # Initialize model
-    if path_to_pretrained_model is None:
-        model = cnn_class(
-            map_size=imgsize, **kwargs_model
-        )
-    else:
-        model = model_module.load_model(
-            path_to_pretrained_model, **kwargs_model
-        )
+    model = cnn_class(
+        map_size=imgsize, **kwargs_model
+    )
 
     if verbose:
         model.summary()
@@ -285,22 +280,10 @@ if __name__ == "__main__":
         help="Path to the augmented dataset (HDF5 file)"
     )
     parser.add_argument(
-        "-m", "--path-to-pretrained-model", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the pretrained model. If none is given, then the model is "
-            "initialized and trained from scratch. If provided, then argument "
-            "`--no-bias` is ineffective; "
-            "moreover, `--imgsize` must be compatible with the provided model. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
         "--backend", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Deep learning framework used to train the model ('tensorflow' or 'torch'). "
-            "Only useful if `--path-to-pretrained-model` is provided. Default = None"
+            "Deep learning framework used to train the model ('tensorflow' or 'torch')."
         )
     )
     parser.add_argument(
