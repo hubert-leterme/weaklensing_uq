@@ -362,6 +362,30 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
+        "--nimgs-ps", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of images used to compute the power spectrum for Wiener initialization. "
+            f"Default = {NIMGS_PS}"
+        )
+    )
+    parser.add_argument(
+        "--batch-size-ps", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Batch size used to compute the power spectrum for Wiener initialization. "
+            f"Default = {BATCH_SIZE_PS}"
+        )
+    )
+    parser.add_argument(
+        "--niter-wienerinit", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for the Wiener initialization. "
+            f"Default = {NITER_WIENERINIT}"
+        )
+    )
+    parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
         help=(
