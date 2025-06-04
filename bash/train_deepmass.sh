@@ -14,7 +14,7 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 
-optional_args="${@:3}"
+optional_args="${@:2}"
 
 # Set model name
 optional_args_cleaned=$(echo "$optional_args" | sed 's/-a //g' | sed 's/-s /--model-size /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--//g' | xargs | sed 's/ /_/g')
