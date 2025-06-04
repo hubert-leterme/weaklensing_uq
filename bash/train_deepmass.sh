@@ -8,20 +8,20 @@ save_freq=1
 current_date=$(date +"%Y%m%d_%H%M%S")
 
 # Check if correct number of arguments are provided
-if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <GPU_ID> <INPUT_METHOD> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 wiener [-a torch.UNet] [--loss mse]"
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 [-a torch.UNetWienerInit] [--loss mse]"
   exit 1
 fi
 
 optional_args="${@:3}"
 
-# Set name of the denoiser
+# Set model name
 optional_args_cleaned=$(echo "$optional_args" | sed 's/-a //g' | sed 's/-s /--model-size /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--//g' | xargs | sed 's/ /_/g')
-name_denoiser=$(echo "denoiser_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
+model_name=$(echo "deepmass_${optional_args_cleaned}_${current_date}" | sed 's/__/_/g')
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --input-method $2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${name_denoiser} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --wiener-init ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
