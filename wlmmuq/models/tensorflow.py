@@ -50,7 +50,7 @@ class UNet(BaseModel):
 
     def __init__(
             self, *args, in_channels=1, out_channels=1, meancentering=True,
-            use_bias=True, **kwargs
+            bias=True, **kwargs
     ):
         """
         Initialisation
@@ -59,13 +59,13 @@ class UNet(BaseModel):
         :param out_channels: number of output channels. Default = 1
         :param meancentering: whether to apply mean centering at the output.
             Default = True
-        :param use_bias: whether to use bias in the convolutional and batch
+        :param bias: whether to use bias in the convolutional and batch
             normalization layers. Default = True
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.meancentering = meancentering
-        self.use_bias = use_bias
+        self.bias = bias
         super().__init__(*args, **kwargs)
 
 
@@ -75,7 +75,7 @@ class UNet(BaseModel):
             "in_channels": self.in_channels,
             "out_channels": self.out_channels,
             "meancentering": self.meancentering,
-            "use_bias": self.use_bias
+            "bias": self.bias
         })
         return config
 
@@ -86,72 +86,72 @@ class UNet(BaseModel):
 
         x1 = Conv2D(
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(inp)
-        x1 = BatchNormalization(center=self.use_bias)(x1)
+        x1 = BatchNormalization(center=self.bias)(x1)
 
         pool1 = AveragePooling2D(pool_size=(2, 2))(x1)
         x2 = Conv2D(
             32, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(pool1)
-        x2 = BatchNormalization(center=self.use_bias)(x2)
+        x2 = BatchNormalization(center=self.bias)(x2)
 
         pool2 = AveragePooling2D(pool_size=(2, 2))(x2)
         x3 = Conv2D(
             64, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(pool2)
-        x3 = BatchNormalization(center=self.use_bias)(x3)
+        x3 = BatchNormalization(center=self.bias)(x3)
 
         pool3 = AveragePooling2D(pool_size=(2, 2))(x3)
         x4 = Conv2D(
             64, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(pool3)
-        x4 = BatchNormalization(center=self.use_bias)(x4)
+        x4 = BatchNormalization(center=self.bias)(x4)
 
         pool_deep = AveragePooling2D(pool_size=(2, 2))(x4)
         xdeep = Conv2D(
             64, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(pool_deep)
-        xdeep = BatchNormalization(center=self.use_bias)(xdeep)
+        xdeep = BatchNormalization(center=self.bias)(xdeep)
 
         updeep = UpSampling2D((2, 2))(xdeep)
         mergedeep = concatenate([x4, updeep], axis=3)
 
         xdeep2 = Conv2D(
             64, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(mergedeep)
-        xdeep2 = BatchNormalization(center=self.use_bias)(xdeep2)
+        xdeep2 = BatchNormalization(center=self.bias)(xdeep2)
 
         up5 = UpSampling2D((2, 2))(xdeep2)
         merge5 = concatenate([x3, up5], axis=3)
-        merge5 = BatchNormalization(center=self.use_bias)(merge5)
+        merge5 = BatchNormalization(center=self.bias)(merge5)
 
         x5 = Conv2D(
             64, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(merge5)
 
         up6 = UpSampling2D((2, 2))(x5)
         merge6 = concatenate([x2, up6], axis=3)
-        merge6 = BatchNormalization(center=self.use_bias)(merge6)
+        merge6 = BatchNormalization(center=self.bias)(merge6)
 
         x6 = Conv2D(
             32, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(merge6)
 
         up7 = UpSampling2D((2, 2))(x6)
         merge7 = concatenate([x1, up7], axis=3)
-        merge7 = BatchNormalization(center=self.use_bias)(merge7)
+        merge7 = BatchNormalization(center=self.bias)(merge7)
 
         x7 = Conv2D(
             16, 3, activation='relu', padding='same', kernel_initializer='he_normal',
-            use_bias=self.use_bias
+            use_bias=self.bias
         )(merge7)
         out = Conv2D(self.out_channels, 1, activation=None)(x7)
 

@@ -51,7 +51,7 @@ def main(
     except KeyError:
         pass
     else:
-        kwargs_model.update(use_bias=not no_bias)
+        kwargs_model.update(bias=not no_bias)
 
     # Initialize batch generators for training and validation
     if use_stdnoise_mask:
