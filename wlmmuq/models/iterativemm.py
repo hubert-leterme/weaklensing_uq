@@ -207,15 +207,14 @@ class FixedPointUQ(nn.Module):
 class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
-            self, *args, custom_metrics: MetricDict=None,
+            self, *args, metric_dict: MetricDict=None,
             prior_uq: dinv.optim.Prior=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.psnr_metric = dinv.metric.PSNR()
-        if custom_metrics is not None:
-            self.custom_metrics = nn.ModuleDict(custom_metrics)
+        if metric_dict is not None:
+            self.metric_dict = nn.ModuleDict(metric_dict)
         else:
-            self.custom_metrics = None
+            self.metric_dict = None
         self.batch_size = None
         if prior_uq is not None:
             self.fixed_point = FixedPointUQ(self.fixed_point)
@@ -235,15 +234,12 @@ class BaseOptim(dinv.optim.BaseOptim):
     def _update_metrics(
             self, metrics: MetricDict, x: torch.Tensor, x_gt: torch.Tensor=None
     ):
-        if x_gt is not None:
-            psnr = self.psnr_metric.metric(x, x_gt) # Shape = (batch_size,)
-            metrics.cat("psnr", psnr)
-        if self.custom_metrics is not None:
-            for custom_metric_name, custom_metric_fn in self.custom_metrics.items():
-                custom_metric = custom_metric_fn(
-                    x, x_gt, metrics[custom_metric_name], None
+        if self.metric_dict is not None:
+            for metric_name, metric_fn in self.metric_dict.items():
+                metric = metric_fn(
+                    x, x_gt, metrics[metric_name], None
                 ) # Shape = (batch_size,)
-                metrics.cat(custom_metric_name, custom_metric)
+                metrics.cat(metric_name, metric)
 
         return metrics
 
@@ -255,11 +251,9 @@ class BaseOptim(dinv.optim.BaseOptim):
         init = MetricDict(
             batch_size=self.batch_size, dtype=x_init.dtype, device=x_init.device
         )
-        if x_gt is not None:
-            init.init_metric("psnr")
-        if self.custom_metrics is not None:
-            for custom_metric_name in self.custom_metrics.keys():
-                init.init_metric(custom_metric_name)
+        if self.metric_dict is not None:
+            for metric_name in self.metric_dict.keys():
+                init.init_metric(metric_name)
         if self.has_cost:
             init.init_metric("cost")
         init.init_metric("residual")
