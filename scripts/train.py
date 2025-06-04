@@ -355,18 +355,10 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--use-std-noise", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Whether to apply a heteroscedastic noise to the input images "
-            "(denoiser only)."
-        )
-    )
-    parser.add_argument(
         "--wiener-init", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Use Wiener initialization, for DeepMass"
+            "Use Wiener initialization, for DeepMass."
         )
     )
     parser.add_argument(
