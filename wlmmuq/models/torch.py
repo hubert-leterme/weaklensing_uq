@@ -95,6 +95,122 @@ class ModelMixin:
         torchinfo.summary(self, input_data=fake_input_data)
 
 
+class BaseUNet(nn.Module):
+    """
+    PyTorch adaptation and modification of the 'cnn_keras.py' module from DeepMass
+    https://github.com/NiallJeffrey/DeepMass
+
+    """
+    def __init__(self, in_channels=1, out_channels=1, bias=True):
+
+        super().__init__()
+
+        # Encoder blocks
+        self.enc1 = nn.Sequential(
+            nn.Conv2d(in_channels, 16, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(16, affine=bias)
+        )
+        self.pool1 = nn.AvgPool2d(2)
+
+        self.enc2 = nn.Sequential(
+            nn.Conv2d(16, 32, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(32, affine=bias)
+        )
+        self.pool2 = nn.AvgPool2d(2)
+
+        self.enc3 = nn.Sequential(
+            nn.Conv2d(32, 64, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(64, affine=bias)
+        )
+        self.pool3 = nn.AvgPool2d(2)
+
+        self.enc4 = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(64, affine=bias)
+        )
+        self.pool4 = nn.AvgPool2d(2)
+
+        self.encdeep = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(64, affine=bias)
+        )
+
+        # Decoder convolutions
+        self.decdeep = nn.Sequential(
+            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.ReLU(),
+            nn.BatchNorm2d(64, affine=bias),
+        )
+        self.dec5 = nn.Sequential(
+            nn.BatchNorm2d(128, affine=bias),
+            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.ReLU()
+        )
+        self.dec6 = nn.Sequential(
+            nn.BatchNorm2d(96, affine=bias),
+            nn.Conv2d(96, 32, 3, padding='same', bias=bias),
+            nn.ReLU()
+        )
+        self.dec7 = nn.Sequential(
+            nn.BatchNorm2d(48, affine=bias),
+            nn.Conv2d(48, 16, 3, padding='same', bias=bias),
+            nn.ReLU()
+        )
+
+        # Final convolution layer
+        self.final = nn.Conv2d(16, out_channels, 1)
+
+        # Upsampling and concatenation layers
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.concatenate = Concatenate()
+
+
+    def forward(self, x):
+
+        x1 = self.enc1(x)
+        x2 = self.enc2(self.pool1(x1))
+        x3 = self.enc3(self.pool2(x2))
+        x4 = self.enc4(self.pool3(x3))
+        xdeep = self.encdeep(self.pool4(x4))
+
+        updeep = self.upsample(xdeep)
+        mergedeep = self.concatenate([x4, updeep])
+        xdeep2 = self.decdeep(mergedeep)
+
+        up5 = self.upsample(xdeep2)
+        merge5 = self.concatenate([x3, up5])
+        x5 = self.dec5(merge5)
+
+        up6 = self.upsample(x5)
+        merge6 = self.concatenate([x2, up6])
+        x6 = self.dec6(merge6)
+
+        up7 = self.upsample(x6)
+        merge7 = self.concatenate([x1, up7])
+        x7 = self.dec7(merge7)
+
+        out = self.final(x7)
+
+        return out
+
+
+class UNet(ModelMixin, BaseUNet):
+
+    def _preprocess_kwargs(
+            self, map_size=None, **kwargs
+    ):
+        # map_size is discarded
+        return kwargs
+
+    def _get_fake_input_data(self, map_size, in_channels):
+        return (torch.randn(1, in_channels, map_size, map_size),)
+
+
 class DRUNet(ModelMixin, dinv.models.DRUNet):
 
     def _preprocess_kwargs(
@@ -241,6 +357,14 @@ class Meancentering(nn.Module):
     """
     def forward(self, x):
         return utils.meancenter(x)
+    
+
+class Concatenate(nn.Module):
+    r"""
+    Module for concatenating a list of tensors along the channel dimension.
+    """
+    def forward(self, inps):
+        return torch.cat(inps, dim=1)
 
 
 #=================================================================================

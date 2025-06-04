@@ -5,6 +5,7 @@ if USE_TENSORFLOW:
     from . import tensorflow
 
 MODEL_CLASSES = {
+    "torch.UNet": (torch.UNet, False),
     "torch.DRUNet": (torch.DRUNet, True),
     "torch.SUNet": (torch.SUNet, False),
     "torch.SUNetNoiseAware": (torch.SUNetNoiseAware, True),
