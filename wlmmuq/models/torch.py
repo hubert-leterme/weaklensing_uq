@@ -93,7 +93,7 @@ class ModelMixin:
         fake_input_data = tuple(
             self._buffers[f"_fake_input_data_{i}"] for i in range(self._n_inputs)
         )
-        torchinfo.summary(self, input_data=fake_input_data)
+        print(torchinfo.summary(self, input_data=fake_input_data))
 
 
 class BaseUNet(nn.Module):
