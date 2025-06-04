@@ -39,7 +39,7 @@ class MahalanobisDistance(dinv.optim.Distance):
         super().__init__()
         # The tensor is properly sent to GPU when applying `self.to(device)`
         if torch.is_tensor(sigma):
-            self.var = nn.Parameter(sigma**2, requires_grad=False)
+            self.register_buffer("var", sigma**2)
         else:
             self.var = sigma**2
 
@@ -211,6 +211,17 @@ class BaseOptim(dinv.optim.BaseOptim):
             prior_uq: dinv.optim.Prior=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
+
+        # Bugfix: the prior (list of instances of :class:`deepinv.optim.Prior`),
+        # and data_fidelity are converted to a `nn.ModuleList` to be properly registered.
+        # In particular, the modules can be moved to GPU with `model.to(device)`.
+        # This is copy-pasted from `deepinv.unfolded.unfolded.py`.
+        self.prior = nn.ModuleList(self.prior) if self.prior else None
+        self.data_fidelity = (
+            nn.ModuleList(self.data_fidelity) if self.data_fidelity else None
+        )
+        # End of bugfix
+
         if metric_dict is not None:
             self.metric_dict = nn.ModuleDict(metric_dict)
         else:
