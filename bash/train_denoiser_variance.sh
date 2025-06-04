@@ -8,7 +8,7 @@ save_freq=1
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> <NAME_DENOISER> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 denoiser_torch.DRUNet_small-model_scale_2.0e-1_scale-min_1.0e-1_20250417_105243 [-m <filename> OR -a torch.DRUNet] [-pred <filename> OR -o1 <timestamp>/ckp_20.pth.tar] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss mse]"
+  echo "Example: $0 0 denoiser_torch.DRUNet_small-model_scale_2.0e-1_scale-min_1.0e-1_20250417_105243 [-a torch.DRUNet] [-pred <filename> OR -o1 <timestamp>/ckp_20.pth.tar] [--scale 2.0e-1] [--scale-min 1.0e-1] [--loss mse]"
   exit 1
 fi
 
