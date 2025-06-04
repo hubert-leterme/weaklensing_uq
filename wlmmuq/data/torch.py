@@ -42,9 +42,6 @@ class HDF5Dataset(TorchMixin, base_dataset.HDF5Dataset):
 class HDF5DatasetMassMapping(TorchMixin, base_dataset.HDF5DatasetMassMapping):
     pass
 
-class HDF5DatasetDeepMass(TorchMixin, base_dataset.HDF5DatasetDeepMass):
-    pass
-
 
 class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
 

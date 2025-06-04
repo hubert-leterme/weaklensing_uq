@@ -94,17 +94,15 @@ def main(
 
     if backend == 'tensorflow': # Use Keras (TensorFlow backend)
         data_module = wlds.tensorflow
-        model_module = wlnn.tensorflow
     elif backend == 'torch': # Use DeepInverse (PyTorch backend)
         data_module = wlds.torch
-        model_module = wlnn.torch
     else:
         raise ValueError
 
     if denoiser:
         dataset_class = data_module.HDF5DatasetDenoiser
     else:
-        dataset_class = data_module.HDF5DatasetDeepMass
+        dataset_class = data_module.HDF5DatasetMassMapping
 
     if verbose:
         print("Initialize batch generators for training and validation")
@@ -342,14 +340,6 @@ if __name__ == "__main__":
         help=(
             "If provided, then the scale for the noise standard deviation will be drawn "
             "uniformly between `scale_min` and `scale` for each input image."
-        )
-    )
-    parser.add_argument(
-        "--input-method", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Weak lensing method used as input ('ks', 'wiener'). "
-            "Only used if option `--denoiser` is not activated. Default = None"
         )
     )
     parser.add_argument(

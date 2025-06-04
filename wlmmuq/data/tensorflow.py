@@ -72,9 +72,6 @@ class HDF5Dataset(TensorflowMixin, base_dataset.HDF5Dataset):
 class HDF5DatasetMassMapping(TensorflowMixin, base_dataset.HDF5DatasetMassMapping):
     pass
 
-class HDF5DatasetDeepMass(TensorflowMixin, base_dataset.HDF5DatasetDeepMass):
-    pass
-
 
 class HDF5DatasetDenoiser(TensorflowMixin, base_dataset.HDF5DatasetDenoiser):
 

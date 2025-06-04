@@ -18,8 +18,7 @@ class BaseHDF5Dataset:
 
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
-            std_noise=None, mask=None, input_method=None,
-            beg_idx=0, shuffle=True, output_shape=None,
+            std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
             sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
@@ -43,9 +42,6 @@ class BaseHDF5Dataset:
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
-        input_method: str, optional
-            Input mass mapping method: 'ks' or 'wiener'. Only if already
-            registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -64,7 +60,7 @@ class BaseHDF5Dataset:
             or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
-            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
+            'gamma1_noisy', 'gamma2_noisy', 'kappa_inp', or None.
             If None, returns a dictionary of outputs. Default is None.
         close_after_batch: bool, optional
             Default is False.
@@ -84,7 +80,6 @@ class BaseHDF5Dataset:
         self.batch_size = batch_size
         self.std_noise = std_noise
         self.mask = mask
-        self.input_method = input_method
         self.beg_idx = beg_idx
         self.shuffle = shuffle
         self.output_shape = output_shape
@@ -102,7 +97,6 @@ class BaseHDF5Dataset:
         self.ds_kappa_inp = None
         self.ds_kappa_true = None
         self.ds_kappa_pred = None
-        self.input_exists = False
         self.current_idx = 0  # To track the batch number
         self.current_real = 0 # Useful when self.nreal_per_img > 1
         self.nx = None
@@ -119,17 +113,6 @@ class BaseHDF5Dataset:
     def _open_and_get_dataset(self):
         self.file = h5py.File(self.hdf5_filepath, 'r', swmr=True)  # Keep file open
         self.ds_kappa_true = self.file['kappa']
-
-        # Load dataset of input mass mapping method
-        if self.input_method is not None:
-            try:
-                self.ds_kappa_inp = self.file[f'kappa_{self.input_method}']
-            except KeyError:
-                warnings.warn(
-                    f"Dataset 'kappa_{self.input_method}' absent from the HDF5 file."
-                )
-            else:
-                self.input_exists = True
 
         # Load dataset of predictions (for order-2 moment networks)
         if self.pred_filepath is not None:
@@ -185,10 +168,6 @@ class BaseHDF5Dataset:
         if self.close_after_batch:
             self._open_and_get_dataset()
         kappa_true = self.ds_kappa_true[idx]
-        if self.input_exists:
-            kappa_inp = self.ds_kappa_inp[idx]
-        else:
-            kappa_inp = None
         if self.pred_filepath is not None:
             kappa_pred = self.ds_kappa_pred[idx]
         else:
@@ -225,14 +204,11 @@ class BaseHDF5Dataset:
 
         # Output transformations
         kappa_true = transform(kappa_true)
-        if kappa_inp is not None:
-            kappa_inp = transform(kappa_inp)
         if kappa_pred is not None:
             kappa_pred = transform(kappa_pred)
 
         out_dict = {
             "kappa_true": kappa_true,
-            "kappa_inp": kappa_inp,
             "kappa_pred": kappa_pred
         }
         out_dict = self._postprocess(out_dict, idx)
@@ -257,7 +233,7 @@ class BaseHDF5Dataset:
     def _prepare_output(self, out_dict):
         if self.list_of_outputs is not None:
             out = tuple(
-                [out_dict[val] for val in self.list_of_outputs]
+                [out_dict[val] if val is not None else None for val in self.list_of_outputs]
             )
             if len(out) == 1:
                 out = out[0]
@@ -360,8 +336,8 @@ class BaseHDF5Dataset:
 class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
-            self, *args, inpainting=False, std_gaussianfilter=None, powerspectrum_1d=None,
-            niter=1, complexconjugate=False, return_complex=False,
+            self, *args, inpainting=False,
+            complexconjugate=False, return_complex=False,
             output_shape_wider: int | tuple[int, int]=None, **kwargs
     ):
         """
@@ -383,8 +359,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         inpainting: bool, optional
             If True, then apply noise in masked regions of the shear. Otherwise, set masked
             values to 0. Default is False.
-        input_method: str, optional
-            Input mass mapping method: 'ks' or 'wiener'. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -403,15 +377,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
             or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
-        std_gaussianfilter: float, optional
-            If `input_method` is set to 'ks', standard deviation of the smoothing filter.
-            Default is None.
-        powerspectrum_1d: np.ndarray, optional
-            If `input_method` is set to 'wiener' or 'wiener_pdg', 1D power spectrum.
-            Its length must be half the image size. Default is None.
-        niter: int, optional
-            If `input_method` is set to 'wiener', number of iterations.
-            Default is 1.
         complexconjugate (bool, default=True)   
             Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
         return_complex (bool, default=False)
@@ -432,9 +397,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         super().__init__(*args, **kwargs)
 
         self.inpainting = inpainting
-        self.std_gaussianfilter = std_gaussianfilter
-        self.powerspectrum_1d = powerspectrum_1d
-        self.niter = niter
         self.complexconjugate = complexconjugate
         self.return_complex = return_complex
         if output_shape_wider is not None:
@@ -456,23 +418,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             self.mask_wider = None
             self.beg_x = None
             self.beg_y = None
-
-        self.sheardata = None # For Wiener filtering
-
-        self._initialize_wiener()
-
-
-    def _initialize_wiener(self):
-        """Initialize the parameters for iterative Wiener filtering."""
-        if self.input_method == 'wiener' and not self.input_exists:
-            # Register data into a `csmm.shear_data` object
-            self.sheardata = csmm.shear_data()
-            self.sheardata.mask = self.mask.astype(int)
-            self.sheardata.Ncov = 2 * self.std_noise**2 # Factor 2 required
-
-            # Create a mass mapping structure and initialize it
-            self.massmap = csmm.massmap2d(name='mass')
-            self.massmap.init_massmap(self.nx, self.ny)
 
 
     def _postprocess(self, out_dict, idx):
@@ -520,32 +465,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
                     "gamma_noisy_wider": gamma_noisy_wider
                 })
 
-        # Compute KS solution if required
-        if self.input_method is not None and not self.input_exists:
-            if self.input_method == 'ks':
-                if self.verbose:
-                    print("\tCompute Kaiser-Squires solution")
-                kappa_inp = utils.ksfilter(
-                    gamma_noisy.real, gamma_noisy.imag, get_bounds=False,
-                    std_gaussianfilter=self.std_gaussianfilter
-                )
-            # Compute Wiener solution if required
-            elif self.input_method == 'wiener':
-                if self.verbose:
-                    print("\tCompute Wiener solution")
-                self.sheardata.g1 = gamma_noisy.real
-                self.sheardata.g2 = gamma_noisy.imag
-                kappa_inp, _ = self.massmap.prox_wiener_filtering(
-                    self.sheardata, self.powerspectrum_1d, niter=self.niter,
-                    **self.kwargs_wiener
-                )
-            else:
-                raise ValueError
-
-            out_dict.update({
-                "kappa_inp": kappa_inp
-            })
-
         return out_dict
 
 
@@ -586,9 +505,6 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
             order-2 moment networks.
         batch_size : int, optional
             Number of images per batch. Default is None.
-        input_method: str, optional
-            Input mass mapping method: 'ks' or 'wiener'. Only if already
-            registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -666,7 +582,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
 
 class InputTargetMixin:
 
-    def __init__(self, *args, input_type='kappa_inp', order=1, mode='IT', **kwargs):
+    def __init__(self, *args, input_type=None, order=1, mode='IT', **kwargs):
         """
         Dataset adapted for batch loading of type (input, target) or (target, input).
 
@@ -678,8 +594,8 @@ class InputTargetMixin:
             Number of images in the dataset. Indices from `beg_idx` to
             `beg_idx + nimgs` are considered.
         input_type : str, optional
-            Type of input data: 'kappa_inp' (noisy convergence map, naive estimation,
-            or None), or 'gamma_noisy' (shear map).
+            Type of input data: 'kappa_inp' (noisy convergence map),
+            'gamma_noisy' (shear map), or None.
         order : int, optional
             Order of the moment network: 1 for standard posterior mean estimate,
             2 for posterior variance. Default is 1.
@@ -708,9 +624,6 @@ class InputTargetMixin:
             order-2 moment networks.
         batch_size : int, optional
             Number of images per batch. Default is None.
-        input_method: str, optional
-            Input mass mapping method: 'ks' or 'wiener'. Only if already
-            registered in the HDF5 dataset. Default is None.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -770,8 +683,8 @@ class HDF5Dataset(InputTargetMixin, BaseHDF5Dataset):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(
-            *args, input_type='kappa_inp', **kwargs
-        ) # kappa_inp is None, unless a mass mapping method is specified
+            *args, input_type=None, **kwargs
+        )
 
 class HDF5DatasetMassMapping(InputTargetMixin, BaseHDF5DatasetGammaKappa):
     """
@@ -781,16 +694,6 @@ class HDF5DatasetMassMapping(InputTargetMixin, BaseHDF5DatasetGammaKappa):
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args, input_type='gamma_noisy', return_complex=True, **kwargs
-        )
-
-class HDF5DatasetDeepMass(InputTargetMixin, BaseHDF5DatasetGammaKappa):
-    """
-    Dataset for training DeepMass. The dataset takes as input
-    an initial estimation (Kaiser-Squires or Wiener) of the convergence maps.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args, input_type='kappa_inp', return_complex=False, **kwargs
         )
 
 class HDF5DatasetDenoiser(InputTargetMixin, BaseHDF5DatasetDenoiser):

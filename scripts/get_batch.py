@@ -35,7 +35,7 @@ def main(
     if denoiser:
         batch_loader = wlbl.HDF5DatasetDenoiser
     else:
-        batch_loader = wlbl.HDF5DatasetDeepMass
+        batch_loader = wlbl.HDF5DatasetMassMapping
 
     # Check whether the dataset should be sorted by their original filenames
     if keep_unsorted is not None:
