@@ -11,6 +11,7 @@ import _commons
 
 import wlmmuq.data as wlds
 import wlmmuq.models as wlnn
+import wlmmuq.utils as wlutils
 
 from wlmmuq import USE_TENSORFLOW
 from wlmmuq.data import SCALE, NUM_WORKERS
@@ -21,6 +22,9 @@ if USE_TENSORFLOW:
 IMGSIZE = 384
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
+NIMGS_PS = 2048
+BATCH_SIZE_PS = 256
+NITER_WIENERINIT = 1
 NREAL_PER_IMG = 1
 NEPOCHS = 20
 BATCH_SIZE = 32
@@ -33,16 +37,22 @@ def main(
         path_to_augmented_dataset,
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
+        wiener_init=False, nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
+        niter_wienerinit=NITER_WIENERINIT, multfact_step_size_wienerinit=0.99,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
-        path_to_csv_log=None, path_to_tensorboard_log=None, seed=None,
-        verbose=False, **kwargs
+        path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
+        seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if verbose:
+        print(f"Device: {device}")
 
     keys_model = ['model_size', 'pretrained']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
@@ -53,14 +63,43 @@ def main(
     else:
         kwargs_model.update(bias=not no_bias)
 
-    # Initialize batch generators for training and validation
+    std_noise, mask = _commons.get_stdnoise_mask(
+        imgsize, cosmos_include_faint=cosmos_include_faint,
+        convert_to_torch_tensor=True, inpainting=True,
+        seed=seed, verbose=verbose
+    )
+
     if use_stdnoise_mask:
-        std_noise, mask = _commons.get_stdnoise_mask(
-            imgsize, cosmos_include_faint=cosmos_include_faint,
-            convert_to_torch_tensor=True, inpainting=True,
-            seed=seed, verbose=verbose
-        )
+        assert denoiser
         kwargs.update(std_noise=std_noise, mask=mask)
+
+    if wiener_init:
+        assert not denoiser
+
+        # Compute power spectrum
+        if verbose:
+            print(
+                f"Compute the power spectrum of {nimgs_ps} images "
+                f"with batch size {batch_size_ps}"
+            )
+        powerspectrum = _commons.get_powerspectrum_from_dataset(
+            path_to_augmented_dataset, nimgs=nimgs_ps,
+            batch_size=batch_size_ps, output_shape=imgsize,
+            num_workers=num_workers, device=device
+        )
+
+        # Compute step size
+        step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
+            std_noise=std_noise, mask=mask
+        )
+        if verbose:
+            print(f"Wiener initialization with step size {step_size:.1e}")
+
+        args_wienerinit = dict(
+            step_size=step_size, powerspectrum=powerspectrum,
+            std_noise=std_noise, mask=mask, niter=niter_wienerinit
+        )
+        kwargs_model.update(args_wienerinit=args_wienerinit)
 
     if arch is not None:
         backend = arch.split(".")[0]
@@ -110,14 +149,16 @@ def main(
         hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
-        newaxis=True, nreal_per_img=nreal_per_img, **kwargs
+        newaxis=True, nreal_per_img=nreal_per_img,
+        num_workers=num_workers, **kwargs
     )
     train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
         hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, newaxis=True, **kwargs
+        output_shape=imgsize, newaxis=True,
+        num_workers=num_workers, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()
 
@@ -243,9 +284,6 @@ def main(
         else:
             scheduler = None
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        if verbose:
-            print(f"Device: {device}")
         model.to(device)
         loss_fun.to(device)
         trainer = wlnn.torch.Trainer(
@@ -322,6 +360,13 @@ if __name__ == "__main__":
         help=(
             "Whether to apply a heteroscedastic noise to the input images "
             "(denoiser only)."
+        )
+    )
+    parser.add_argument(
+        "--wiener-init", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use Wiener initialization, for DeepMass"
         )
     )
     parser.add_argument(

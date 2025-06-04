@@ -7,6 +7,7 @@ import astropy.table as aptable
 from wlmmuq import cosmos as wlcosmos
 from wlmmuq import kappatng as wlktng
 from wlmmuq import utils as wlutils
+from wlmmuq.data import torch as wlbl
 
 from wlmmuq.kappatng import OPENINGANGLE
 
@@ -93,6 +94,31 @@ def create_dataset_from_kappatng(
         path_to_saved_dataset, idx_lp, ninpimgs, weights_redshift, imgsize,
         verbose=verbose, **kwargs
     )
+
+
+def get_powerspectrum_from_dataset(
+        hdf5_filepath, nimgs, device=None, **kwargs
+):
+    dataloader = wlbl.HDF5Dataset(
+        hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
+    ).to_dataloader()
+    dataloader = iter(dataloader)
+
+    list_of_powerspectrum = []
+    while True:
+        try:
+            kappa_ps, _ = next(dataloader)
+        except StopIteration:
+            break
+        if device is not None:
+            kappa_ps = kappa_ps.to(device)
+        list_of_powerspectrum.append(
+            wlutils.get_powerspectrum(kappa_ps)
+        )
+    powerspectrum = torch.stack(list_of_powerspectrum, dim=0)
+    powerspectrum = torch.mean(powerspectrum, dim=0)
+
+    return powerspectrum
 
 
 def add_arguments_create_dataset(parser):
