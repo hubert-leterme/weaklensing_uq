@@ -1,6 +1,7 @@
 import os
 import argparse
 import time
+import warnings
 import numpy as np
 
 import _commons
@@ -8,7 +9,10 @@ import _commons
 import wlmmuq.utils as wlutils
 import wlmmuq.data.torch as wldata
 
-import pycs.astro.wl.mass_mapping as csmm
+try:
+    import pycs.astro.wl.mass_mapping as csmm
+except ImportError:
+    warnings.warn("Module `pycs` not found.")
 
 from wlmmuq.data import NUM_WORKERS
 
