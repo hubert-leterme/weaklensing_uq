@@ -89,11 +89,11 @@ class ModelMixin:
         raise NotImplementedError
 
 
-    def summary(self):
+    def summary(self, **kwargs):
         fake_input_data = tuple(
             self._buffers[f"_fake_input_data_{i}"] for i in range(self._n_inputs)
         )
-        print(torchinfo.summary(self, input_data=fake_input_data))
+        print(torchinfo.summary(self, input_data=fake_input_data, **kwargs))
 
 
 class BaseUNet(nn.Module):
@@ -481,10 +481,15 @@ class WienerInitMixin:
         out = super().forward(inp, *args, **kwargs)
         return out
 
-
-class UNetWienerInit(WienerInitMixin, UNet):
     def _get_fake_input_data(self, map_size, in_channels):
         return (torch.randn(1, in_channels, map_size, map_size, dtype=torch.complex64),)
+
+
+class UNetWienerInit(WienerInitMixin, UNet):
+    pass
+
+class SUNetWienerInit(WienerInitMixin, SUNet):
+    pass
 
 
 def zero_init(y: torch.Tensor, _unused_physics):
