@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tqdm
 from scipy import ndimage, signal, stats, sparse, linalg
 import matplotlib.pyplot as plt
 import torch
@@ -953,6 +954,63 @@ def get_sup_step_size(std_noise, mask=None, its=20):
     spectrnorm = linalg.interpolative.estimate_spectral_norm(linearop, its=its)
 
     return 2 / spectrnorm
+
+
+def infer_model(
+        model, dataloader, idx_list=None, idx_dict=None,
+        device='cpu', verbose=False, **kwargs
+):
+    model.eval().to(device)
+    outputs = []
+    with torch.no_grad():
+        for inp in tqdm.tqdm(dataloader, disable=not verbose):
+
+            if torch.is_tensor(inp):
+                inp = (inp,)
+            inp = tuple(x.to(device) for x in inp)
+            if idx_list is None:
+                idx_list = range(len(inp))
+            args = tuple(inp[idx] for idx in idx_list)
+            if idx_dict is not None:
+                kwargs.update({
+                    key: inp[idx] for key, idx in idx_dict.items()
+                })
+            outputs.append(model(*args, **kwargs))
+
+        out = cat_arrays(outputs, dim=0)
+
+    return out
+
+
+def cat_arrays(inp_list, **kwargs):
+
+    first_elt = inp_list[0]
+    if torch.is_tensor(first_elt):
+        out = torch.cat(inp_list, **kwargs)
+    elif isinstance(first_elt, list):
+        out = [
+            cat_arrays([
+                l[i] for l in inp_list
+            ], **kwargs) for i in range(len(first_elt))
+        ]
+    elif isinstance(first_elt, tuple):
+        out = tuple(
+            cat_arrays([
+                t[i] for t in inp_list
+            ], **kwargs) for i in range(len(first_elt))
+        )
+    elif isinstance(first_elt, dict):
+        out = {
+            key: cat_arrays([
+                d[key] for d in inp_list
+            ], **kwargs) for key in first_elt.keys()
+        }
+    else:
+        raise TypeError(
+            f"Unsupported input type: {type(first_elt)}. "
+            "Expected torch.Tensor, list, tuple or dict."
+        )
+    return out
 
 
 #=================================================================================
