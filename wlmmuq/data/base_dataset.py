@@ -333,6 +333,16 @@ class BaseHDF5Dataset:
         self.close()
 
 
+class HDF5DatasetKappa(BaseHDF5Dataset):
+    """
+    Dataset with ground truth convergence maps only.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, list_of_outputs=["kappa_true"], **kwargs
+        )
+
+
 class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
@@ -676,15 +686,6 @@ class InputTargetMixin:
 
         return out_dict
 
-
-class HDF5Dataset(InputTargetMixin, BaseHDF5Dataset):
-    """
-    Dataset with ground truth convergence maps only.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args, input_type=None, **kwargs
-        )
 
 class HDF5DatasetMassMapping(InputTargetMixin, BaseHDF5DatasetGammaKappa):
     """

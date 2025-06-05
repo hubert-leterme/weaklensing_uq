@@ -66,11 +66,11 @@ def main(
     # Compute the 1D power spectrum from simulated convergence maps
     if method in ("wiener", "mcalens"):
         if path_to_powerspectrum is None:
-            dataset_ps = wldata.HDF5Dataset(
+            dataset_ps = wldata.HDF5DatasetKappa(
                 path_to_test_dataset, nimgs=nimgs_ps, sort_by_filename_ori=True,
                 shuffle=False, beg_idx=nimgs, output_shape=imgsize, **kwargs
             )
-            kappa_ps, _ = dataset_ps.load_batch(get_all_images=True)
+            kappa_ps = dataset_ps.load_batch(get_all_images=True)
             kappa_ps = kappa_ps.numpy()
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
             del kappa_ps

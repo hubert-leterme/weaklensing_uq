@@ -27,12 +27,12 @@ def main(
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-    data_loader = wlbl.HDF5Dataset(
+    data_loader = wlbl.HDF5DatasetKappa(
         path_to_dataset, nimgs=nimgs, batch_size=batch_size,
         output_shape=imgsize, shuffle=True
     )
     data_gen = data_loader.to_dataloader(raise_stop_iteration=True)
-    _, data_gen = iter(data_gen)
+    data_gen = iter(data_gen)
 
     list_of_powerspectrum_1d = []
     nsteps = nimgs // batch_size

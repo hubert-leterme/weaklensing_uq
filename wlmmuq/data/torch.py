@@ -33,10 +33,10 @@ class TorchMixin:
         return out
 
 
-class BaseHDF5DatasetGammaKappa(TorchMixin, base_dataset.BaseHDF5DatasetGammaKappa):
+class HDF5DatasetKappa(TorchMixin, base_dataset.HDF5DatasetKappa):
     pass
 
-class HDF5Dataset(TorchMixin, base_dataset.HDF5Dataset):
+class BaseHDF5DatasetGammaKappa(TorchMixin, base_dataset.BaseHDF5DatasetGammaKappa):
     pass
 
 class HDF5DatasetMassMapping(TorchMixin, base_dataset.HDF5DatasetMassMapping):

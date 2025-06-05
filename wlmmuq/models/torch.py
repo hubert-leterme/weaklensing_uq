@@ -208,6 +208,17 @@ class UNet(ModelMixin, BaseUNet):
         # map_size is discarded
         return kwargs
 
+    def forward(self, inp, sigma=None, **kwargs):
+        r"""
+        The noise level is not used in this model.
+
+        :param torch.Tensor x: noisy image, of shape B, C, W, H.
+        :param float sigma: noise level (not used).
+        """
+        # The signature of this forward method follows the specifications of DeepInverse,
+        # to be able to use the `Trainer` class for training.
+        return super().forward(inp, **kwargs)
+
     def _get_fake_input_data(self, map_size, in_channels):
         return (torch.randn(1, in_channels, map_size, map_size),)
 

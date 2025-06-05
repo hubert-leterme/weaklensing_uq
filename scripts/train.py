@@ -69,8 +69,7 @@ def main(
         seed=seed, verbose=verbose
     )
 
-    if use_stdnoise_mask:
-        assert denoiser
+    if not denoiser or use_stdnoise_mask:
         kwargs.update(std_noise=std_noise, mask=mask)
 
     if wiener_init:
@@ -165,7 +164,7 @@ def main(
     # Initialize model
     model = cnn_class(
         map_size=imgsize, **kwargs_model
-    )
+    ).to(device)
 
     if verbose:
         model.summary()
@@ -284,7 +283,6 @@ def main(
         else:
             scheduler = None
 
-        model.to(device)
         loss_fun.to(device)
         trainer = wlnn.torch.Trainer(
             model,

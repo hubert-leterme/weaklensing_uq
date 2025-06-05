@@ -99,7 +99,7 @@ def create_dataset_from_kappatng(
 def get_powerspectrum_from_dataset(
         hdf5_filepath, nimgs, device=None, **kwargs
 ):
-    dataloader = wlbl.HDF5Dataset(
+    dataloader = wlbl.HDF5DatasetKappa(
         hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
     ).to_dataloader()
     dataloader = iter(dataloader)
@@ -107,7 +107,7 @@ def get_powerspectrum_from_dataset(
     list_of_powerspectrum = []
     while True:
         try:
-            kappa_ps, _ = next(dataloader)
+            kappa_ps = next(dataloader)
         except StopIteration:
             break
         if device is not None:
