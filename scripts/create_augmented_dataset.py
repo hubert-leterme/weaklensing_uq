@@ -49,17 +49,7 @@ if __name__ == "__main__":
             "Default = 1"
         )
     )
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    )
+    _commons.add_arguments_seed_verbose(parser)
 
     args = parser.parse_args()
     kwargs = vars(args).copy()

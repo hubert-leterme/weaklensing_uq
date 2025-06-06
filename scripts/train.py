@@ -7,8 +7,6 @@ import threading
 import torch
 import deepinv as dinv
 
-import _commons
-
 import wlmmuq.data as wlds
 import wlmmuq.models as wlnn
 import wlmmuq.utils as wlutils
@@ -19,7 +17,9 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 if USE_TENSORFLOW:
     import tensorflow as tf
 
-IMGSIZE = 384
+import _commons
+from _commons import IMGSIZE
+
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_PS = 2048
@@ -49,10 +49,7 @@ def main(
         seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    if verbose:
-        print(f"Device: {device}")
+    device = _commons.get_device(verbose=verbose)
 
     keys_model = ['model_size', 'pretrained']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
@@ -76,15 +73,10 @@ def main(
         assert not denoiser
 
         # Compute power spectrum
-        if verbose:
-            print(
-                f"Compute the power spectrum of {nimgs_ps} images "
-                f"with batch size {batch_size_ps}"
-            )
         powerspectrum = _commons.get_powerspectrum_from_dataset(
             path_to_augmented_dataset, nimgs=nimgs_ps,
             batch_size=batch_size_ps, output_shape=imgsize,
-            num_workers=num_workers, device=device
+            num_workers=num_workers, device=device, verbose=verbose
         )
 
         # Compute step size
@@ -428,14 +420,6 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--imgsize", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of pixels (width) in input images. "
-            f"Default = {IMGSIZE}"
-        )
-    )
-    parser.add_argument(
         "--nimgs-train", type=int,
         default=argparse.SUPPRESS,
         help=(
@@ -451,6 +435,7 @@ if __name__ == "__main__":
             f"Default = {NIMGS_VAL}"
         )
     )
+    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
     parser.add_argument(
         "--nreal-per-img", type=int,
         default=argparse.SUPPRESS,
@@ -473,22 +458,6 @@ if __name__ == "__main__":
         help=(
             "Number of training epochs. "
             f"Default = {NEPOCHS}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size for training and validation. "
-            f"Default = {BATCH_SIZE}"
-        )
-    )
-    parser.add_argument(
-        "-w", "--num-workers", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of workers for parallel processing. Only work for PyTorch datasets. "
-            f"Default = {NUM_WORKERS}"
         )
     )
     parser.add_argument(
@@ -550,17 +519,7 @@ if __name__ == "__main__":
             "Path to the TensorBoard log file. Default = None"
         )
     )
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    )
+    _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 

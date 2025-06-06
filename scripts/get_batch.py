@@ -4,6 +4,9 @@ import random
 import numpy as np
 import torch
 
+import _commons
+from _commons import IMGSIZE
+
 from wlmmuq import USE_TENSORFLOW
 if not USE_TENSORFLOW:
     raise ImportError(
@@ -14,7 +17,6 @@ if not USE_TENSORFLOW:
 import wlmmuq.data.tensorflow as wlbl
 
 MOMENT_ORDER = 1
-IMGSIZE = 384
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_PS = 256 # To compute the power spectrum
 BATCH_SIZE = 32
@@ -106,14 +108,6 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--imgsize", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of pixels (width) in input images. "
-            f"Default = {IMGSIZE}"
-        )
-    )
-    parser.add_argument(
         "--nimgs", type=int,
         default=argparse.SUPPRESS,
         help=(
@@ -121,14 +115,7 @@ if __name__ == "__main__":
             f"Default = {NIMGS_TRAIN}"
         )
     )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size for training and validation. "
-            f"Default = {BATCH_SIZE}"
-        )
-    )
+    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
     parser.add_argument(
         "--keep-unsorted", action='store_true',
         default=argparse.SUPPRESS,
@@ -145,17 +132,7 @@ if __name__ == "__main__":
             f"Default = '{OUTPUT_DIR}'"
         )
     )
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    )
+    _commons.add_arguments_seed_verbose(parser)
 
     args = parser.parse_args()
     kwargs = vars(args).copy()

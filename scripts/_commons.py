@@ -10,8 +10,10 @@ from wlmmuq import utils as wlutils
 from wlmmuq.data import torch as wlbl
 
 from wlmmuq.kappatng import OPENINGANGLE
+from wlmmuq.data import NUM_WORKERS
 
 NINPIMGS = 100 # Number of input images
+IMGSIZE = 384
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -19,6 +21,13 @@ def set_seed(seed):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
+
+
+def get_device(verbose=False):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if verbose:
+        print(f"Device: {device}")
+    return device
 
 
 def get_stdnoise_mask(
@@ -97,8 +106,10 @@ def create_dataset_from_kappatng(
 
 
 def get_powerspectrum_from_dataset(
-        hdf5_filepath, nimgs, device=None, **kwargs
+        hdf5_filepath, nimgs, device=None, verbose=False, **kwargs
 ):
+    if verbose:
+        print(f"Compute the power spectrum of {nimgs} images")
     dataloader = wlbl.HDF5DatasetKappa(
         hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
     ).to_dataloader()
@@ -152,3 +163,44 @@ def add_arguments_create_dataset(parser):
             "Default = 50"
         )
     )
+
+def add_arguments_dataset(parser, batch_size):
+
+    parser.add_argument(
+        "--imgsize", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of pixels (width) in input images. "
+            f"Default = {IMGSIZE}"
+        )
+    )
+    parser.add_argument(
+        "-b", "--batch-size", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Batch size. "
+            f"Default = {batch_size}"
+        )
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of workers for parallel processing. Only work for PyTorch datasets. "
+            f"Default = {NUM_WORKERS}"
+        )
+    )
+
+def add_arguments_seed_verbose(parser):
+
+    parser.add_argument(
+        "--seed", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Seed for the random number generators"
+        )
+    )
+    parser.add_argument(
+        "-v", "--verbose", action='store_true',
+        default=argparse.SUPPRESS
+    ) 

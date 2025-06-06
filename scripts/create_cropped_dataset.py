@@ -25,17 +25,7 @@ if __name__ == "__main__":
         help="Path to the cropped dataset (HDF5 file)"
     )
     _commons.add_arguments_create_dataset(parser)
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    )
+    _commons.add_arguments_seed_verbose(parser)
 
     args = parser.parse_args()
     kwargs = vars(args).copy()

@@ -4,8 +4,6 @@ import time
 import warnings
 import numpy as np
 
-import _commons
-
 import wlmmuq.utils as wlutils
 import wlmmuq.data.torch as wldata
 
@@ -16,7 +14,9 @@ except ImportError:
 
 from wlmmuq.data import NUM_WORKERS
 
-IMGSIZE = 384
+import _commons
+from _commons import IMGSIZE
+
 CONFIDENCE = 2 # number of sigmas
 NIMGS = 225
 NIMGS_PS = 256 # images used to compute the power spectrum
@@ -267,17 +267,7 @@ if __name__ == "__main__":
             "computed in a single batch)"
         )
     )
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    )
+    _commons.add_arguments_seed_verbose(parser)
 
     args = parser.parse_args()
     kwargs = vars(args).copy()
