@@ -1,13 +1,7 @@
 import argparse
 import torch
 
-from wlmmuq import USE_TENSORFLOW
 from wlmmuq.data import NUM_WORKERS
-if not USE_TENSORFLOW:
-    raise ImportError(
-        "This script requires TensorFlow to be imported. "
-        "Please set 'use_tensorflow' to True in the configuration file."
-    )
 
 import _commons
 from _commons import IMGSIZE
