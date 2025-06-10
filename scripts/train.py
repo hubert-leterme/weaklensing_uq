@@ -32,6 +32,7 @@ LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
+UPDATE_PBAR_EVERY = 64 # Update the progress bar every this many iterations
 
 def main(
         path_to_augmented_dataset,
@@ -46,7 +47,7 @@ def main(
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
-        seed=None, verbose=False, **kwargs
+        update_pbar_every=UPDATE_PBAR_EVERY, seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
     device = _commons.get_device(verbose=verbose)
@@ -276,13 +277,14 @@ def main(
             show_progress_bar=True,
             train_dataloader=train_dataloader,
             eval_dataloader=val_dataloader,
+            update_pbar_every=update_pbar_every
         )
 
         # Start profiling
         def print_stats():
             while True:
                 time.sleep(15)
-                filename_stats = 'profile_results.txt'
+                filename_stats = 'stats.prof'
                 if trainer.save_path is not None:
                     filename_stats = os.path.join(trainer.save_path, filename_stats)
                 if os.path.exists(trainer.save_path): # Will be created during training
