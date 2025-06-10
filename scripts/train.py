@@ -32,7 +32,6 @@ LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
-UPDATE_PBAR_EVERY = 64 # Update the progress bar every this many iterations
 
 def main(
         path_to_augmented_dataset,
@@ -47,7 +46,7 @@ def main(
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
-        update_pbar_every=UPDATE_PBAR_EVERY, seed=None, verbose=False, **kwargs
+        seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
     device = _commons.get_device(verbose=verbose)
@@ -276,8 +275,7 @@ def main(
             optimizer=optimizer,
             show_progress_bar=True,
             train_dataloader=train_dataloader,
-            eval_dataloader=val_dataloader,
-            update_pbar_every=update_pbar_every
+            eval_dataloader=val_dataloader
         )
 
         # Start profiling
