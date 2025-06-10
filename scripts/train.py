@@ -287,8 +287,9 @@ def main(
                 filename_stats = 'stats.prof'
                 if trainer.save_path is not None:
                     filename_stats = os.path.join(trainer.save_path, filename_stats)
-                if os.path.exists(trainer.save_path): # Will be created during training
-                    profiler.dump_stats(filename_stats)
+                if not os.path.exists(trainer.save_path):
+                    os.makedirs(trainer.save_path)
+                profiler.dump_stats(filename_stats)
 
         profiler = cProfile.Profile()
         profiler.enable()
