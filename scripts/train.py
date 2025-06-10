@@ -278,28 +278,21 @@ def main(
             eval_dataloader=val_dataloader
         )
 
-        # Start profiling
-        def print_stats():
-            while True:
-                time.sleep(15)
-                filename_stats = 'stats.prof'
-                if trainer.save_path is not None:
-                    filename_stats = os.path.join(trainer.save_path, filename_stats)
-                if not os.path.exists(trainer.save_path):
-                    os.makedirs(trainer.save_path)
-                profiler.dump_stats(filename_stats)
-
-        profiler = cProfile.Profile()
-        profiler.enable()
-        stats_thread = threading.Thread(target=print_stats, daemon=True)
-        stats_thread.start()
-
-        # Train model
-        trainer.train()
+        # Train model with profiler
+        logdir = os.path.join(checkpoint_dir, 'log')
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
+        with torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(logdir)
+        ):
+            trainer.train()
 
     train_dataset.close()
     val_dataset.close()
-    profiler.disable()
 
 
 if __name__ == "__main__":
