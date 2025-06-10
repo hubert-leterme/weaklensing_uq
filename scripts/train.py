@@ -175,21 +175,6 @@ def main(
         backup_dir = os.path.join(backup_dir, output_type)
         backup_dir = os.path.normpath(backup_dir)
 
-    # Start profiling
-    def print_stats():
-        while True:
-            time.sleep(15)
-            filename_stats = 'profile_results.txt'
-            if checkpoint_dir is not None:
-                filename_stats = os.path.join(checkpoint_dir, filename_stats)
-            if os.path.exists(checkpoint_dir): # Will be created during training
-                profiler.dump_stats(filename_stats)
-
-    profiler = cProfile.Profile()
-    profiler.enable()
-    stats_thread = threading.Thread(target=print_stats, daemon=True)
-    stats_thread.start()
-
     if backend == 'tensorflow':
 
         # Compile model
@@ -292,6 +277,23 @@ def main(
             train_dataloader=train_dataloader,
             eval_dataloader=val_dataloader,
         )
+
+        # Start profiling
+        def print_stats():
+            while True:
+                time.sleep(15)
+                filename_stats = 'profile_results.txt'
+                if trainer.save_path is not None:
+                    filename_stats = os.path.join(trainer.save_path, filename_stats)
+                if os.path.exists(trainer.save_path): # Will be created during training
+                    profiler.dump_stats(filename_stats)
+
+        profiler = cProfile.Profile()
+        profiler.enable()
+        stats_thread = threading.Thread(target=print_stats, daemon=True)
+        stats_thread.start()
+
+        # Train model
         trainer.train()
 
     train_dataset.close()
