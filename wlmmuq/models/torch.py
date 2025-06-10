@@ -386,13 +386,11 @@ class Concatenate(nn.Module):
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, update_pbar_every=1, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=False, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
-        self.update_pbar_every = update_pbar_every
-
-        self._batch_nb = 0
+        self.pbar_logs = pbar_logs
 
 
     def get_samples(self, iterators, g):
@@ -411,12 +409,6 @@ class Trainer(dinv.Trainer):
         super().plot(epoch, physics, x, y, x_net, train=train)
 
 
-    def step(self, *args, **kwargs):
-        # This is a (possibly unstable) hack to keep track of the batch number.
-        self._batch_nb += 1
-        super().step(*args, **kwargs)
-
-
     def compute_loss(self, physics, x, y, train=True, epoch: int = None):
         r"""
         Compute the loss and perform the backward pass.
@@ -425,7 +417,7 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Avoid calling methods `.item()` and `.cpu()` for each batch.
+        Option to avoid calling `.item()` and `.cpu()` for each batch.
 
         ************************************************************
 
@@ -459,7 +451,7 @@ class Trainer(dinv.Trainer):
                 )
                 loss_total += loss.mean()
                 if len(self.losses) > 1 and self.verbose_individual_losses:
-                    if self._batch_nb % self.update_pbar_every == 0:
+                    if self.pbar_logs:
                         meters = (
                             self.logs_losses_train[k] if train else self.logs_losses_eval[k]
                         )
@@ -467,7 +459,7 @@ class Trainer(dinv.Trainer):
                         cur_loss = meters.avg
                         logs[l.__class__.__name__] = cur_loss
 
-            if self._batch_nb % self.update_pbar_every == 0:
+            if self.pbar_logs:
                 meters = self.logs_total_loss_train if train else self.logs_total_loss_eval
                 meters.update(loss_total.item())
                 logs[f"TotalLoss"] = meters.avg
@@ -475,7 +467,7 @@ class Trainer(dinv.Trainer):
         if train:
             loss_total.backward()  # Backward the total loss
 
-            if self._batch_nb % self.update_pbar_every == 0:
+            if self.pbar_logs:
                 norm = self.check_clip_grad()  # Optional gradient clipping
                 if norm is not None:
                     logs["gradient_norm"] = self.check_grad_val.avg
@@ -496,7 +488,7 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Avoid calling methods `.item()` and `.cpu()` for each batch.
+        Option to avoid calling `.item()` and `.cpu()` for each batch.
 
         ************************************************************
 
@@ -509,7 +501,7 @@ class Trainer(dinv.Trainer):
         :param int epoch: current epoch.
         :returns: The logs with the metrics.
         """
-        if self._batch_nb % self.update_pbar_every == 0:
+        if self.pbar_logs:
             # Compute the metrics over the batch
             with torch.no_grad():
                 for k, l in enumerate(self.metrics):
