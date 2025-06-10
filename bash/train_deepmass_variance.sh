@@ -6,18 +6,32 @@ checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
 save_freq=1
 
 # Check if correct number of arguments are provided
-if [ "$#" -ne 5 ]; then
-  echo "Usage: $0 <GPU_ID> <WL_METHOD> <PRED_DATASET> <TRAINING_DATE> <LEARNING_RATE>"
-  echo "Example: $0 0 ks /path/to/pred/dataset.hdf5 20241105_213110 1e-4"
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $0 <GPU_ID> <NAME_DENOISER> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 deepmass_torch.UNetWienerInit_20250417_105243 [-a torch.UNetWienerInit] [-pred <filename> OR -o1 <timestamp>/ckp_19.pth.tar] [--loss mse]"
   exit 1
 fi
 
+model_name=$2
+optional_args="${@:3}"
+
+# Update optional arguments with full path to saved order-1 model
+if [[ $optional_args == *"-o1 "* ]]; then
+  order1_model_filename=$(echo "$optional_args" | xargs | grep -oP '\-o1 \K[^\s]+' | xargs)
+  optional_args=$(echo "$optional_args" | sed "s|-o1 $order1_model_filename||g" | xargs)
+  optional_args="-o1 ${checkpoint_dir}/${model_name}/pe/${order1_model_filename} ${optional_args}"
+fi
+
+# Command to execute
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --wiener-init --order2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --seed 42 -v" | xargs)
+
+# Print the command for tracking
+echo "Running the following command:"
+echo "=============================================================================="
+echo "$cmd"
+echo "=============================================================================="
+echo ""
+
 # Set environment variables and run the task
 export CUDA_VISIBLE_DEVICES=$1
-python scripts/train.py $path_to_augmented_dataset \
-  --input-method $2 \
-  --moment-order 2 \
-  --path-to-pred-dataset $3 \
-  -lr $5 --lr-scheduler \
-  --checkpoint-dir $checkpoint_dir/checkpoint_${2}_${4} \
-  --seed 42 -v
+eval "$cmd"
