@@ -386,11 +386,10 @@ class Concatenate(nn.Module):
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=False, **kwargs
+            self, *args, scale_as_input=False, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
-        self.pbar_logs = pbar_logs
 
 
     def get_samples(self, iterators, g):
@@ -407,124 +406,6 @@ class Trainer(dinv.Trainer):
         if torch.is_complex(y):
             y = y.real
         super().plot(epoch, physics, x, y, x_net, train=train)
-
-
-    def compute_loss(self, physics, x, y, train=True, epoch: int = None):
-        r"""
-        Compute the loss and perform the backward pass.
-
-        It evaluates the reconstruction network, computes the losses, and performs the backward pass.
-
-        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
-
-        Option to avoid calling `.item()` and `.cpu()` for each batch.
-
-        ************************************************************
-
-        :param deepinv.physics.Physics physics: Current physics operator.
-        :param torch.Tensor x: Ground truth.
-        :param torch.Tensor y: Measurement.
-        :param bool train: If ``True``, the model is trained, otherwise it is evaluated.
-        :param int epoch: current epoch.
-        :returns: (tuple) The network reconstruction x_net (for plotting and computing metrics) and
-            the logs (for printing the training progress).
-        """
-        logs = {}
-
-        if train:
-            self.optimizer.zero_grad()
-
-        # Evaluate reconstruction network
-        x_net = self.model_inference(y=y, physics=physics, x=x, train=train)
-
-        if train or self.display_losses_eval:
-            # Compute the losses
-            loss_total = 0
-            for k, l in enumerate(self.losses):
-                loss = l(
-                    x=x,
-                    x_net=x_net,
-                    y=y,
-                    physics=physics,
-                    model=self.model,
-                    epoch=epoch,
-                )
-                loss_total += loss.mean()
-                if len(self.losses) > 1 and self.verbose_individual_losses:
-                    if self.pbar_logs:
-                        meters = (
-                            self.logs_losses_train[k] if train else self.logs_losses_eval[k]
-                        )
-                        meters.update(loss.detach().cpu().numpy())
-                        cur_loss = meters.avg
-                        logs[l.__class__.__name__] = cur_loss
-
-            if self.pbar_logs:
-                meters = self.logs_total_loss_train if train else self.logs_total_loss_eval
-                meters.update(loss_total.item())
-                logs[f"TotalLoss"] = meters.avg
-
-        if train:
-            loss_total.backward()  # Backward the total loss
-
-            if self.pbar_logs:
-                norm = self.check_clip_grad()  # Optional gradient clipping
-                if norm is not None:
-                    logs["gradient_norm"] = self.check_grad_val.avg
-
-            # Optimizer step
-            self.optimizer.step()
-
-        return x_net, logs
-
-
-    def compute_metrics(
-        self, x, x_net, y, physics, logs, train=True, epoch: int = None
-    ):
-        r"""
-        Compute the metrics.
-
-        It computes the metrics over the batch.
-
-        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
-
-        Option to avoid calling `.item()` and `.cpu()` for each batch.
-
-        ************************************************************
-
-        :param torch.Tensor x: Ground truth.
-        :param torch.Tensor x_net: Network reconstruction.
-        :param torch.Tensor y: Measurement.
-        :param deepinv.physics.Physics physics: Current physics operator.
-        :param dict logs: Dictionary containing the logs for printing the training progress.
-        :param bool train: If ``True``, the model is trained, otherwise it is evaluated.
-        :param int epoch: current epoch.
-        :returns: The logs with the metrics.
-        """
-        if self.pbar_logs:
-            # Compute the metrics over the batch
-            with torch.no_grad():
-                for k, l in enumerate(self.metrics):
-                    metric = l(
-                        x_net=x_net,
-                        x=x,
-                        epoch=epoch,
-                    )
-
-                    current_log = (
-                        self.logs_metrics_train[k] if train else self.logs_metrics_eval[k]
-                    )
-                    current_log.update(metric.detach().cpu().numpy())
-                    logs[l.__class__.__name__] = current_log.avg
-
-                    if not train and self.compare_no_learning:
-                        x_lin = self.no_learning_inference(y, physics)
-                        metric = l(x=x, x_net=x_lin, y=y, physics=physics, model=self.model)
-                        self.logs_metrics_linear[k].update(metric.detach().cpu().numpy())
-                        logs[f"{l.__class__.__name__} no learning"] = (
-                            self.logs_metrics_linear[k].avg
-                        )
-        return logs
 
 
 #=================================================================================
