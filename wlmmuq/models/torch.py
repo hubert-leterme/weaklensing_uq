@@ -558,7 +558,7 @@ class CProfilerCallback(BaseCallback):
         self.filename_stats = filename_stats
         self.profiler = cProfile.Profile()
 
-        self._nbatches = None
+        self._nbatches = 0
         self._is_enabled = False
 
     def on_train_begin(self):
@@ -576,6 +576,7 @@ class CProfilerCallback(BaseCallback):
         self._nbatches += 1
         if self.wait is not None and self._nbatches >= self.wait:
             if not self._is_enabled:
+                self._nbatches = 0
                 self._enable_and_start_threading()
         if self.max_nbatches is not None and self._nbatches >= self.max_nbatches:
             if self._is_enabled:
@@ -592,7 +593,6 @@ class CProfilerCallback(BaseCallback):
     def _enable_and_start_threading(self):
         self.profiler.enable()
         self._is_enabled = True
-        self._nbatches = 0
         stats_thread = threading.Thread(target=self._print_stats, daemon=True)
         stats_thread.start()
 
