@@ -464,10 +464,12 @@ class Trainer(dinv.Trainer):
                         disable=(not self.verbose or not self.show_progress_bar),
                     )
                 ):
+                    callbacks.on_batch_begin(i)
                     progress_bar.set_description(f"Train epoch {epoch + 1}/{self.epochs}")
                     self.step(
                         epoch, progress_bar, train=True, last_batch=(i == batches - 1)
                     )
+                    callbacks.on_batch_end(i)
 
                 self.loss_history.append(self.logs_total_loss_train.avg)
 
@@ -495,14 +497,14 @@ class Trainer(dinv.Trainer):
                             disable=(not self.verbose or not self.show_progress_bar),
                         )
                     ):
-                        callbacks.on_batch_begin(i)
+                        callbacks.on_eval_batch_begin(i)
                         progress_bar.set_description(
                             f"Eval epoch {epoch + 1}/{self.epochs}"
                         )
                         self.step(
                             epoch, progress_bar, train=False, last_batch=(i == batches - 1)
                         )
-                        callbacks.on_batch_end(i)
+                        callbacks.on_eval_batch_end(i)
 
                     for l in self.logs_losses_eval:
                         self.eval_metrics_history[l.__class__.__name__] = l.avg
@@ -539,6 +541,10 @@ class BaseCallback:
         pass
     def on_batch_end(self, batch):
         pass
+    def on_eval_batch_begin(self, batch):
+        pass
+    def on_eval_batch_end(self, batch):
+        pass
 
 
 class CProfilerCallback(BaseCallback):
@@ -563,7 +569,7 @@ class CProfilerCallback(BaseCallback):
 
     def _print_stats(self):
         while True:
-            time.sleep(2)
+            time.sleep(15)
             self.profiler.dump_stats(self.filename_stats)
 
 
@@ -581,7 +587,8 @@ class PyTorchProfilerCallback(BaseCallback):
         self.profiler = torch.profiler.profile(
             activities=[
                 torch.profiler.ProfilerActivity.CPU,
-                torch.profiler.ProfilerActivity.CUDA],
+                torch.profiler.ProfilerActivity.CUDA
+            ],
             on_trace_ready=torch.profiler.tensorboard_trace_handler(logdir),
             **self.kwargs
         )
@@ -616,6 +623,10 @@ class CallbackList(BaseCallback):
         self._loop_over_callbacks("on_batch_begin", batch)
     def on_batch_end(self, batch):
         self._loop_over_callbacks("on_batch_end", batch)
+    def on_eval_batch_begin(self, batch):
+        self._loop_over_callbacks("on_eval_batch_begin", batch)
+    def on_eval_batch_end(self, batch):
+        self._loop_over_callbacks("on_eval_batch_end", batch)
 
 
 #=================================================================================
