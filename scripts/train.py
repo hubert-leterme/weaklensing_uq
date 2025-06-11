@@ -46,7 +46,7 @@ def main(
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
-        cprofiler_max_nbatches=None, seed=None, verbose=False, **kwargs
+        cprofiler_max_nbatches=None, cprofiler_wait=None, seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
     device = _commons.get_device(verbose=verbose)
@@ -282,7 +282,8 @@ def main(
         cprofiler_callback = wlnn.torch.CProfilerCallback(trainer)
         profiler_schedule = torch.profiler.schedule(wait=2, warmup=2, active=50, repeat=1)
         pytorchprofiler_callback = wlnn.torch.PyTorchProfilerCallback(
-            trainer, max_nbatches=cprofiler_max_nbatches, schedule=profiler_schedule
+            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+            schedule=profiler_schedule
         )
         callbacks = wlnn.torch.CallbackList(
             [cprofiler_callback, pytorchprofiler_callback]
@@ -489,6 +490,14 @@ if __name__ == "__main__":
         help=(
             "Maximum number of batches to profile. "
             "If None, then profiling is done until the end of the training. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--cprofiler-wait", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of batches to wait before starting profiling. "
             "Default = None"
         )
     )

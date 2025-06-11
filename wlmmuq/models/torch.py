@@ -549,13 +549,16 @@ class BaseCallback:
 
 class CProfilerCallback(BaseCallback):
 
-    def __init__(self, trainer, max_nbatches=None, filename_stats='stats.prof'):
+    def __init__(
+            self, trainer, max_nbatches=None, wait=None, filename_stats='stats.prof'
+    ):
         self.trainer = trainer
         self.max_nbatches = max_nbatches
+        self.wait = wait
         self.filename_stats = filename_stats
         self.profiler = cProfile.Profile()
 
-        self._nbatches = 0
+        self._nbatches = None
         self._is_enabled = False
 
     def on_train_begin(self):
@@ -563,18 +566,20 @@ class CProfilerCallback(BaseCallback):
         self.filename_stats = os.path.join(
             self.trainer.save_path, self.filename_stats
         )
-        self.profiler.enable()
-        self._is_enabled = True
-        stats_thread = threading.Thread(target=self._print_stats, daemon=True)
-        stats_thread.start()
+        if self.wait is None:
+            self._enable_and_start_threading()
 
     def on_train_end(self):
         self._dump_stats_and_disable()
 
     def on_batch_end(self, batch):
         self._nbatches += 1
+        if self.wait is not None and self._nbatches >= self.wait:
+            if not self._is_enabled:
+                self._enable_and_start_threading()
         if self.max_nbatches is not None and self._nbatches >= self.max_nbatches:
-            self._dump_stats_and_disable()
+            if self._is_enabled:
+                self._dump_stats_and_disable()
 
     def _print_stats(self):
         while True:
@@ -583,6 +588,13 @@ class CProfilerCallback(BaseCallback):
                 self.profiler.dump_stats(self.filename_stats)
             else:
                 break
+
+    def _enable_and_start_threading(self):
+        self.profiler.enable()
+        self._is_enabled = True
+        self._nbatches = 0
+        stats_thread = threading.Thread(target=self._print_stats, daemon=True)
+        stats_thread.start()
 
     def _dump_stats_and_disable(self):
         self.profiler.dump_stats(self.filename_stats)
