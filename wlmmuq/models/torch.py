@@ -559,7 +559,8 @@ class CProfilerCallback(BaseCallback):
         self.profiler = cProfile.Profile()
 
         self._nbatches = 0
-        self._is_enabled = False
+        self._profiling_started = False
+        self._profiling_ended = False
 
     def on_train_begin(self):
         os.makedirs(self.trainer.save_path, exist_ok=True)
@@ -567,39 +568,41 @@ class CProfilerCallback(BaseCallback):
             self.trainer.save_path, self.filename_stats
         )
         if self.wait is None:
-            self._enable_and_start_threading()
+            self._start_profiling()
 
     def on_train_end(self):
-        self._dump_stats_and_disable()
+        self._end_profiling()
 
     def on_batch_end(self, batch):
         self._nbatches += 1
-        if self.wait is not None and self._nbatches >= self.wait:
-            if not self._is_enabled:
-                self._nbatches = 0
-                self._enable_and_start_threading()
-        if self.max_nbatches is not None and self._nbatches >= self.max_nbatches:
-            if self._is_enabled:
-                self._dump_stats_and_disable()
+        if not self._profiling_started \
+                and self.wait is not None \
+                and self._nbatches >= self.wait:
+            self._nbatches = 0
+            self._start_profiling()
+        if not self._profiling_ended \
+                and self.max_nbatches is not None \
+                and self._nbatches >= self.max_nbatches:
+            self._end_profiling()
 
     def _print_stats(self):
         while True:
             time.sleep(15)
-            if self._is_enabled:
+            if not self._profiling_ended:
                 self.profiler.dump_stats(self.filename_stats)
             else:
                 break
 
-    def _enable_and_start_threading(self):
+    def _start_profiling(self):
         self.profiler.enable()
-        self._is_enabled = True
+        self._profiling_started = True
         stats_thread = threading.Thread(target=self._print_stats, daemon=True)
         stats_thread.start()
 
-    def _dump_stats_and_disable(self):
+    def _end_profiling(self):
         self.profiler.dump_stats(self.filename_stats)
         self.profiler.disable()
-        self._is_enabled = False
+        self._profiling_ended = True
 
 
 class PyTorchProfilerCallback(BaseCallback):
