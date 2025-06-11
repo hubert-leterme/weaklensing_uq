@@ -549,11 +549,14 @@ class BaseCallback:
 
 class CProfilerCallback(BaseCallback):
 
-    def __init__(self, trainer, filename_stats='stats.prof'):
+    def __init__(self, trainer, max_nbatches=None, filename_stats='stats.prof'):
         self.trainer = trainer
+        self.max_nbatches = max_nbatches
         self.filename_stats = filename_stats
         self.profiler = cProfile.Profile()
-        self.stats_thread = None
+
+        self._nbatches = 0
+        self._is_enabled = False
 
     def on_train_begin(self):
         os.makedirs(self.trainer.save_path, exist_ok=True)
@@ -561,16 +564,30 @@ class CProfilerCallback(BaseCallback):
             self.trainer.save_path, self.filename_stats
         )
         self.profiler.enable()
-        self.stats_thread = threading.Thread(target=self._print_stats, daemon=True)
-        self.stats_thread.start()
+        self._is_enabled = True
+        stats_thread = threading.Thread(target=self._print_stats, daemon=True)
+        stats_thread.start()
 
     def on_train_end(self):
-        self.profiler.disable()
+        self._dump_stats_and_disable()
+
+    def on_batch_end(self, batch):
+        self._nbatches += 1
+        if self.max_nbatches is not None and self._nbatches >= self.max_nbatches:
+            self._dump_stats_and_disable()
 
     def _print_stats(self):
         while True:
             time.sleep(15)
-            self.profiler.dump_stats(self.filename_stats)
+            if self._is_enabled:
+                self.profiler.dump_stats(self.filename_stats)
+            else:
+                break
+
+    def _dump_stats_and_disable(self):
+        self.profiler.dump_stats(self.filename_stats)
+        self.profiler.disable()
+        self._is_enabled = False
 
 
 class PyTorchProfilerCallback(BaseCallback):
