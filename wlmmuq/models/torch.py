@@ -1,4 +1,10 @@
+import os
 import warnings
+import time
+import cProfile
+import threading
+from tqdm import tqdm
+import wandb
 import torch
 from torch import nn
 import torchinfo
@@ -391,6 +397,8 @@ class Trainer(dinv.Trainer):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
 
+        self.current_iterators = None
+
 
     def get_samples(self, iterators, g):
         x, y, physics = super().get_samples(iterators, g)
@@ -406,6 +414,208 @@ class Trainer(dinv.Trainer):
         if torch.is_complex(y):
             y = y.real
         super().plot(epoch, physics, x, y, x_net, train=train)
+
+
+    def train(
+        self, callbacks=None
+    ):
+        r"""
+        Train the model.
+
+        It performs the training process, including the setup, the evaluation, the forward and backward passes,
+        and the visualization.
+
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
+
+        Optional argument `callbacks`
+
+        ************************************************************
+
+        :returns: The trained model.
+        """
+        if callbacks is None:
+            callbacks = BaseCallback()
+
+        self.setup_train()
+
+        callbacks.on_train_begin()
+
+        try:
+            for epoch in range(self.epoch_start, self.epochs):
+                callbacks.on_epoch_begin(epoch)
+                self.reset_metrics()
+
+                ## Training
+                self.current_iterators = [iter(loader) for loader in self.train_dataloader]
+
+                batches = min(
+                    [len(loader) - loader.drop_last for loader in self.train_dataloader]
+                )
+
+                if self.loop_physics_generator and self.physics_generator is not None:
+                    for physics_generator in self.physics_generator:
+                        physics_generator.reset_rng()
+
+                self.model.train()
+                for i in (
+                    progress_bar := tqdm(
+                        range(batches),
+                        ncols=150,
+                        disable=(not self.verbose or not self.show_progress_bar),
+                    )
+                ):
+                    progress_bar.set_description(f"Train epoch {epoch + 1}/{self.epochs}")
+                    self.step(
+                        epoch, progress_bar, train=True, last_batch=(i == batches - 1)
+                    )
+
+                self.loss_history.append(self.logs_total_loss_train.avg)
+
+                if self.scheduler:
+                    self.scheduler.step()
+
+                ## Evaluation
+                perform_eval = self.eval_dataloader and (
+                    epoch % self.eval_interval == 0 or epoch + 1 == self.epochs
+                )
+                if perform_eval:
+                    self.current_iterators = [
+                        iter(loader) for loader in self.eval_dataloader
+                    ]
+
+                    batches = min(
+                        [len(loader) - loader.drop_last for loader in self.eval_dataloader]
+                    )
+
+                    self.model.eval()
+                    for i in (
+                        progress_bar := tqdm(
+                            range(batches),
+                            ncols=150,
+                            disable=(not self.verbose or not self.show_progress_bar),
+                        )
+                    ):
+                        callbacks.on_batch_begin(i)
+                        progress_bar.set_description(
+                            f"Eval epoch {epoch + 1}/{self.epochs}"
+                        )
+                        self.step(
+                            epoch, progress_bar, train=False, last_batch=(i == batches - 1)
+                        )
+                        callbacks.on_batch_end(i)
+
+                    for l in self.logs_losses_eval:
+                        self.eval_metrics_history[l.__class__.__name__] = l.avg
+
+                # Saving the model
+                self.save_model(epoch, self.eval_metrics_history if perform_eval else None)
+
+                callbacks.on_epoch_end(epoch)
+
+        finally:
+            callbacks.on_train_end()
+
+        if self.wandb_vis:
+            wandb.save("model.h5")
+            wandb.finish()
+
+        return self.model
+
+
+#=================================================================================
+# Callbacks
+#=================================================================================
+
+class BaseCallback:
+    def on_train_begin(self):
+        pass
+    def on_train_end(self):
+        pass
+    def on_epoch_begin(self, epoch):
+        pass
+    def on_epoch_end(self, epoch):
+        pass
+    def on_batch_begin(self, batch):
+        pass
+    def on_batch_end(self, batch):
+        pass
+
+
+class CProfilerCallback(BaseCallback):
+
+    def __init__(self, trainer, filename_stats='stats.prof'):
+        self.trainer = trainer
+        self.filename_stats = filename_stats
+        self.profiler = cProfile.Profile()
+        self.stats_thread = None
+
+    def on_train_begin(self):
+        os.makedirs(self.trainer.save_path, exist_ok=True)
+        self.filename_stats = os.path.join(
+            self.trainer.save_path, self.filename_stats
+        )
+        self.profiler.enable()
+        self.stats_thread = threading.Thread(target=self._print_stats, daemon=True)
+        self.stats_thread.start()
+
+    def on_train_end(self):
+        self.profiler.disable()
+
+    def _print_stats(self):
+        while True:
+            time.sleep(2)
+            self.profiler.dump_stats(self.filename_stats)
+
+
+class PyTorchProfilerCallback(BaseCallback):
+
+    def __init__(self, trainer, logdir='pytorch_profiler', **kwargs):
+        self.trainer = trainer
+        self.logdir = logdir
+        self.kwargs = kwargs
+        self.profiler = None
+
+    def on_train_begin(self):
+        logdir = os.path.join(self.trainer.save_path, self.logdir)
+        os.makedirs(self.trainer.save_path, exist_ok=True)
+        self.profiler = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(logdir),
+            **self.kwargs
+        )
+        self.profiler.__enter__()
+
+    def on_batch_end(self, batch):
+        self.profiler.step()
+
+    def on_train_end(self):
+        self.profiler.__exit__(None, None, None)
+
+
+class CallbackList(BaseCallback):
+
+    def __init__(self, callbacks=None):
+        self.callbacks = callbacks if callbacks is not None else []
+
+    def _loop_over_callbacks(self, method_name, *args, **kwargs):
+        for callback in self.callbacks:
+            if hasattr(callback, method_name):
+                getattr(callback, method_name)(*args, **kwargs)
+
+    def on_train_begin(self):
+        self._loop_over_callbacks("on_train_begin")
+    def on_train_end(self):
+        self._loop_over_callbacks("on_train_end")
+    def on_epoch_begin(self, epoch):
+        self._loop_over_callbacks("on_epoch_begin", epoch)
+    def on_epoch_end(self, epoch):
+        self._loop_over_callbacks("on_epoch_end", epoch)
+    def on_batch_begin(self, batch):
+        self._loop_over_callbacks("on_batch_begin", batch)
+    def on_batch_end(self, batch):
+        self._loop_over_callbacks("on_batch_end", batch)
 
 
 #=================================================================================
