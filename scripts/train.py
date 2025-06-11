@@ -278,18 +278,18 @@ def main(
             eval_dataloader=val_dataloader
         )
 
-        # Train model with profiler
-        logdir = os.path.join(checkpoint_dir, 'log')
-        if not os.path.exists(logdir):
-            os.makedirs(logdir)
-        with torch.profiler.profile(
-            activities=[
-                torch.profiler.ProfilerActivity.CPU,
-                torch.profiler.ProfilerActivity.CUDA,
-            ],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(logdir)
-        ):
-            trainer.train()
+        # Define profiling callbacks
+        cprofiler_callback = wlnn.torch.CProfilerCallback(trainer)
+        profiler_schedule = torch.profiler.schedule(wait=2, warmup=2, active=50, repeat=1)
+        pytorchprofiler_callback = wlnn.torch.PyTorchProfilerCallback(
+            trainer, schedule=profiler_schedule
+        )
+        callbacks = wlnn.torch.CallbackList(
+            [cprofiler_callback, pytorchprofiler_callback]
+        )
+
+        # Train model
+        trainer.train(callbacks=callbacks)
 
     train_dataset.close()
     val_dataset.close()
