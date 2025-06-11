@@ -483,38 +483,6 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help="Path to checkpoint directory (saving model after each epoch). Default = None"
     )
-    parser.add_argument(
-        "--save-freq", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "TensorFlow documentation: the callback saves the model at end of this many batches. "
-            "Default = None (saved after each epoch)"
-        )
-    )
-    parser.add_argument(
-        "--backup-dir", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "TensorFlow documentation: path of directory where to store the data needed to "
-            "restore the model. The directory cannot be reused elsewhere to store other files, "
-            "e.g. by the `BackupAndRestore` callback of another training run, or by another "
-            "callback (e.g. `ModelCheckpoint`) of the same training run. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--path-to-csv-log", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the CSV file where epoch results are stored. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--path-to-tensorboard-log", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the TensorBoard log file. Default = None"
-        )
-    )
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
