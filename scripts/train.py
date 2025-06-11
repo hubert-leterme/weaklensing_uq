@@ -282,16 +282,9 @@ def main(
         cprofiler_callback = wlnn.torch.CProfilerCallback(
             trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait
         )
-        profiler_schedule = torch.profiler.schedule(wait=2, warmup=2, active=50, repeat=1)
-        pytorchprofiler_callback = wlnn.torch.PyTorchProfilerCallback(
-            trainer, schedule=profiler_schedule
-        )
-        callbacks = wlnn.torch.CallbackList(
-            [cprofiler_callback, pytorchprofiler_callback]
-        )
 
         # Train model
-        trainer.train(callbacks=callbacks)
+        trainer.train(callbacks=cprofiler_callback)
 
     train_dataset.close()
     val_dataset.close()
