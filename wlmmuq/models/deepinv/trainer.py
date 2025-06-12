@@ -29,9 +29,10 @@ class Trainer(dinv.Trainer):
     def setup_train(self, train=True, **kwargs):
         super().setup_train(train, **kwargs)
         now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
-        self.save_path = (
-            f"{self.save_path}/{now}" if self.save_path else None
-        ) # Change date-time format to ease navigation from the terminal
+        if self.save_path is not None:
+            # Change date-time format to ease navigation from the terminal
+            savedir = os.path.dirname(self.save_path)
+            self.save_path = f"{savedir}/{now}"
 
 
     def get_samples(self, iterators, g):
