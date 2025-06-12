@@ -346,12 +346,16 @@ class BaseCallback:
 class CProfilerCallback(BaseCallback):
 
     def __init__(
-            self, trainer, max_nbatches=None, wait=None, filename_stats='stats.prof'
+            self, trainer, max_nbatches=None, wait=None,
+            filename_stats='stats.prof', verbose=False
     ):
+        super().__init__()
         self.trainer = trainer
         self.max_nbatches = max_nbatches
         self.wait = wait
         self.filename_stats = filename_stats
+        self.verbose = verbose
+
         self.profiler = cProfile.Profile()
 
         self._nbatches = 0
@@ -363,6 +367,10 @@ class CProfilerCallback(BaseCallback):
         self.filename_stats = os.path.join(
             self.trainer.save_path, self.filename_stats
         )
+        if self.verbose:
+            print(
+                f"Profiling will be saved to {self.filename_stats}"
+            )
         if self.wait is None:
             self._start_profiling()
 
@@ -403,7 +411,10 @@ class CProfilerCallback(BaseCallback):
 
 class PyTorchProfilerCallback(BaseCallback):
 
-    def __init__(self, trainer, logdir='pytorch_profiler', **kwargs):
+    def __init__(
+            self, trainer, logdir='pytorch_profiler', **kwargs
+    ):
+        super().__init__()
         self.trainer = trainer
         self.logdir = logdir
         self.kwargs = kwargs
@@ -432,6 +443,7 @@ class PyTorchProfilerCallback(BaseCallback):
 class CallbackList(BaseCallback):
 
     def __init__(self, callbacks=None):
+        super().__init__()
         self.callbacks = callbacks if callbacks is not None else []
 
     def _loop_over_callbacks(self, method_name, *args, **kwargs):

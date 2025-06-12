@@ -279,7 +279,8 @@ def main(
 
         # Define profiling callbacks
         cprofiler_callback = wlnn.deepinv.trainer.CProfilerCallback(
-            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait
+            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+            verbose=True
         )
 
         # Train model
