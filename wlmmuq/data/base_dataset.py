@@ -20,7 +20,7 @@ class BaseHDF5Dataset:
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
-            sort_by_filename_ori=True, newaxis=False,
+            meancentering=False, sort_by_filename_ori=True, newaxis=False,
             list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
     ):
@@ -53,6 +53,8 @@ class BaseHDF5Dataset:
             Whether to shuffle the indices. Default is True.
         output_shape : int or tuple, optional
             Shape to crop the output images. Default is None.
+        meancentering : bool, optional
+            If True, meancenter the convergence maps. Default is False.
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
@@ -84,6 +86,7 @@ class BaseHDF5Dataset:
         self.beg_idx = beg_idx
         self.shuffle = shuffle
         self.output_shape = output_shape
+        self.meancentering = meancentering
         self.sort_by_filename_ori = sort_by_filename_ori
         self.newaxis = newaxis
         self.kwargs_wiener = kwargs
@@ -199,7 +202,8 @@ class BaseHDF5Dataset:
         if transform is not None:
             transforms.append(transform)
         transforms.append(self._convert_to_tensor) # Identity by default
-        transforms.append(utils.meancenter)
+        if self.meancentering:
+            transforms.append(utils.meancenter)
 
         transform = _pipe(*transforms)
 
