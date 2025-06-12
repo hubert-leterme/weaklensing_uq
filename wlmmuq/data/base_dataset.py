@@ -722,14 +722,14 @@ def _pipe(*transforms):
     return lambda x: _pipeline(x, *transforms)
 
 
-def meancenter_dataset(hdf5_filepath, batch_size, verbose=False):  
+def meancenter_dataset(hdf5_filepath, batch_size, create_backup=False, verbose=False):  
     """
     Meancenter images from a given dataset.
     """
     with h5py.File(hdf5_filepath, 'r+') as f:
 
         # Backup original data if not already backed up
-        if 'kappa_backup' not in f:
+        if create_backup and not 'kappa_backup' not in f:
             if verbose:
                 print("Creating backup dataset 'kappa_backup'...")
             f.copy('kappa', 'kappa_backup')
