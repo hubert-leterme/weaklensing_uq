@@ -1,8 +1,5 @@
 import os
 import argparse
-import time
-import cProfile
-import threading
 
 import torch
 import deepinv as dinv
