@@ -1,4 +1,5 @@
 import warnings
+import tqdm
 import numpy as np
 import h5py
 import torch
@@ -719,3 +720,31 @@ def _pipeline(inp, *transforms):
 
 def _pipe(*transforms):
     return lambda x: _pipeline(x, *transforms)
+
+
+def meancenter_dataset(hdf5_filepath, batch_size, verbose=False):  
+    """
+    Meancenter images from a given dataset.
+    """
+    with h5py.File(hdf5_filepath, 'r+') as f:
+
+        # Backup original data if not already backed up
+        if 'kappa_backup' not in f:
+            if verbose:
+                print("Creating backup dataset 'kappa_backup'...")
+            f.copy('kappa', 'kappa_backup')
+
+        nimgs = f['kappa'].shape[0]
+
+        pbar = tqdm.tqdm(
+            range(-(-nimgs // batch_size)),
+            disable=not verbose,
+        )
+        for i in pbar:
+            beg_idx = i * batch_size
+            end_idx = min(beg_idx + batch_size, nimgs)
+            pbar.set_description(f"Images {beg_idx + 1}-{end_idx}/{nimgs}")
+
+            kappa = f['kappa'][beg_idx:end_idx]
+            kappa = utils.meancenter(kappa)
+            f['kappa'][beg_idx:end_idx] = kappa
