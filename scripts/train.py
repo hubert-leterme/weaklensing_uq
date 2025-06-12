@@ -261,7 +261,7 @@ def main(
             scheduler = None
 
         loss_fun.to(device)
-        trainer = wlnn.torch.Trainer(
+        trainer = wlnn.deepinv.trainer.Trainer(
             model,
             device=device,
             save_path=checkpoint_dir,
@@ -279,7 +279,7 @@ def main(
         )
 
         # Define profiling callbacks
-        cprofiler_callback = wlnn.torch.CProfilerCallback(
+        cprofiler_callback = wlnn.deepinv.trainer.CProfilerCallback(
             trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait
         )
 

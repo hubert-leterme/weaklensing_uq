@@ -1,4 +1,5 @@
 from . import torch
+from . import deepinv
 
 from .. import USE_TENSORFLOW
 if USE_TENSORFLOW:

@@ -2,9 +2,8 @@ import shutil
 import torch
 from torch import nn
 import deepinv as dinv
-import pycs.astro.wl.mass_mapping as csmm
 
-from .. import utils
+from ... import utils
 
 #########################################################################
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
