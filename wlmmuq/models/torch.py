@@ -6,6 +6,7 @@ import threading
 from datetime import datetime
 from tqdm import tqdm
 import wandb
+from pathlib import Path
 import torch
 from torch import nn
 import torchinfo
@@ -542,6 +543,49 @@ class Trainer(dinv.Trainer):
                             self.logs_metrics_linear[k].avg
                         )
         return logs
+
+
+    def save_model(self, epoch, eval_metrics=None, state=None):
+        r"""
+        Save the model.
+
+        It saves the model every ``ckp_interval`` epochs.
+
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
+
+        Bugfix with epoch number
+
+        ************************************************************
+
+        :param int epoch: Current epoch.
+        :param None, float eval_metrics: Evaluation metrics across epochs.
+        :param dict state: custom objects to save with model
+        """
+        if state is None:
+            state = {}
+
+        if not self.save_path:
+            return
+
+        epoch += 1 # Ranges from 1 to self.epochs included
+        if (epoch > 0 and epoch % self.ckp_interval == 0) or epoch == self.epochs:
+            os.makedirs(str(self.save_path), exist_ok=True)
+            state = state | {
+                "epoch": epoch,
+                "state_dict": self.model.state_dict(),
+                "loss": self.loss_history,
+                "optimizer": self.optimizer.state_dict(),
+            }
+            if eval_metrics is not None:
+                state["eval_metrics"] = eval_metrics
+            if self.wandb_vis:
+                state["wandb_id"] = wandb.run.id
+            torch.save(
+                state,
+                os.path.join(
+                    Path(self.save_path), Path("ckp_{}.pth.tar".format(epoch))
+                ),
+            )
 
 
     def train(
