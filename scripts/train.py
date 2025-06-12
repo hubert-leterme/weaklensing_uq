@@ -50,6 +50,8 @@ def main(
 ):
     _commons.set_seed(seed)
     device = _commons.get_device(verbose=verbose)
+    if verbose:
+        print(f"Number of workers: {num_workers}")
 
     keys_model = ['model_size', 'pretrained']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
