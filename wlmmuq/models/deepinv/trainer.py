@@ -26,6 +26,9 @@ class Trainer(dinv.Trainer):
         self.pbar_logs = pbar_logs
 
         self.current_iterators = None
+        self.total_training_time = None
+        self.training_time_per_epoch = []
+        self.eval_time_per_epoch = []
 
 
     def setup_train(self, train=True, **kwargs):
@@ -293,6 +296,9 @@ class Trainer(dinv.Trainer):
                 "state_dict": self.model.state_dict(),
                 "loss": self.loss_history,
                 "optimizer": self.optimizer.state_dict(),
+                "total_training_time": self.total_training_time,
+                "training_time_per_epoch": self.training_time_per_epoch,
+                "eval_time_per_epoch": self.eval_time_per_epoch
             }
             if eval_metrics is not None:
                 state["eval_metrics"] = eval_metrics
@@ -332,11 +338,13 @@ class Trainer(dinv.Trainer):
         callbacks.on_train_begin()
 
         try:
+            beg_time_total = time.time()
             for epoch in range(self.epoch_start, self.epochs):
                 callbacks.on_epoch_begin(epoch)
                 self.reset_metrics()
 
                 ## Training
+                beg_time_train = time.time()
                 self.current_iterators = [iter(loader) for loader in self.train_dataloader]
 
                 batches = min(
@@ -368,7 +376,10 @@ class Trainer(dinv.Trainer):
                 if self.scheduler:
                     self.scheduler.step()
 
+                self.training_time_per_epoch.append(time.time() - beg_time_train)
+
                 ## Evaluation
+                beg_time_eval = time.time()
                 perform_eval = self.eval_dataloader and (
                     epoch % self.eval_interval == 0 or epoch + 1 == self.epochs
                 )
@@ -401,6 +412,10 @@ class Trainer(dinv.Trainer):
 
                     for l in self.logs_losses_eval:
                         self.eval_metrics_history[l.__class__.__name__] = l.avg
+
+                    self.eval_time_per_epoch.append(time.time() - beg_time_eval)
+
+                self.total_training_time = time.time() - beg_time_total
 
                 # Saving the model
                 self.save_model(epoch, self.eval_metrics_history if perform_eval else None)
