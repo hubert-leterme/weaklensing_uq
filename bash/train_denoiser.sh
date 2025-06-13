@@ -15,7 +15,7 @@ fi
 optional_args="${@:2}"
 
 # Set name of the denoiser
-optional_args_cleaned=$(echo "$optional_args" | sed 's/-a //g' | sed 's/-s /--model-size /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--cprofiler-max-nbatches [0-9]\+//g' | sed 's/--cprofiler-wait [0-9]\+//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
+optional_args_cleaned=$(echo "$optional_args" | sed 's/-a //g' | sed 's/-s /--model-size /g' | sed 's/-p /--pretrained /g' | sed 's/-w [0-9]\+//g' | sed 's/-b /--batch-size /g' | sed 's/-e /--nepochs /g' | sed 's/-lr /--learning-rate /g' | sed 's/--cprofiler-max-nbatches [0-9]\+//g' | sed 's/--cprofiler-wait [0-9]\+//g' | sed 's/--cprofiler-cuda-synchronize//g' | sed 's/--cprofiler//g' | sed 's/--//g' | xargs | sed 's/ /_/g')
 name_denoiser=$(echo "denoiser_${optional_args_cleaned}" | sed 's/__/_/g')
 
 # Command to execute
