@@ -35,13 +35,15 @@ class CProfilerCallback(BaseCallback):
 
     def __init__(
             self, trainer, max_nbatches=None, wait=None,
-            filename_stats='stats.prof', verbose=False
+            filename_stats='stats.prof', cuda_synchronize=False,
+            verbose=False
     ):
         super().__init__()
         self.trainer = trainer
         self.max_nbatches = max_nbatches
         self.wait = wait
         self.filename_stats = filename_stats
+        self.cuda_synchronize = cuda_synchronize
         self.verbose = verbose
 
         self.profiler = cProfile.Profile()
@@ -109,7 +111,8 @@ class CProfilerCallback(BaseCallback):
         self._profiling_ended = True
 
     def _cuda_synchronize(self):
-        if torch.cuda.is_available() \
+        if self.cuda_synchronize \
+                and torch.cuda.is_available() \
                 and self._profiling_started \
                 and not self._profiling_ended:
             torch.cuda.synchronize()

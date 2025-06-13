@@ -43,7 +43,9 @@ def main(
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
         path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
-        cprofiler_max_nbatches=None, cprofiler_wait=None, seed=None, verbose=False, **kwargs
+        cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
+        cprofiler_cuda_synchronize=False,
+        seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
     device = _commons.get_device(verbose=verbose)
@@ -278,10 +280,13 @@ def main(
         )
 
         # Define profiling callbacks
-        cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
-            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
-            verbose=True
-        )
+        if cprofiler:
+            cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
+                trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+                cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
+            )
+        else:
+            cprofiler_callback = None
 
         # Train model
         trainer.train(callbacks=cprofiler_callback)
@@ -479,6 +484,13 @@ if __name__ == "__main__":
         help="Path to checkpoint directory (saving model after each epoch). Default = None"
     )
     parser.add_argument(
+        "--cprofiler", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Profile training using cProfile."
+        )
+    )
+    parser.add_argument(
         "--cprofiler-max-nbatches", type=int,
         default=argparse.SUPPRESS,
         help=(
@@ -493,6 +505,16 @@ if __name__ == "__main__":
         help=(
             "Number of batches to wait before starting profiling. "
             "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--cprofiler-cuda-synchronize", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Synchronize CUDA when profiling, after the forward pass, the "
+            "loss evaluation, the backward pass, and the optimizer step. "
+            "See: https://discuss.pytorch.org/t/to-device-slowing-the-code/80973/3. "
+            "WARNING: This will slow down the training."
         )
     )
     _commons.add_arguments_seed_verbose(parser)
