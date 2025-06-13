@@ -196,7 +196,7 @@ class Trainer(dinv.Trainer):
             if self.pbar_logs:
                 meters = self.logs_total_loss_train if train else self.logs_total_loss_eval
                 meters.update(loss_total.item())
-                logs[f"TotalLoss"] = meters.avg
+                logs["TotalLoss"] = meters.avg
 
         if train:
             loss_total.backward()  # Backward the total loss
