@@ -53,5 +53,5 @@ class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
 
 
 class TensorList(list[torch.Tensor]):
-    def to(self, device):
-        return TensorList(t.to(device) for t in self)
+    def to(self, device, **kwargs):
+        return TensorList(t.to(device, **kwargs) for t in self)

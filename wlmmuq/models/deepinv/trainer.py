@@ -1,14 +1,16 @@
 import os
 import warnings
 import time
-import cProfile
-import threading
 from datetime import datetime
+import inspect
 from tqdm import tqdm
 import wandb
 from pathlib import Path
+import numpy as np
 import torch
 import deepinv as dinv
+
+from .callbacks import BaseCallback
 
 #=================================================================================
 # Class inheriting from dinv.Trainer, used for training
@@ -51,7 +53,94 @@ class Trainer(dinv.Trainer):
         super().plot(epoch, physics, x, y, x_net, train=train)
 
 
-    def compute_loss(self, physics, x, y, train=True, epoch: int = None):
+    def get_samples_offline(self, iterators, g):
+        r"""
+        Get the samples for the offline measurements.
+
+        In this setting, samples have been generated offline and are loaded from the dataloader.
+        This function returns a tuple containing necessary data for the model inference. It needs to contain
+        the measurement, the ground truth, and the current physics operator, but can also contain additional data
+        (you can override this function to add custom data).
+
+        If the dataloader returns 3-tuples, this is assumed to be ``(x, y, params)`` where
+        ``params`` is a dict of physics generator params. These params are then used to update
+        the physics.
+
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
+
+        Monitor running time for getting data and sending input to device.
+
+        ************************************************************
+
+        :param list iterators: List of dataloader iterators.
+        :param int g: Current dataloader index.
+        :returns: a dictionary containing at least: the ground truth, the measurement, and the current physics operator.
+        """
+        data = next(iterators[g])
+        if (type(data) is not tuple and type(data) is not list) or len(data) != 2:
+            raise ValueError(
+                "If online_measurements=False, the dataloader should output a tuple (x, y)"
+            )
+
+        if len(data) == 2:
+            x, y, params = *data, None
+        elif len(data) == 3:
+            x, y, params = data
+        else:
+            raise ValueError
+
+        if type(x) is list or type(x) is tuple:
+            x = [s.to(self.device, non_blocking=True) for s in x]
+        else:
+            x = x.to(self.device, non_blocking=True)
+
+        y = y.to(self.device, non_blocking=True)
+        physics = self.physics[g]
+
+        if params is not None:
+            params = {k: p.to(self.device, non_blocking=True) for k, p in params.items()}
+            physics.update_parameters(**params)
+
+        return x, y, physics
+
+
+    def model_inference(self, y, physics, x=None, train=True, **kwargs):
+        r"""
+        Perform the model inference.
+
+        It returns the network reconstruction given the samples.
+
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
+
+        Avoid sending input to device at this stage
+        Remove `with torch.no_grad()` context manager (inference was done twice)
+
+        ************************************************************
+
+        :param torch.Tensor y: Measurement.
+        :param deepinv.physics.Physics physics: Current physics operator.
+        :param torch.Tensor x: Optional ground truth, used for computing convergence metrics.
+        :returns: The network reconstruction.
+        """
+        kwargs = {}
+
+        # check if the forward has 'update_parameters' method, and if so, update the parameters
+        if "update_parameters" in inspect.signature(self.model.forward).parameters:
+            kwargs["update_parameters"] = True
+
+        if self.plot_convergence_metrics and not train:
+            x_net, self.conv_metrics = self.model(
+                y, physics, x_gt=x, compute_metrics=True, **kwargs
+            )
+        else:
+            x_net = self.model(y, physics, **kwargs)
+
+        return x_net
+
+
+    def compute_loss(
+            self, physics, x, y, train=True, epoch: int = None, callbacks: BaseCallback=None
+    ):
         r"""
         Compute the loss and perform the backward pass.
 
@@ -68,6 +157,7 @@ class Trainer(dinv.Trainer):
         :param torch.Tensor y: Measurement.
         :param bool train: If ``True``, the model is trained, otherwise it is evaluated.
         :param int epoch: current epoch.
+        :param BaseCallback callbacks: Callbacks to be executed at each step.
         :returns: (tuple) The network reconstruction x_net (for plotting and computing metrics) and
             the logs (for printing the training progress).
         """
@@ -78,6 +168,7 @@ class Trainer(dinv.Trainer):
 
         # Evaluate reconstruction network
         x_net = self.model_inference(y=y, physics=physics, x=x, train=train)
+        callbacks.on_forward_end()
 
         if train or self.display_losses_eval:
             # Compute the losses
@@ -92,6 +183,7 @@ class Trainer(dinv.Trainer):
                     epoch=epoch,
                 )
                 loss_total += loss.mean()
+                callbacks.on_loss_end(loss_total)
                 if len(self.losses) > 1 and self.verbose_individual_losses:
                     if self.pbar_logs:
                         meters = (
@@ -108,6 +200,7 @@ class Trainer(dinv.Trainer):
 
         if train:
             loss_total.backward()  # Backward the total loss
+            callbacks.on_backward_end()
 
             if self.pbar_logs:
                 norm = self.check_clip_grad()  # Optional gradient clipping
@@ -116,6 +209,7 @@ class Trainer(dinv.Trainer):
 
             # Optimizer step
             self.optimizer.step()
+            callbacks.on_optimizer_step_end()
 
         return x_net, logs
 
@@ -213,7 +307,7 @@ class Trainer(dinv.Trainer):
 
 
     def train(
-        self, callbacks=None
+        self, callbacks: BaseCallback=None
     ):
         r"""
         Train the model.
@@ -227,6 +321,7 @@ class Trainer(dinv.Trainer):
 
         ************************************************************
 
+        :param BaseCallback callbacks: Callbacks to be executed at each step.
         :returns: The trained model.
         """
         if callbacks is None:
@@ -263,7 +358,8 @@ class Trainer(dinv.Trainer):
                     callbacks.on_batch_begin(i)
                     progress_bar.set_description(f"Train epoch {epoch + 1}/{self.epochs}")
                     self.step(
-                        epoch, progress_bar, train=True, last_batch=(i == batches - 1)
+                        epoch, progress_bar, train=True, last_batch=(i == batches - 1),
+                        callbacks=callbacks
                     )
                     callbacks.on_batch_end(i)
 
@@ -298,7 +394,8 @@ class Trainer(dinv.Trainer):
                             f"Eval epoch {epoch + 1}/{self.epochs}"
                         )
                         self.step(
-                            epoch, progress_bar, train=False, last_batch=(i == batches - 1)
+                            epoch, progress_bar, train=False, last_batch=(i == batches - 1),
+                            callbacks=callbacks
                         )
                         callbacks.on_eval_batch_end(i)
 
@@ -318,152 +415,75 @@ class Trainer(dinv.Trainer):
             wandb.finish()
 
         return self.model
+    
 
-
-#=================================================================================
-# Callbacks
-#=================================================================================
-
-class BaseCallback:
-    def on_train_begin(self):
-        pass
-    def on_train_end(self):
-        pass
-    def on_epoch_begin(self, epoch):
-        pass
-    def on_epoch_end(self, epoch):
-        pass
-    def on_batch_begin(self, batch):
-        pass
-    def on_batch_end(self, batch):
-        pass
-    def on_eval_batch_begin(self, batch):
-        pass
-    def on_eval_batch_end(self, batch):
-        pass
-
-
-class CProfilerCallback(BaseCallback):
-
-    def __init__(
-            self, trainer, max_nbatches=None, wait=None,
-            filename_stats='stats.prof', verbose=False
+    def step(
+            self, epoch, progress_bar, train=True, last_batch=False, callbacks: BaseCallback=None
     ):
-        super().__init__()
-        self.trainer = trainer
-        self.max_nbatches = max_nbatches
-        self.wait = wait
-        self.filename_stats = filename_stats
-        self.verbose = verbose
+        r"""
+        Train/Eval a batch.
 
-        self.profiler = cProfile.Profile()
+        It performs the forward pass, the backward pass, and the evaluation at each iteration.
 
-        self._nbatches = 0
-        self._profiling_started = False
-        self._profiling_ended = False
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-    def on_train_begin(self):
-        os.makedirs(self.trainer.save_path, exist_ok=True)
-        self.filename_stats = os.path.join(
-            self.trainer.save_path, self.filename_stats
-        )
-        if self.verbose:
-            print(
-                f"Profiling will be saved to {self.filename_stats}"
+        Optional argument `callbacks`
+
+        ************************************************************
+
+        :param int epoch: Current epoch.
+        :param tqdm progress_bar: Progress bar.
+        :param bool train: If ``True``, the model is trained, otherwise it is evaluated.
+        :param bool last_batch: If ``True``, the last batch of the epoch is being processed.
+        :param BaseCallback callbacks: Callbacks to be executed at each step.
+        :returns: The current physics operator, the ground truth, the measurement, and the network reconstruction.
+        """
+        if callbacks is None:
+            callbacks = BaseCallback()
+
+        # random permulation of the dataloaders
+        G_perm = np.random.permutation(self.G)
+
+        for g in G_perm:  # for each dataloader
+            x, y, physics_cur = self.get_samples(self.current_iterators, g)
+
+            # Compute loss and perform backprop
+            x_net, logs = self.compute_loss(
+                physics_cur, x, y, train=train, epoch=epoch, callbacks=callbacks
             )
-        if self.wait is None:
-            self._start_profiling()
 
-    def on_train_end(self):
-        self._end_profiling()
+            # detach the network output for metrics and plotting
+            x_net = x_net.detach()
 
-    def on_batch_end(self, batch):
-        self._nbatches += 1
-        if not self._profiling_started \
-                and self.wait is not None \
-                and self._nbatches >= self.wait:
-            self._nbatches = 0
-            self._start_profiling()
-        if not self._profiling_ended \
-                and self.max_nbatches is not None \
-                and self._nbatches >= self.max_nbatches:
-            self._end_profiling()
+            # Log metrics
+            logs = self.compute_metrics(
+                x, x_net, y, physics_cur, logs, train=train, epoch=epoch
+            )
 
-    def _print_stats(self):
-        while True:
-            time.sleep(15)
-            if not self._profiling_ended:
-                self.profiler.dump_stats(self.filename_stats)
-            else:
-                break
+            # Update the progress bar
+            progress_bar.set_postfix(logs)
 
-    def _start_profiling(self):
-        self.profiler.enable()
-        self._profiling_started = True
-        stats_thread = threading.Thread(target=self._print_stats, daemon=True)
-        stats_thread.start()
+        if last_batch:
+            if self.verbose and not self.show_progress_bar:
+                if self.verbose_individual_losses:
+                    print(
+                        f"{'Train' if train else 'Eval'} epoch {epoch}:"
+                        f" {', '.join([f'{k}={round(v, 3)}' for (k, v) in logs.items()])}"
+                    )
+                else:
+                    print(
+                        f"{'Train' if train else 'Eval'} epoch {epoch}: Total loss: {logs['TotalLoss']}"
+                    )
 
-    def _end_profiling(self):
-        self.profiler.dump_stats(self.filename_stats)
-        self.profiler.disable()
-        self._profiling_ended = True
+            if train:
+                logs["step"] = epoch
 
-
-class PyTorchProfilerCallback(BaseCallback):
-
-    def __init__(
-            self, trainer, logdir='pytorch_profiler', **kwargs
-    ):
-        super().__init__()
-        self.trainer = trainer
-        self.logdir = logdir
-        self.kwargs = kwargs
-        self.profiler = None
-
-    def on_train_begin(self):
-        logdir = os.path.join(self.trainer.save_path, self.logdir)
-        os.makedirs(self.trainer.save_path, exist_ok=True)
-        self.profiler = torch.profiler.profile(
-            activities=[
-                torch.profiler.ProfilerActivity.CPU,
-                torch.profiler.ProfilerActivity.CUDA
-            ],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(logdir),
-            **self.kwargs
-        )
-        self.profiler.__enter__()
-
-    def on_batch_end(self, batch):
-        self.profiler.step()
-
-    def on_train_end(self):
-        self.profiler.__exit__(None, None, None)
-
-
-class CallbackList(BaseCallback):
-
-    def __init__(self, callbacks=None):
-        super().__init__()
-        self.callbacks = callbacks if callbacks is not None else []
-
-    def _loop_over_callbacks(self, method_name, *args, **kwargs):
-        for callback in self.callbacks:
-            if hasattr(callback, method_name):
-                getattr(callback, method_name)(*args, **kwargs)
-
-    def on_train_begin(self):
-        self._loop_over_callbacks("on_train_begin")
-    def on_train_end(self):
-        self._loop_over_callbacks("on_train_end")
-    def on_epoch_begin(self, epoch):
-        self._loop_over_callbacks("on_epoch_begin", epoch)
-    def on_epoch_end(self, epoch):
-        self._loop_over_callbacks("on_epoch_end", epoch)
-    def on_batch_begin(self, batch):
-        self._loop_over_callbacks("on_batch_begin", batch)
-    def on_batch_end(self, batch):
-        self._loop_over_callbacks("on_batch_end", batch)
-    def on_eval_batch_begin(self, batch):
-        self._loop_over_callbacks("on_eval_batch_begin", batch)
-    def on_eval_batch_end(self, batch):
-        self._loop_over_callbacks("on_eval_batch_end", batch)
+            self.log_metrics_wandb(logs, epoch, train)  # Log metrics to wandb
+            self.plot(
+                epoch,
+                physics_cur,
+                x,
+                y,
+                x_net,
+                train=train,
+            )  # plot images
