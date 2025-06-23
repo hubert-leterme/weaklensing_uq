@@ -61,37 +61,36 @@ def main(
     else:
         kwargs_model.update(bias=not no_bias)
 
-    std_noise, mask = _commons.get_stdnoise_mask(
-        imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, inpainting=True,
-        seed=seed, verbose=verbose
-    )
-
     if not denoiser or use_stdnoise_mask:
+        std_noise, mask = _commons.get_stdnoise_mask(
+            imgsize, cosmos_include_faint=cosmos_include_faint,
+            convert_to_torch_tensor=True, inpainting=True,
+            seed=seed, verbose=verbose
+        )
         kwargs.update(std_noise=std_noise, mask=mask)
 
-    if wiener_init:
-        assert not denoiser
+        if wiener_init:
+            assert not denoiser
 
-        # Compute power spectrum
-        powerspectrum = _commons.get_powerspectrum_from_dataset(
-            path_to_augmented_dataset, nimgs=nimgs_ps,
-            batch_size=batch_size_ps, output_shape=imgsize,
-            num_workers=num_workers, device=device, verbose=verbose
-        )
+            # Compute power spectrum
+            powerspectrum = _commons.get_powerspectrum_from_dataset(
+                path_to_augmented_dataset, nimgs=nimgs_ps,
+                batch_size=batch_size_ps, output_shape=imgsize,
+                num_workers=num_workers, device=device, verbose=verbose
+            )
 
-        # Compute step size
-        step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
-            std_noise=std_noise, mask=mask
-        )
-        if verbose:
-            print(f"Wiener initialization with step size {step_size:.1e}")
+            # Compute step size
+            step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
+                std_noise=std_noise, mask=mask
+            )
+            if verbose:
+                print(f"Wiener initialization with step size {step_size:.1e}")
 
-        args_wienerinit = dict(
-            step_size=step_size, powerspectrum=powerspectrum,
-            std_noise=std_noise, mask=mask, niter=niter_wienerinit
-        )
-        kwargs_model.update(args_wienerinit=args_wienerinit)
+            args_wienerinit = dict(
+                step_size=step_size, powerspectrum=powerspectrum,
+                std_noise=std_noise, mask=mask, niter=niter_wienerinit
+            )
+            kwargs_model.update(args_wienerinit=args_wienerinit)
 
     if arch is not None:
         backend = arch.split(".")[0]
