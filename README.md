@@ -71,7 +71,7 @@ Examples are provided in the Jupyter notebooks provided in the directory `./note
 
 ## License
 
-Copyright 2025 Hubert Leterme
+Copyright 2025 Hubert Leterme & Andreas Tersenov
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
