@@ -1,3 +1,4 @@
+import os
 import warnings
 import tqdm
 import numpy as np
@@ -77,7 +78,7 @@ class BaseHDF5Dataset:
             Keyword arguments for
             `pycs.astro.wl.mass_mapping.massmap2d.prox_wiener_filtering`.
         """
-        self.hdf5_filepath = hdf5_filepath
+        self.hdf5_filepath = os.path.expanduser(hdf5_filepath)
         self.pred_filepath = pred_filepath
         self.nimgs = nimgs
         self.batch_size = batch_size
