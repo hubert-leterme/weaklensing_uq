@@ -38,7 +38,7 @@ def main(
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir='.', num_workers=NUM_WORKERS,
-        resume=False, epoch_resume=None,
+        resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
         seed=None, verbose=False, **kwargs
@@ -184,6 +184,14 @@ def main(
         scheduler = None
 
     loss_fun.to(device)
+    kwargs_trainer = {}
+    if resume:
+        ckpt_pretrained = os.path.join(
+            checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
+        )
+        if verbose:
+            print(f"Resuming training from {ckpt_pretrained}")
+        kwargs_trainer.update(ckpt_pretrained=ckpt_pretrained)
     trainer = wlnn.deepinv.trainer.Trainer(
         model,
         device=device,
@@ -199,16 +207,8 @@ def main(
         show_progress_bar=True,
         train_dataloader=train_dataloader,
         eval_dataloader=val_dataloader,
-        resume=resume
+        **kwargs_trainer
     )
-    if resume:
-        ckpt_pretrained = os.path.join(
-            trainer.save_path, f"ckp_{epoch_resume}.pth.tar"
-        )
-        trainer.ckpt_pretrained = ckpt_pretrained
-        trainer.load_model()
-        if verbose:
-            print(f"Resuming training from {ckpt_pretrained}")
 
     # Define profiling callbacks
     if cprofiler:
@@ -419,7 +419,16 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Resume training from a previous checkpoint. "
-            "If activated, then `--epoch-resume` must be provided."
+            "If activated, then `--timestamp-resume` and `--epoch-resume` must be provided."
+        )
+    )
+    parser.add_argument(
+        "--timestamp-resume", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Timestamp of the checkpoint to resume training from. "
+            "Only used if `--resume` is activated. "
+            "Default = None"
         )
     )
     parser.add_argument(

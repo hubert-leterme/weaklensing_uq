@@ -19,15 +19,14 @@ from .callbacks import BaseCallback
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=True, resume=False, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
         self.pbar_logs = pbar_logs
-        self.resume = resume
 
         self.current_iterators = None
-        self.total_training_time = None
+        self.total_training_time = 0
         self.training_time_per_epoch = []
         self.eval_time_per_epoch = []
 
@@ -267,6 +266,36 @@ class Trainer(dinv.Trainer):
         return logs
 
 
+    def load_model(self):
+        r"""
+        Load a pretrained model if required.
+
+        ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
+
+        - Load loss history and training time if available
+
+        ************************************************************
+        """
+        if self.ckpt_pretrained is not None:
+            checkpoint = torch.load(self.ckpt_pretrained)
+            self.model.load_state_dict(checkpoint["state_dict"])
+            if "optimizer" in checkpoint and self.optimizer is not None:
+                self.optimizer.load_state_dict(checkpoint["optimizer"])
+            if "wandb_id" in checkpoint and self.wandb_vis:
+                self.wandb_setup["id"] = checkpoint["wandb_id"]
+                self.wandb_setup["resume"] = "allow"
+            if "epoch" in checkpoint:
+                self.epoch_start = checkpoint["epoch"]
+            if "loss" in checkpoint:
+                self.loss_history = checkpoint["loss"]
+            if "total_training_time" in checkpoint:
+                self.total_training_time = checkpoint["total_training_time"]
+            if "training_time_per_epoch" in checkpoint:
+                self.training_time_per_epoch = checkpoint["training_time_per_epoch"]
+            if "eval_time_per_epoch" in checkpoint:
+                self.eval_time_per_epoch = checkpoint["eval_time_per_epoch"]
+
+
     def save_model(self, epoch, eval_metrics=None, state=None):
         r"""
         Save the model.
@@ -275,8 +304,7 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        - Bugfix with epoch number
-        - Register `epoch_start`, useful when resuming training
+        Bugfix with epoch number
 
         ************************************************************
 
@@ -295,7 +323,6 @@ class Trainer(dinv.Trainer):
             os.makedirs(str(self.save_path), exist_ok=True)
             state = state | {
                 "epoch": epoch,
-                "epoch_start": self.epoch_start,
                 "state_dict": self.model.state_dict(),
                 "loss": self.loss_history,
                 "optimizer": self.optimizer.state_dict(),
@@ -326,8 +353,7 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        - Optional argument `callbacks`
-        - Do not setup the training if `resume=True`
+        Optional argument `callbacks`
 
         ************************************************************
 
@@ -337,19 +363,17 @@ class Trainer(dinv.Trainer):
         if callbacks is None:
             callbacks = BaseCallback()
 
-        if not self.resume:
-            self.setup_train()
+        self.setup_train()
 
         callbacks.on_train_begin()
 
         try:
-            beg_time_total = time.time()
             for epoch in range(self.epoch_start, self.epochs):
+                beg_time_train = time.time()
                 callbacks.on_epoch_begin(epoch)
                 self.reset_metrics()
 
                 ## Training
-                beg_time_train = time.time()
                 self.current_iterators = [iter(loader) for loader in self.train_dataloader]
 
                 batches = min(
@@ -420,7 +444,7 @@ class Trainer(dinv.Trainer):
 
                     self.eval_time_per_epoch.append(time.time() - beg_time_eval)
 
-                self.total_training_time = time.time() - beg_time_total
+                self.total_training_time += time.time() - beg_time_train
 
                 # Saving the model
                 self.save_model(epoch, self.eval_metrics_history if perform_eval else None)
