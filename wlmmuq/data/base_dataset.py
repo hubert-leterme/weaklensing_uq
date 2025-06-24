@@ -60,8 +60,8 @@ class BaseHDF5Dataset:
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
         newaxis: bool, optional
-            If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
-            or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
+            If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
+            for training purpose. Default is False.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp', or None.
@@ -391,8 +391,8 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
         newaxis: bool, optional
-            If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
-            or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
+            If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
+            for training purpose. Default is False.
         complexconjugate (bool, default=True)   
             Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
         return_complex (bool, default=False)
@@ -535,8 +535,8 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
         newaxis: bool, optional
-            If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
-            or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
+            If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
+            for training purpose. Default is False.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
@@ -598,7 +598,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
 
 class InputTargetMixin:
 
-    def __init__(self, *args, input_type=None, order=1, mode='IT', **kwargs):
+    def __init__(self, *args, input_type=None, order=1, mode='TI', **kwargs):
         """
         Dataset adapted for batch loading of type (input, target) or (target, input).
 
@@ -617,8 +617,8 @@ class InputTargetMixin:
             2 for posterior variance. Default is 1.
         mode : str, optional
             Whether to yield tuples of input (noisy) / target (clean) images
-            ('IT', used by Keras / TensorFlow), or tuples of target / input images
-            ('TI', used by DeepInverse / PyTorch). Default is 'IT'.
+            ('IT', deprecated), or tuples of target / input images
+            ('TI', used by DeepInverse / PyTorch). Default is 'TI'.
         std_noise : numpy.ndarray, optional
             Array of noise standard deviation. If none is given, a white noise
             will be applied (identity). Default is None.
@@ -654,8 +654,8 @@ class InputTargetMixin:
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
         newaxis: bool, optional
-            If True, the returned arrays will be of shape (nimgs, nx, ny, 1) (for TensorFlow),
-            or (nimgs, 1, nx, ny) (for PyTorch), for training purpose. Default is False.
+            If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
+            for training purpose. Default is False.
         close_after_batch: bool, optional
             Default is False.
         verbose : bool, optional

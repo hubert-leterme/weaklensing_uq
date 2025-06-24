@@ -34,7 +34,6 @@ else:
         print(f"Configuration file found in {configdir}")
 
 USE_PYCS = CONFIG_DATA.get('use_pycs', False)
-USE_TENSORFLOW = CONFIG_DATA.get('use_tensorflow', False)
 
 COSMOS_DIR = os.path.expanduser(CONFIG_DATA.get('cosmos_dir', None))
 KTNG_DIR = os.path.expanduser(CONFIG_DATA.get('ktng_dir', None))

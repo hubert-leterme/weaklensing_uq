@@ -4,15 +4,11 @@ import argparse
 import torch
 import deepinv as dinv
 
-import wlmmuq.data as wlds
+import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
 import wlmmuq.utils as wlutils
 
-from wlmmuq import USE_TENSORFLOW
 from wlmmuq.data import SCALE, NUM_WORKERS
-
-if USE_TENSORFLOW:
-    import tensorflow as tf
 
 import _commons
 from _commons import IMGSIZE
@@ -41,8 +37,8 @@ def main(
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, save_freq=None, backup_dir=None,
-        path_to_csv_log=None, path_to_tensorboard_log=None, num_workers=NUM_WORKERS,
+        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, backup_dir=None,
+        num_workers=NUM_WORKERS,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
         seed=None, verbose=False, **kwargs
@@ -101,11 +97,10 @@ def main(
         cnn_class = None
         scale_as_input = False
 
-    if backend == 'tensorflow' and not USE_TENSORFLOW:
-        raise ImportError(
-            "This script requires TensorFlow to be imported. "
-            "Please set 'use_tensorflow' to True in the configuration file."
-        )
+    if backend == 'tensorflow':
+        raise ValueError("Deprecated TensorFlow backend. Use PyTorch instead.")
+    elif backend != 'torch':
+        raise ValueError("Unsupported backend.")
 
     kwargs_model_order1 = None
     if order2:
@@ -113,8 +108,6 @@ def main(
             kwargs.update(
                 order=2, pred_filepath=path_to_pred_dataset
             )
-        elif backend == 'tensorflow':
-            raise NotImplementedError
         else:
             # No mean centering and only positive values in order-2 moment networks
             kwargs_model_order1 = kwargs_model.copy()
@@ -122,17 +115,10 @@ def main(
                 meancentering=False, onlypositive=True
             )
 
-    if backend == 'tensorflow': # Use Keras (TensorFlow backend)
-        data_module = wlds.tensorflow
-    elif backend == 'torch': # Use DeepInverse (PyTorch backend)
-        data_module = wlds.torch
-    else:
-        raise ValueError
-
     if denoiser:
-        dataset_class = data_module.HDF5DatasetDenoiser
+        dataset_class = wlds.HDF5DatasetDenoiser
     else:
-        dataset_class = data_module.HDF5DatasetMassMapping
+        dataset_class = wlds.HDF5DatasetMassMapping
 
     if verbose:
         print("Initialize batch generators for training and validation")
@@ -175,120 +161,61 @@ def main(
         backup_dir = os.path.join(backup_dir, output_type)
         backup_dir = os.path.normpath(backup_dir)
 
-    if backend == 'tensorflow':
-
-        # Compile model
-        wlnn.tensorflow.compile_kerasmodel(
-            model, loss=loss, learning_rate=learning_rate
+    # Set loss function
+    metric = wlnn.torch.METRIC_DICT[loss]
+    if order2 and path_to_pred_dataset is None:
+        order1_model = cnn_class(
+            map_size=imgsize, **kwargs_model_order1
         )
+        checkpoint_order1_model = torch.load(path_to_order1_model)
+        order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
 
-        # Define the checkpoint callback
-        callbacks = []
-        if checkpoint_dir is not None:
-            model_name, output_type = checkpoint_dir.split(os.sep)[-2:]
-            filename = f"{model_name}_{output_type}_e" + "{epoch:02d}.keras"
-            filepath = os.path.join(checkpoint_dir, filename)
-            checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-                filepath=filepath,
-                save_weights_only=False,
-                save_best_only=False,
-                save_freq=save_freq
-            )
-            callbacks.append(checkpoint_callback)
-        if backup_dir is not None:
-            backup_callback = tf.keras.callbacks.BackupAndRestore(
-                backup_dir=backup_dir, save_freq="epoch"
-            )
-            callbacks.append(backup_callback)
-        if path_to_csv_log is not None:
-            csvlogger_callback = tf.keras.callbacks.CSVLogger(
-                path_to_csv_log, append=True
-            )
-            callbacks.append(csvlogger_callback)
-        if path_to_tensorboard_log is not None:
-            tblogger_callback = tf.keras.callbacks.TensorBoard(
-                log_dir=path_to_tensorboard_log
-            )
-            callbacks.append(tblogger_callback)
-        if lr_scheduler:
-            def schedule(epoch, lr):
-                epochs_drop = nepochs // ndecays
-                if epoch % epochs_drop == 0 and epoch > 0:
-                    return lr * drop_rate
-                else:
-                    return lr
-
-            lrscheduler_callback = tf.keras.callbacks.LearningRateScheduler(
-                schedule, verbose=verbose
-            )
-            callbacks.append(lrscheduler_callback)
-
-        # Fit model
-        model.fit(
-            train_dataloader, epochs=nepochs,
-            steps_per_epoch=nreal_per_img * nimgs_train // batch_size,
-            validation_data=val_dataloader,
-            validation_steps=nimgs_val // batch_size,
-            callbacks=callbacks
+        loss_fun = wlnn.torch.Order2SupLoss(
+            order1_model=order1_model, metric=metric
         )
+    else:
+        loss_fun = dinv.loss.SupLoss(metric=metric)
 
-    elif backend == 'torch':
-
-        # Set loss function
-        metric = wlnn.torch.METRIC_DICT[loss]
-        if order2 and path_to_pred_dataset is None:
-            order1_model = cnn_class(
-                map_size=imgsize, **kwargs_model_order1
-            )
-            checkpoint_order1_model = torch.load(path_to_order1_model)
-            order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
-
-            loss_fun = wlnn.torch.Order2SupLoss(
-                order1_model=order1_model, metric=metric
-            )
-        else:
-            loss_fun = dinv.loss.SupLoss(metric=metric)
-
-        # Set optimizer and learning rate scheduler
-        optimizer = torch.optim.Adam(
-            model.parameters(), lr=learning_rate, weight_decay=1e-8
+    # Set optimizer and learning rate scheduler
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=1e-8
+    )
+    if lr_scheduler:
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=nepochs // ndecays, gamma=drop_rate
         )
-        if lr_scheduler:
-            scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer, step_size=nepochs // ndecays, gamma=drop_rate
-            )
-        else:
-            scheduler = None
+    else:
+        scheduler = None
 
-        loss_fun.to(device)
-        trainer = wlnn.deepinv.trainer.Trainer(
-            model,
-            device=device,
-            save_path=checkpoint_dir,
-            verbose=verbose,
-            scale_as_input=scale_as_input,
-            physics=None,
-            online_measurements=False,
-            epochs=nepochs,
-            scheduler=scheduler,
-            losses=loss_fun,
-            optimizer=optimizer,
-            show_progress_bar=True,
-            train_dataloader=train_dataloader,
-            eval_dataloader=val_dataloader
+    loss_fun.to(device)
+    trainer = wlnn.deepinv.trainer.Trainer(
+        model,
+        device=device,
+        save_path=checkpoint_dir,
+        verbose=verbose,
+        scale_as_input=scale_as_input,
+        physics=None,
+        online_measurements=False,
+        epochs=nepochs,
+        scheduler=scheduler,
+        losses=loss_fun,
+        optimizer=optimizer,
+        show_progress_bar=True,
+        train_dataloader=train_dataloader,
+        eval_dataloader=val_dataloader
+    )
+
+    # Define profiling callbacks
+    if cprofiler:
+        cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
+            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+            cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
         )
+    else:
+        cprofiler_callback = None
 
-        # Define profiling callbacks
-        if cprofiler:
-            cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
-                trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
-                cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
-            )
-        else:
-            cprofiler_callback = None
-
-        # Train model
-        trainer.train(callbacks=cprofiler_callback)
+    # Train model
+    trainer.train(callbacks=cprofiler_callback)
 
     train_dataset.close()
     val_dataset.close()

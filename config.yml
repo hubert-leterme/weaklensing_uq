@@ -2,12 +2,10 @@
 #
 # Parameters:
 #   verbose: Boolean flag to enable verbose output when importing the wlmmuq library.
-#   use_tensorflow: Boolean flag to indicate whether to import TensorFlow.
 #   cosmos_dir: Path to the COSMOS data directory.
 #   ktng_dir: Path to the kappaTNG data directory.
 
 verbose: true
-use_tensorflow: false
 
 cosmos_dir: path/to/COSMOS/v1.0
 ktng_dir: path/to/kappaTNG
