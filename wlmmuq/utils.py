@@ -936,7 +936,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 def get_sup_step_size(std_noise, mask=None, its=20):
     """
     Get the upper bound for the step size in PGD algorithms where the data
-    fidelity term is the negative log-likelihood. This function used the power
+    fidelity term is the negative log-likelihood. This function uses the power
     iteration method.
     """
     nx, ny = std_noise.shape
