@@ -157,10 +157,6 @@ def main(
         checkpoint_dir = os.path.join(checkpoint_dir, output_type)
         checkpoint_dir = os.path.normpath(checkpoint_dir)
 
-    if backup_dir is not None: 
-        backup_dir = os.path.join(backup_dir, output_type)
-        backup_dir = os.path.normpath(backup_dir)
-
     # Set loss function
     metric = wlnn.torch.METRIC_DICT[loss]
     if order2 and path_to_pred_dataset is None:
