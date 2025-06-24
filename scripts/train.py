@@ -65,7 +65,7 @@ def main(
         std_noise, mask = _commons.get_stdnoise_mask(
             imgsize, cosmos_include_faint=cosmos_include_faint,
             convert_to_torch_tensor=True, inpainting=True,
-            seed=seed, verbose=verbose
+            verbose=verbose
         )
         kwargs.update(std_noise=std_noise, mask=mask)
 

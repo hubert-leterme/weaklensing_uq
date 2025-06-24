@@ -32,13 +32,8 @@ def get_device(verbose=False):
 
 def get_stdnoise_mask(
         imgsize, cosmos_include_faint=False, convert_to_torch_tensor=False,
-        inpainting=False, seed=None, verbose=False
+        inpainting=False, verbose=False
 ):
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-
     if verbose:
         print("Load COSMOS galaxy shape catalog")
     cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
