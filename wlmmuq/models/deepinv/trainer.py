@@ -19,7 +19,7 @@ from .callbacks import BaseCallback
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=False, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
