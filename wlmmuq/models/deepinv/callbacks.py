@@ -176,3 +176,11 @@ class CallbackList(BaseCallback):
         self._loop_over_callbacks("on_eval_batch_begin", batch)
     def on_eval_batch_end(self, batch):
         self._loop_over_callbacks("on_eval_batch_end", batch)
+    def on_forward_end(self):
+        self._loop_over_callbacks("on_forward_end")
+    def on_loss_end(self, loss):
+        self._loop_over_callbacks("on_loss_end", loss)
+    def on_backward_end(self):
+        self._loop_over_callbacks("on_backward_end")
+    def on_optimizer_step_end(self):
+        self._loop_over_callbacks("on_optimizer_step_end")
