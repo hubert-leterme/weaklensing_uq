@@ -38,7 +38,7 @@ def main(
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir='.', num_workers=NUM_WORKERS,
-        resume=False, timestamp_resume=None, epoch_resume=None,
+        resume=False, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
         seed=None, verbose=False, **kwargs
@@ -203,7 +203,7 @@ def main(
     )
     if resume:
         ckpt_pretrained = os.path.join(
-            checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
+            trainer.save_path, f"ckp_{epoch_resume}.pth.tar"
         )
         trainer.ckpt_pretrained = ckpt_pretrained
         trainer.load_model()
@@ -413,6 +413,23 @@ if __name__ == "__main__":
         "--checkpoint-dir", type=str,
         default=argparse.SUPPRESS,
         help="Path to checkpoint directory (saving model after each epoch). Default = None"
+    )
+    parser.add_argument(
+        "-r", "--resume", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Resume training from a previous checkpoint. "
+            "If activated, then `--epoch-resume` must be provided."
+        )
+    )
+    parser.add_argument(
+        "--epoch-resume", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Epoch of the checkpoint to resume training from. "
+            "Only used if `--resume` is activated. "
+            "Default = None"
+        )
     )
     parser.add_argument(
         "--cprofiler", action='store_true',
