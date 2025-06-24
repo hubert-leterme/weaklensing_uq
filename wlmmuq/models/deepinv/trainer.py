@@ -19,11 +19,12 @@ from .callbacks import BaseCallback
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=True, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=True, resume=False, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
         self.pbar_logs = pbar_logs
+        self.resume = resume
 
         self.current_iterators = None
         self.total_training_time = None
@@ -274,7 +275,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Bugfix with epoch number
+        - Bugfix with epoch number
+        - Register `epoch_start`, useful when resuming training
 
         ************************************************************
 
@@ -293,6 +295,7 @@ class Trainer(dinv.Trainer):
             os.makedirs(str(self.save_path), exist_ok=True)
             state = state | {
                 "epoch": epoch,
+                "epoch_start": self.epoch_start,
                 "state_dict": self.model.state_dict(),
                 "loss": self.loss_history,
                 "optimizer": self.optimizer.state_dict(),
@@ -323,7 +326,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Optional argument `callbacks`
+        - Optional argument `callbacks`
+        - Do not setup the training if `resume=True`
 
         ************************************************************
 
@@ -333,7 +337,8 @@ class Trainer(dinv.Trainer):
         if callbacks is None:
             callbacks = BaseCallback()
 
-        self.setup_train()
+        if not self.resume:
+            self.setup_train()
 
         callbacks.on_train_begin()
 
@@ -430,7 +435,7 @@ class Trainer(dinv.Trainer):
             wandb.finish()
 
         return self.model
-    
+
 
     def step(
             self, epoch, progress_bar, train=True, last_batch=False, callbacks: BaseCallback=None

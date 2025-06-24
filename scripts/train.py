@@ -37,8 +37,8 @@ def main(
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=None, backup_dir=None,
-        num_workers=NUM_WORKERS,
+        ndecays=NDECAYS, loss=LOSS, checkpoint_dir='.', num_workers=NUM_WORKERS,
+        resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
         seed=None, verbose=False, **kwargs
@@ -153,9 +153,9 @@ def main(
     else:
         output_type = "var" # Variance
 
-    if checkpoint_dir is not None:
-        checkpoint_dir = os.path.join(checkpoint_dir, output_type)
-        checkpoint_dir = os.path.normpath(checkpoint_dir)
+    checkpoint_dir = os.path.expanduser(checkpoint_dir)
+    checkpoint_dir = os.path.join(checkpoint_dir, output_type)
+    checkpoint_dir = os.path.normpath(checkpoint_dir)
 
     # Set loss function
     metric = wlnn.torch.METRIC_DICT[loss]
@@ -198,8 +198,17 @@ def main(
         optimizer=optimizer,
         show_progress_bar=True,
         train_dataloader=train_dataloader,
-        eval_dataloader=val_dataloader
+        eval_dataloader=val_dataloader,
+        resume=resume
     )
+    if resume:
+        ckpt_pretrained = os.path.join(
+            checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
+        )
+        trainer.ckpt_pretrained = ckpt_pretrained
+        trainer.load_model()
+        if verbose:
+            print(f"Resuming training from {ckpt_pretrained}")
 
     # Define profiling callbacks
     if cprofiler:
