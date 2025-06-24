@@ -15,6 +15,7 @@ METRIC_DICT = {
 
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
+    'tiny': [8, 16, 32, 64],
     'small': [16, 32, 64, 64],
     'medium': [32, 64, 128, 256],
     'large': [64, 128, 256, 512], # Default value
