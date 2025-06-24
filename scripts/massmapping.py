@@ -1,7 +1,10 @@
 import os
 import argparse
 import time
+import threading
 import warnings
+import tqdm
+import cProfile
 import numpy as np
 
 import wlmmuq.utils as wlutils
@@ -24,15 +27,18 @@ NIMGS_PS = 256 # images used to compute the power spectrum
 METHOD_LIST = ["wiener", "mcalens"]
 
 def main(
-        method, picklename, path_to_test_dataset,
+        method, pickledir, picklename, path_to_test_dataset,
         cosmos_include_faint=False, imgsize=IMGSIZE,
         nimgs=NIMGS, nimgs_ps=NIMGS_PS, path_to_powerspectrum=None,
         batch_size=None, uq=False, nsamples=None,
-        batch_size_noise=None, seed=None, verbose=False, **kwargs
+        batch_size_noise=None, cprofiler=False,
+        seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
 
     beg = time.time()
+    pickledir = os.path.expanduser(pickledir)
+    os.makedirs(pickledir, exist_ok=True)
     assert method in METHOD_LIST
 
     keys_massmapping = ['niter', 'Nsigma', 'Inpaint']
@@ -40,7 +46,7 @@ def main(
 
     std_noise, mask = _commons.get_stdnoise_mask(
         imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, seed=seed, verbose=verbose
+        convert_to_torch_tensor=True, verbose=verbose
     )
 
     # Initialize dataset
@@ -75,6 +81,7 @@ def main(
             powerspectrum_1d = wlutils.get_1d_powerspectrum(kappa_ps)
             del kappa_ps
         else:
+            path_to_powerspectrum = os.path.expanduser(path_to_powerspectrum)
             powerspectrum_1d = np.load(path_to_powerspectrum)
         kwargs_massmapping.update(PowSpecSignal=powerspectrum_1d)
 
@@ -92,22 +99,37 @@ def main(
             batch_size_noise = nsamples
         kwargs_massmapping.update(PropagateNoise=True)
 
+    # Start profiling
+    if cprofiler:
+        profiler = cProfile.Profile()
+        filename_stats = os.path.join(pickledir, f"{picklename}.prof")
+        def _print_stats():
+            while True:
+                time.sleep(15)
+                profiler.dump_stats(filename_stats)
+        profiler.enable()
+        stats_thread = threading.Thread(target=_print_stats, daemon=True)
+        stats_thread.start()
+
     recs = []
+    exec_times = []
+    elapsed_times = []
 
     # Loop over batches of images
     max_idx = 0
     dataloader = iter(dataloader)
-    while True:
+    if batch_size is None:
+        batch_size = nimgs
+    pbar = tqdm.tqdm(
+        range(-(-nimgs // batch_size)),
+        disable=not verbose,
+    )
+    for i in pbar:
+        min_idx = i * batch_size
+        max_idx = min(min_idx + batch_size, nimgs)
+        pbar.set_description(f"Images {min_idx + 1}-{max_idx}/{nimgs}")
         beg_loop = time.time()
-        try:
-            _, gamma_noisy = next(dataloader)
-        except StopIteration:
-            break
-
-        min_idx = max_idx
-        max_idx = min_idx + gamma_noisy.shape[0]
-        if verbose:
-            print(f"Images {min_idx} to {max_idx - 1}...")
+        _, gamma_noisy = next(dataloader)
 
         # Register data into the `csmm.shear_data` object
         gamma_noisy = gamma_noisy.numpy()
@@ -125,8 +147,6 @@ def main(
                 Nrea = min(batch_size_noise, nremainingsamples)
                 kwargs_massmapping.update(Nrea=Nrea)
                 nremainingsamples -= Nrea
-                if verbose:
-                    print(f"Propagating {Nrea} noise realizations...")
             rec = func(
                 sheardata, **kwargs_massmapping
             )[0]
@@ -146,25 +166,39 @@ def main(
         recs.append(rec)
 
         end_loop = time.time()
+        exec_time = end_loop - beg_loop
+        elapsed_time = end_loop - beg
+        exec_times.append(exec_time)
+        elapsed_times.append(elapsed_time)
         if verbose:
-            exec_time = end_loop - beg_loop
             hours = int(exec_time // 3600)
             minutes = int((exec_time % 3600) // 60)
             seconds = int(exec_time % 60)
             print(f"Execution time: {hours} h, {minutes} min, {seconds} sec")
 
-            elapsed_time = end_loop - beg
             hours = int(elapsed_time // 3600)
             minutes = int((elapsed_time % 3600) // 60)
             seconds = int(elapsed_time % 60)
             print(f"Elapsed time: {hours} h, {minutes} min, {seconds} sec")
 
-
-    # Concatenate over nimgs
     rec = np.concatenate(recs, axis=0) # shape = (nimgs, nx, ny)
+    exec_times = np.array(exec_times) # shape = -(-nimgs // batch_size,)
+    elapsed_times = np.array(elapsed_times) # shape = -(-nimgs // batch_size,)
+
+    save_data = {
+        "rec": rec,
+        "exec_times": exec_times,
+        "elapsed_times": elapsed_times
+    }
+    if batch_size is not None:
+        save_data["batch_size"] = batch_size
+    if nimgs_ps is not None:
+        save_data["nimgs_ps"] = nimgs_ps
+    if powerspectrum_1d is not None:
+        save_data["powerspectrum_1d"] = powerspectrum_1d
 
     # Pickle data
-    np.save(os.path.expanduser(picklename), rec)
+    np.savez(os.path.join(pickledir, f"{picklename}.npz"), **save_data)
 
 
 if __name__ == "__main__":
@@ -174,10 +208,16 @@ if __name__ == "__main__":
         help=f"Mass mapping method: {' | '.join(METHOD_LIST)}"
     )
     parser.add_argument(
+        "pickledir", type=str,
+        help=(
+            "Directory where to save the pickled data. "
+            "If the directory does not exist, it will be created."
+        )
+    )
+    parser.add_argument(
         "picklename", type=str,
         help=(
-            "Path to the output file where the reconstructed maps will be saved "
-            "(in .npy format)"
+            "File name (without extension)."
         )
     )
     parser.add_argument(
@@ -265,6 +305,13 @@ if __name__ == "__main__":
             "Number of noise realizations. Depending on the mass mapping method, each input image "
             "may or may not get its own set of noise realizations. Default = None (all noise realizations "
             "computed in a single batch)"
+        )
+    )
+    parser.add_argument(
+        "--cprofiler", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Profile training using cProfile."
         )
     )
     _commons.add_arguments_seed_verbose(parser)
