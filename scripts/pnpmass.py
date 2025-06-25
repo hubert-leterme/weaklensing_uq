@@ -120,7 +120,7 @@ def main(
             "imgsize": imgsize
         }
         now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
-        path_to_output_completed = f"{path_to_output}_step-size_{tau}_{now}.pt"
+        path_to_output_completed = f"{path_to_output}_step-size_{tau:.3f}_{now}.pt"
         torch.save(out_dict, path_to_output_completed)
 
 
