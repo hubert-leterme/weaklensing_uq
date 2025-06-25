@@ -1,4 +1,5 @@
 import os
+import re
 import warnings
 import tqdm
 import numpy as np
@@ -21,8 +22,8 @@ class BaseHDF5Dataset:
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
-            meancentering=False, sort_by_filename_ori=True, newaxis=False,
-            list_of_outputs=None, close_after_batch=False,
+            meancentering=False, sort_by_filename_ori=True, filter_by_filename_ori=None,
+            newaxis=False, list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
     ):
         """
@@ -59,6 +60,10 @@ class BaseHDF5Dataset:
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
+        filter_by_filename_ori: str, optional
+            Regex pattern to filter `filename_ori` values. If provided, only images
+            with `filename_ori` matching the pattern will be considered.
+            Default is None.
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
             for training purpose. Default is False.
@@ -89,6 +94,7 @@ class BaseHDF5Dataset:
         self.output_shape = output_shape
         self.meancentering = meancentering
         self.sort_by_filename_ori = sort_by_filename_ori
+        self.filter_by_filename_ori = filter_by_filename_ori
         self.newaxis = newaxis
         self.kwargs_wiener = kwargs
         self.list_of_outputs = list_of_outputs
@@ -281,14 +287,16 @@ class BaseHDF5Dataset:
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
         self._open_and_get_dataset()
-        if self.sort_by_filename_ori:
+        if self.sort_by_filename_ori or self.filter_by_filename_ori is not None:
             try:
                 filename_ori = self.file['filename_ori']
             except KeyError:
                 warnings.warn(
-                    "The 'filename_ori' dataset is missing; input images will not be sorted."
+                    "The 'filename_ori' dataset is missing; input images will not be sorted "
+                    "or filtered by filename."
                 )
                 self.sort_by_filename_ori = False
+                self.filter_by_filename_ori = None
         nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
         # Check if requested number of images exceeds total available
@@ -301,6 +309,12 @@ class BaseHDF5Dataset:
             idx = np.argsort(filename_ori)  # Sort indices of `filename_ori`
         else:
             idx = np.arange(nimgs_tot)
+        if self.filter_by_filename_ori is not None:
+            pattern = re.compile(self.filter_by_filename_ori)
+            unique_filename_ori = np.unique(filename_ori)
+            match_dict = {s: bool(pattern.match(s)) for s in unique_filename_ori}
+            mask = np.array([match_dict[filename_ori[i]] for i in idx])
+            idx = idx[mask]
         self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
 
         # Get crop indices, if required
