@@ -1,0 +1,157 @@
+import argparse
+import time
+import tqdm
+import torch
+import deepinv as dinv
+
+import wlmmuq.data.torch as wlds
+import wlmmuq.models as wlnn
+import wlmmuq.models.deepinv.iterativemm as wlpnp
+import wlmmuq.utils as wlutils
+
+from wlmmuq.data import NUM_WORKERS
+
+import _commons
+from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL
+
+NIMGS_TEST = 512 # Images extracted from the 57 first original files
+MULTFACT_STEP_SIZE = 0.99
+NITER = 8
+
+def main(
+        path_to_test_dataset: str, path_to_checkpoint: str, path_to_output: str,
+        arch: str=None,
+        multfact_step_size: float=MULTFACT_STEP_SIZE, niter: int=NITER,
+        cosmos_include_faint: bool=False,
+        nimgs_test: int=NIMGS_TEST,
+        imgsize: int=IMGSIZE, batch_size: int=BATCH_SIZE, num_workers: int=NUM_WORKERS,
+        seed: int=None, verbose: bool=False, **kwargs
+):
+    _commons.set_seed(seed)
+    device = _commons.get_device(verbose=verbose)
+    if verbose:
+        print(f"Number of workers: {num_workers}")
+
+    beg_time = time.time()
+
+    # Load trained denoiser
+    if arch is None:
+        raise ValueError(
+            "Architecture of the denoiser must be provided with -a or --arch"
+        )
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    cnn_class, _ = wlnn.MODEL_CLASSES[arch]
+    model = cnn_class(map_size=imgsize, **kwargs_model)
+    checkpoint = torch.load(path_to_checkpoint)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.eval()
+    if verbose:
+        model.summary()
+
+    # Load noise standard deviation and mask
+    std_noise, mask = _commons.get_stdnoise_mask(
+        imgsize, cosmos_include_faint=cosmos_include_faint,
+        convert_to_torch_tensor=True, inpainting=False,
+        verbose=verbose
+    )
+
+    # Instantiate data fidelity, prior and metrics
+    data_fidelity = wlpnp.Mahalanobis(
+        sigma=torch.sqrt(std_noise)
+    ) # torch.sqrt is on purpose ("noise-whitening" data fidelity)
+    prior = dinv.optim.prior.PnP(model)
+    rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
+
+    # Get step size
+    upperbound_step_size = wlutils.get_sup_step_size(
+        std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
+        mask=mask
+    )
+    step_size = multfact_step_size * upperbound_step_size
+    if verbose:
+        print(f"Step size = {step_size:.2e}")
+
+    # Instantiate the PnP model
+    pnpmass = wlpnp.optim_builder(
+        iteration="PGD", prior=prior,
+        data_fidelity=data_fidelity,
+        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+        metric_dict={"rmse": rmse}, verbose=True,
+        params_algo={"stepsize": step_size, "g_param": step_size},
+    ).to(device) # The noise stdev for the denoiser is equal to the step size
+
+    # Instantiate physics (forward model)
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+
+    # Load test set
+    test_dataloader = wlds.HDF5DatasetMassMapping(
+        hdf5_filepath=path_to_test_dataset, nimgs=nimgs_test, batch_size=batch_size,
+        std_noise=std_noise, mask=mask, inpainting=True, shuffle=False,
+        output_shape=imgsize, newaxis=True, num_workers=num_workers
+    ).to_dataloader()
+    test_dataloader = iter(test_dataloader)
+
+    # Run PnPMass for each batch
+    listof_rmse_iter = []
+    pbar = tqdm.tqdm(test_dataloader, disable=not verbose)
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            kappa_pnpmass, metrics = pnpmass(
+                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+            )
+            listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
+    rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
+
+    inference_time = time.time() - beg_time
+
+    out_dict = {
+        "rmse_iter": rmse_iter.cpu(),
+        "inference_time": inference_time,
+        "step_size": step_size,
+        "arch": arch,
+        "niter": niter,
+        "nimgs_test": nimgs_test,
+        "imgsize": imgsize
+    }
+    torch.save(out_dict, path_to_output)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "path_to_test_dataset", type=str,
+        help="Path to the test set (HDF5 file)"
+    )
+    parser.add_argument(
+        "path_to_checkpoint", type=str,
+        help="Path to the checkpoint containing the model's state dict (.pth.tar)"
+    )
+    parser.add_argument(
+        "path_to_output", type=str,
+        help="Path to the output file (.pt)"
+    )
+    _commons.add_arguments_model(parser)
+    parser.add_argument(
+        "-i", "--niter", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for PnPMass. "
+            f"Default = {NITER}"
+        )
+    )
+    parser.add_argument(
+        "--nimgs-test", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of images over which to compute the power spectrum. "
+            f"Default = {NIMGS_TEST}"
+        )
+    )
+    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
+    _commons.add_arguments_seed_verbose(parser)
+    args = parser.parse_args()
+    kwargs = vars(args).copy()
+
+    main(**kwargs)
