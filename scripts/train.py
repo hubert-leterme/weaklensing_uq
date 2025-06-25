@@ -48,7 +48,7 @@ def main(
     if verbose:
         print(f"Number of workers: {num_workers}")
 
-    keys_model = ['model_size', 'pretrained']
+    keys_model = ['model_size']
     kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
     try:
         no_bias = kwargs.pop("no_bias")
@@ -256,14 +256,6 @@ if __name__ == "__main__":
         help=(
             "Size of the model (DRUNet only). Possible values are: "
             f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-p", "--pretrained", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Whether to use a pretrained network. Only available for PyTorch models. "
-            "Not available if `--model-size` is used."
         )
     )
     parser.add_argument(
