@@ -21,7 +21,7 @@ NITER = 8
 
 def main(
         path_to_test_dataset: str, path_to_checkpoint: str, path_to_output: str,
-        arch: str=None, step_size: float=None,
+        arch: str=None, step_size: float | list[float]=None,
         multfact_step_size: float=MULTFACT_STEP_SIZE, niter: int=NITER,
         cosmos_include_faint: bool=False,
         nimgs_test: int=NIMGS_TEST,
@@ -63,6 +63,9 @@ def main(
     prior = dinv.optim.prior.PnP(model)
     rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
 
+    # Instantiate physics (forward model)
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+
     # Get step size
     if step_size is None:
         upperbound_step_size = wlutils.get_sup_step_size(
@@ -70,56 +73,55 @@ def main(
             mask=mask
         )
         step_size = multfact_step_size * upperbound_step_size
-    if verbose:
-        print(f"Step size = {step_size:.2e}")
+    if not isinstance(step_size, list):
+        step_size = [step_size]
 
-    # Instantiate the PnP model
-    pnpmass = wlpnp.optim_builder(
-        iteration="PGD", prior=prior,
-        data_fidelity=data_fidelity,
-        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-        metric_dict={"rmse": rmse}, verbose=True,
-        params_algo={"stepsize": step_size, "g_param": step_size},
-    ).to(device) # The noise stdev for the denoiser is equal to the step size
+    for tau in step_size:
+        # Instantiate the PnP model
+        pnpmass = wlpnp.optim_builder(
+            iteration="PGD", prior=prior,
+            data_fidelity=data_fidelity,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            metric_dict={"rmse": rmse}, verbose=True,
+            params_algo={"stepsize": tau, "g_param": tau},
+        ).to(device) # The noise stdev for the denoiser is equal to the step size
 
-    # Instantiate physics (forward model)
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+        # Load test set
+        test_dataloader = wlds.HDF5DatasetMassMapping(
+            hdf5_filepath=path_to_test_dataset, nimgs=nimgs_test, batch_size=batch_size,
+            std_noise=std_noise, mask=mask, inpainting=True, shuffle=False,
+            output_shape=imgsize, newaxis=True, num_workers=num_workers
+        ).to_dataloader()
+        test_dataloader = iter(test_dataloader)
 
-    # Load test set
-    test_dataloader = wlds.HDF5DatasetMassMapping(
-        hdf5_filepath=path_to_test_dataset, nimgs=nimgs_test, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, inpainting=True, shuffle=False,
-        output_shape=imgsize, newaxis=True, num_workers=num_workers
-    ).to_dataloader()
-    test_dataloader = iter(test_dataloader)
+        # Run PnPMass for each batch
+        listof_rmse_iter = []
+        pbar = tqdm.tqdm(test_dataloader, disable=not verbose)
+        pbar.set_description(f"Step size = {tau:.2e}, Nb iterations = {niter}")
+        for kappa_true, gamma_noisy in pbar:
+            kappa_true = kappa_true.to(device)
+            gamma_noisy = gamma_noisy.to(device)
+            with torch.no_grad():
+                kappa_pnpmass, metrics = pnpmass(
+                    gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+                )
+                listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
+        rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
 
-    # Run PnPMass for each batch
-    listof_rmse_iter = []
-    pbar = tqdm.tqdm(test_dataloader, disable=not verbose)
-    for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            kappa_pnpmass, metrics = pnpmass(
-                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
-            )
-            listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
-    rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
+        inference_time = time.time() - beg_time
 
-    inference_time = time.time() - beg_time
-
-    out_dict = {
-        "rmse_iter": rmse_iter.cpu(),
-        "inference_time": inference_time,
-        "step_size": step_size,
-        "arch": arch,
-        "niter": niter,
-        "nimgs_test": nimgs_test,
-        "imgsize": imgsize
-    }
-    now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
-    path_to_output = f"{path_to_output}_{now}.pt"
-    torch.save(out_dict, path_to_output)
+        out_dict = {
+            "rmse_iter": rmse_iter.cpu(),
+            "inference_time": inference_time,
+            "step_size": tau,
+            "arch": arch,
+            "niter": niter,
+            "nimgs_test": nimgs_test,
+            "imgsize": imgsize
+        }
+        now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
+        path_to_output_completed = f"{path_to_output}_step-size_{tau}_{now}.pt"
+        torch.save(out_dict, path_to_output_completed)
 
 
 if __name__ == "__main__":
@@ -138,10 +140,10 @@ if __name__ == "__main__":
     )
     _commons.add_arguments_model(parser)
     parser.add_argument(
-        "-tau", "--step_size", type=float,
+        "-tau", "--step-size", type=float, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            "Step size for the PnPMass algorithm. "
+            "Step size for the PnPMass algorithm. Several values can be provided. "
             f"Default = {MULTFACT_STEP_SIZE:.2f} * upper_bound, "
             "where upper_bound is computed from the noise standard deviation "
             "and the mask, using the power iteration method"
