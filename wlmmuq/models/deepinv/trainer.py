@@ -281,6 +281,8 @@ class Trainer(dinv.Trainer):
             self.model.load_state_dict(checkpoint["state_dict"])
             if "optimizer" in checkpoint and self.optimizer is not None:
                 self.optimizer.load_state_dict(checkpoint["optimizer"])
+            if "scheduler" in checkpoint and self.scheduler is not None:
+                self.scheduler.load_state_dict(checkpoint["scheduler"])
             if "wandb_id" in checkpoint and self.wandb_vis:
                 self.wandb_setup["id"] = checkpoint["wandb_id"]
                 self.wandb_setup["resume"] = "allow"
@@ -304,7 +306,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Bugfix with epoch number
+        - Bugfix with epoch number
+        - Save state dictionary for the learning rate scheduler
 
         ************************************************************
 
@@ -326,6 +329,7 @@ class Trainer(dinv.Trainer):
                 "state_dict": self.model.state_dict(),
                 "loss": self.loss_history,
                 "optimizer": self.optimizer.state_dict(),
+                "scheduler": self.scheduler.state_dict() if self.scheduler else None,
                 "total_training_time": self.total_training_time,
                 "training_time_per_epoch": self.training_time_per_epoch,
                 "eval_time_per_epoch": self.eval_time_per_epoch
