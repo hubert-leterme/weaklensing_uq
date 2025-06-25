@@ -310,6 +310,13 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             raise ValueError
         return cur_prior
+    
+
+def zero_init(y: torch.Tensor, _unused_physics):
+    """The optimization algorithm is initialized with zero-valued tensors"""
+    x_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
+    z_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
+    return {"est": (x_init, z_init)}
 
 
 def optim_builder(

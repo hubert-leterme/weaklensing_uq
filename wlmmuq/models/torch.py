@@ -370,7 +370,7 @@ class Meancentering(nn.Module):
     """
     def forward(self, x):
         return utils.meancenter(x)
-    
+
 
 class Concatenate(nn.Module):
     r"""
