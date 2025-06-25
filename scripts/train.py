@@ -180,6 +180,9 @@ def main(
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=nepochs // ndecays, gamma=drop_rate
         )
+        if resume:
+            # Useful if the state dict of the scheduler is not saved in the checkpoint
+            scheduler.last_epoch = epoch_resume
     else:
         scheduler = None
 
