@@ -1,5 +1,6 @@
 import argparse
 import time
+from datetime import datetime
 import tqdm
 import torch
 import deepinv as dinv
@@ -115,6 +116,8 @@ def main(
         "nimgs_test": nimgs_test,
         "imgsize": imgsize
     }
+    now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
+    path_to_output = f"{path_to_output}_{now}.pt"
     torch.save(out_dict, path_to_output)
 
 
@@ -130,7 +133,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "path_to_output", type=str,
-        help="Path to the output file (.pt)"
+        help="Path to the output file (without extension)"
     )
     _commons.add_arguments_model(parser)
     parser.add_argument(

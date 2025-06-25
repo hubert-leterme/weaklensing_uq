@@ -18,6 +18,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
+  | sed 's/-tau /--step-size /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-b /--batch-size /g' \
   | sed 's/--//g' \
@@ -27,7 +28,7 @@ output_filename=$(echo "results_pnpmass_${optional_args_cleaned}" | sed 's/__/_/
 
 # Apply `dirnames` three times to get the output directory
 output_dir=$(dirname "$(dirname "$(dirname "$path_to_checkpoint")")")
-path_to_output="${output_dir}/${output_filename}.pt"
+path_to_output="${output_dir}/${output_filename}"
 
 # Command to execute
 cmd=$(echo "python scripts/pnpmass.py ${path_to_test_dataset} ${path_to_checkpoint} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
