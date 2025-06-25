@@ -11,7 +11,7 @@ import wlmmuq.utils as wlutils
 from wlmmuq.data import SCALE, NUM_WORKERS
 
 import _commons
-from _commons import IMGSIZE
+from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL
 
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
@@ -20,7 +20,6 @@ BATCH_SIZE_PS = 256
 NITER_WIENERINIT = 12
 NREAL_PER_IMG = 1
 NEPOCHS = 20
-BATCH_SIZE = 32
 LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
@@ -48,8 +47,7 @@ def main(
     if verbose:
         print(f"Number of workers: {num_workers}")
 
-    keys_model = ['model_size']
-    kwargs_model = {k: kwargs.pop(k) for k in keys_model if k in kwargs}
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     try:
         no_bias = kwargs.pop("no_bias")
     except KeyError:
@@ -242,22 +240,7 @@ if __name__ == "__main__":
             "Deep learning framework used to train the model ('tensorflow' or 'torch')."
         )
     )
-    parser.add_argument(
-        "-a", "--arch", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Architecture of the model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-s", "--model-size", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
+    _commons.add_arguments_model(parser)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,

@@ -4,10 +4,9 @@ import torch
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
-from _commons import IMGSIZE
+from _commons import IMGSIZE, BATCH_SIZE
 
 NIMGS = 2048
-BATCH_SIZE = 256
 
 def main(
         path_to_augmented_dataset, path_to_output, imgsize=IMGSIZE, nimgs=NIMGS,

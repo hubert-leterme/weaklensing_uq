@@ -1,7 +1,7 @@
 import argparse
 import wlmmuq.data.base_dataset as wlds
 
-BATCH_SIZE = 256
+from _commons import BATCH_SIZE
 
 def main(
         path_to_dataset, batch_size=BATCH_SIZE, verbose=False

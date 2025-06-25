@@ -8,12 +8,15 @@ from wlmmuq import cosmos as wlcosmos
 from wlmmuq import kappatng as wlktng
 from wlmmuq import utils as wlutils
 from wlmmuq.data import torch as wlbl
+from wlmmuq import models as wlnn
 
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 
 NINPIMGS = 100 # Number of input images
 IMGSIZE = 384
+BATCH_SIZE = 32
+KEYS_MODEL = ['model_size']
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -156,6 +159,25 @@ def add_arguments_create_dataset(parser):
         help=(
             "Batch size, to avoid memory overload. "
             "Default = 50"
+        )
+    )
+
+def add_arguments_model(parser):
+
+    parser.add_argument(
+        "-a", "--arch", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Architecture of the model. Possible values are: "
+            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "-s", "--model-size", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Size of the model (DRUNet only). Possible values are: "
+            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
         )
     )
 
