@@ -939,6 +939,10 @@ def get_sup_step_size(std_noise, mask=None, its=20):
     fidelity term is the negative log-likelihood. This function uses the power
     iteration method.
     """
+    if torch.is_tensor(std_noise):
+        std_noise = std_noise.cpu().numpy()
+    if mask is not None and torch.is_tensor(mask):
+        mask = mask.cpu().numpy()
     nx, ny = std_noise.shape
 
     def matvec(kappa_flattened):
