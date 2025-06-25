@@ -3,7 +3,6 @@
 # Set paths
 path_to_augmented_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP002_augmented_384.hdf5
 checkpoint_dir=/ceph/chercheurs/leterme231/checkpoints
-save_freq=1
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
