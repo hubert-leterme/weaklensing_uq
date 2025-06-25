@@ -21,7 +21,7 @@ NITER = 8
 
 def main(
         path_to_test_dataset: str, path_to_checkpoint: str, path_to_output: str,
-        arch: str=None,
+        arch: str=None, step_size: float=None,
         multfact_step_size: float=MULTFACT_STEP_SIZE, niter: int=NITER,
         cosmos_include_faint: bool=False,
         nimgs_test: int=NIMGS_TEST,
@@ -64,11 +64,12 @@ def main(
     rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
 
     # Get step size
-    upperbound_step_size = wlutils.get_sup_step_size(
-        std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
-        mask=mask
-    )
-    step_size = multfact_step_size * upperbound_step_size
+    if step_size is None:
+        upperbound_step_size = wlutils.get_sup_step_size(
+            std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
+            mask=mask
+        )
+        step_size = multfact_step_size * upperbound_step_size
     if verbose:
         print(f"Step size = {step_size:.2e}")
 
@@ -136,6 +137,16 @@ if __name__ == "__main__":
         help="Path to the output file (without extension)"
     )
     _commons.add_arguments_model(parser)
+    parser.add_argument(
+        "-tau", "--step_size", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Step size for the PnPMass algorithm. "
+            f"Default = {MULTFACT_STEP_SIZE:.2f} * upper_bound, "
+            "where upper_bound is computed from the noise standard deviation "
+            "and the mask, using the power iteration method"
+        )
+    )
     parser.add_argument(
         "-i", "--niter", type=int,
         default=argparse.SUPPRESS,
