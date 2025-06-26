@@ -18,9 +18,9 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
+  | sed 's/-b [^ ]\+//g' \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \
   | sed 's/-i /--niter /g' \
-  | sed 's/-b /--batch-size /g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
