@@ -76,6 +76,7 @@ def main(
     if not isinstance(step_size, list):
         step_size = [step_size]
 
+    now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
     for tau in step_size:
         # Instantiate the PnP model
         pnpmass = wlpnp.optim_builder(
@@ -119,7 +120,6 @@ def main(
             "nimgs_test": nimgs_test,
             "imgsize": imgsize
         }
-        now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
         path_to_output_completed = f"{path_to_output}_step-size_{tau:.3f}_{now}.pt"
         torch.save(out_dict, path_to_output_completed)
 
