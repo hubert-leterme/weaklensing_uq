@@ -1,22 +1,17 @@
 import argparse
 import time
-from datetime import datetime
 import tqdm
 import torch
 import deepinv as dinv
 
-import wlmmuq.data.torch as wlds
-import wlmmuq.models as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
-from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL
+from _commons import NIMGS_TEST, IMGSIZE, BATCH_SIZE, MULTFACT_STEP_SIZE
 
-NIMGS_TEST = 512 # Images extracted from the 57 first original files
-MULTFACT_STEP_SIZE = 0.99
 NITER = 8
 
 def main(
@@ -29,25 +24,13 @@ def main(
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
+
+    now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
     if verbose:
         print(f"Number of workers: {num_workers}")
 
     beg_time = time.time()
-
-    # Load trained denoiser
-    if arch is None:
-        raise ValueError(
-            "Architecture of the denoiser must be provided with -a or --arch"
-        )
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
-    cnn_class, _ = wlnn.MODEL_CLASSES[arch]
-    model = cnn_class(map_size=imgsize, **kwargs_model)
-    checkpoint = torch.load(path_to_checkpoint)
-    model.load_state_dict(checkpoint['state_dict'])
-    model.eval()
-    if verbose:
-        model.summary()
 
     # Load noise standard deviation and mask
     std_noise, mask = _commons.get_stdnoise_mask(
@@ -56,11 +39,22 @@ def main(
         verbose=verbose
     )
 
+    # Load test set
+    test_dataloader = _commons.get_dataloader_massmapping(
+        path_to_test_dataset, nimgs_test, imgsize, batch_size,
+        num_workers, std_noise, mask
+    )
+
+    # Load trained denoiser
+    denoiser = _commons.load_trained_model(
+        path_to_checkpoint, arch, imgsize, verbose=verbose, **kwargs
+    )
+
     # Instantiate data fidelity, prior and metrics
     data_fidelity = wlpnp.Mahalanobis(
         sigma=torch.sqrt(std_noise)
     ) # torch.sqrt is on purpose ("noise-whitening" data fidelity)
-    prior = dinv.optim.prior.PnP(model)
+    prior = dinv.optim.prior.PnP(denoiser)
     rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
 
     # Instantiate physics (forward model)
@@ -76,7 +70,6 @@ def main(
     if not isinstance(step_size, list):
         step_size = [step_size]
 
-    now = datetime.now().strftime(r"%Y%m%d_%H%M%S")
     for tau in step_size:
         # Instantiate the PnP model
         pnpmass = wlpnp.optim_builder(
@@ -86,14 +79,6 @@ def main(
             metric_dict={"rmse": rmse}, verbose=True,
             params_algo={"stepsize": tau, "g_param": tau},
         ).to(device) # The noise stdev for the denoiser is equal to the step size
-
-        # Load test set
-        test_dataloader = wlds.HDF5DatasetMassMapping(
-            hdf5_filepath=path_to_test_dataset, nimgs=nimgs_test, batch_size=batch_size,
-            std_noise=std_noise, mask=mask, inpainting=True, shuffle=False,
-            output_shape=imgsize, newaxis=True, num_workers=num_workers
-        ).to_dataloader()
-        test_dataloader = iter(test_dataloader)
 
         # Run PnPMass for each batch
         listof_rmse_iter = []
@@ -161,7 +146,7 @@ if __name__ == "__main__":
         "--nimgs-test", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of images over which to compute the power spectrum. "
+            "Number of test images. "
             f"Default = {NIMGS_TEST}"
         )
     )

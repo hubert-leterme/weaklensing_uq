@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import numpy as np
 import tqdm
 from scipy import ndimage, signal, stats, sparse, linalg
@@ -1015,6 +1016,10 @@ def cat_arrays(inp_list, **kwargs):
             "Expected torch.Tensor, list, tuple or dict."
         )
     return out
+
+
+def get_timestamp():
+    return datetime.now().strftime(r"%Y%m%d_%H%M%S")
 
 
 #=================================================================================

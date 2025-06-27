@@ -13,6 +13,8 @@ METRIC_DICT = {
     'mae': dinv.metric.MAE()
 }
 
+NITER_WIENERINIT = 12 # For DeepMass
+
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
     'tiny': [8, 16, 32, 64],
@@ -424,7 +426,7 @@ class IterativeWiener(nn.Module):
     def __init__(
             self, step_size: float,
             powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor=None, niter: int=1
+            mask:torch.Tensor=None, niter: int=NITER_WIENERINIT
     ):
         super().__init__()
         data_fidelity = iterativemm.Mahalanobis(sigma=std_noise)

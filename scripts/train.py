@@ -9,6 +9,7 @@ import wlmmuq.models as wlnn
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import SCALE, NUM_WORKERS
+from wlmmuq.models.torch import NITER_WIENERINIT
 
 import _commons
 from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL
@@ -17,7 +18,6 @@ NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original
 NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_PS = 2048
 BATCH_SIZE_PS = 256
-NITER_WIENERINIT = 12
 NREAL_PER_IMG = 1
 NEPOCHS = 20
 LOSS = 'mse'

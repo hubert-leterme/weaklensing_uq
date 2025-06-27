@@ -13,10 +13,12 @@ from wlmmuq import models as wlnn
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 
-NINPIMGS = 100 # Number of input images
+NINPIMGS = 100 # Number of input images before cropping
+NIMGS_TEST = 512 # Images extracted from the 57 first original files
 IMGSIZE = 384
 BATCH_SIZE = 32
-KEYS_MODEL = ['model_size']
+KEYS_MODEL = ['model_size', 'args_wienerinit']
+MULTFACT_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -128,6 +130,39 @@ def get_powerspectrum_from_dataset(
     powerspectrum = torch.mean(powerspectrum, dim=0)
 
     return powerspectrum
+
+
+def load_trained_model(path_to_checkpoint, arch, imgsize, verbose=False, **kwargs):
+
+    if arch is None:
+        raise ValueError(
+            "Model architecture must be provided with -a or --arch"
+        )
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    cnn_class, _ = wlnn.MODEL_CLASSES[arch]
+    model = cnn_class(
+        map_size=imgsize, **kwargs_model
+    )
+    checkpoint = torch.load(path_to_checkpoint)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.eval()
+    if verbose:
+        model.summary()
+
+    return model
+
+
+def get_dataloader_massmapping(
+        path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask
+):
+    test_dataloader = wlbl.HDF5DatasetMassMapping(
+        hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
+        std_noise=std_noise, mask=mask, shuffle=False,
+        output_shape=imgsize, newaxis=True, num_workers=num_workers
+    ).to_dataloader()
+    test_dataloader = iter(test_dataloader)
+
+    return test_dataloader
 
 
 def add_arguments_create_dataset(parser):
