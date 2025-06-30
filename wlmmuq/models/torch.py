@@ -107,7 +107,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
         self.map_size = map_size
         self.in_channels = in_channels
         self.out_channels = out_channels
-        super().__int__(
+        super().__init__(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels, **kwargs
         )
 
