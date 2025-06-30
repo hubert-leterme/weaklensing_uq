@@ -71,6 +71,9 @@ def main(
         step_size = [step_size]
 
     for tau in step_size:
+        # Initialize iterator
+        test_dataloader = iter(test_dataloader)
+
         # Instantiate the PnP model
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", prior=prior,

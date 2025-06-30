@@ -51,6 +51,9 @@ def main(
     )
     kwargs.update(args_wienerinit=args_wienerinit)
 
+    # Initialize iterator
+    test_dataloader = iter(test_dataloader)
+
     # Load trained model
     deepmass = _commons.load_trained_model(
         path_to_checkpoint, arch, imgsize, verbose=verbose, **kwargs

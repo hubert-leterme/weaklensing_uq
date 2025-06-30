@@ -160,7 +160,6 @@ def get_dataloader_massmapping(
         std_noise=std_noise, mask=mask, shuffle=False,
         output_shape=imgsize, newaxis=True, num_workers=num_workers
     ).to_dataloader()
-    test_dataloader = iter(test_dataloader)
 
     return test_dataloader
 
