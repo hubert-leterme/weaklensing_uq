@@ -44,7 +44,7 @@ USE_CHECKPOINTS_SUNET = False
 FINAL_UPSAMPLE_SUNET = 'bilinear' # Avoids checkerboard effects
 
 #=================================================================================
-# Models
+# Mixin classes
 #=================================================================================
 
 class ModelMixin:
@@ -71,7 +71,7 @@ class ModelMixin:
             self.additional_output = None
 
         # For printing summary
-        fake_input_data = self._get_fake_input_data(map_size, in_channels)
+        fake_input_data = self._get_fake_input_data()
         self._n_inputs = len(fake_input_data)
         for i, inp in enumerate(fake_input_data):
             self.register_buffer(f"_fake_input_data_{i}", inp, persistent=False)
@@ -88,7 +88,7 @@ class ModelMixin:
         return out
 
 
-    def _get_fake_input_data(self, map_size, in_channels):
+    def _get_fake_input_data(self):
         raise NotImplementedError
 
 
@@ -98,6 +98,137 @@ class ModelMixin:
         )
         print(torchinfo.summary(self, input_data=fake_input_data, **kwargs))
 
+
+class NoiseAgnosticModelMixin(ModelMixin):
+
+    def __init__(
+            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+    ):
+        self.map_size = map_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        super().__int__(
+            map_size=map_size, in_channels=in_channels, out_channels=out_channels, **kwargs
+        )
+
+    def forward(self, inp, sigma=None, *args, **kwargs):
+        r"""
+        The noise level is not used in this model.
+
+        :param torch.Tensor x: noisy image, of shape B, C, W, H.
+        :param float sigma: noise level (not used).
+        """
+        # The signature of this forward method follows the specifications of DeepInverse,
+        # to be able to use the `Trainer` class from DeepInverse for training.
+        return super().forward(inp, *args, **kwargs)
+
+    def _get_fake_input_data(self):
+        return (torch.randn(1, self.in_channels, self.map_size, self.map_size),)
+
+
+class NoiseAwareModelMixin(ModelMixin):
+
+    def __init__(
+            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+    ):
+        self.map_size = map_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        # On additional input channel for noise level
+        super().__init__(
+            map_size=map_size, in_channels=in_channels + 1,
+            out_channels=out_channels, **kwargs
+        )
+
+    def forward(self, inp, sigma, *args, **kwargs):
+        # This code block is inspired from the DRUNet implementation
+        if isinstance(sigma, torch.Tensor):
+            if sigma.ndim > 0:
+                noise_level_map = sigma.view(inp.size(0), 1, 1, 1)
+                noise_level_map = noise_level_map.expand(-1, 1, inp.size(2), inp.size(3))
+            else:
+                noise_level_map = torch.ones(
+                    (inp.size(0), 1, inp.size(2), inp.size(3)), device=inp.device
+                ) * sigma[None, None, None, None]
+        else:
+            noise_level_map = (
+                torch.ones((inp.size(0), 1, inp.size(2), inp.size(3)), device=inp.device)
+                * sigma
+            )
+        inp = torch.cat((inp, noise_level_map), 1)
+        # End of copy-pasted code block
+
+        return super().forward(inp, *args, **kwargs)
+
+    def _get_fake_input_data(self):
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
+
+
+# class ScoreMatchingMixin:
+#     # TODO: update
+#     def forward(self, inp):
+#         inp, sigma = inp
+#         out = super().forward(inp) # Shape = (batch_size, 1, map_size, map_size)
+#         var = sigma**2 # Shape = (batch_size, 1, 1, 1)
+#         return inp + var * out
+
+
+#=================================================================================
+# DRUNet (from DeepInverse)
+#=================================================================================
+
+# DRUNet is inherently noise-aware, no need to inherit from NoiseAwareModelMixin
+class DRUNet(ModelMixin, dinv.models.DRUNet):
+
+    def __init__(
+            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+    ):
+        self.map_size = map_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        # On additional input channel for noise level
+        super().__init__(
+            map_size=map_size, in_channels=in_channels,
+            out_channels=out_channels, **kwargs
+        )
+
+    def _preprocess_kwargs(
+            self, map_size=None, model_size: str=None,
+            act_mode: str=ACT_MODE_DRUNET,
+            downsample_mode: str=DOWNSAMPLE_MODE_DRUNET,
+            pretrained=False, **kwargs
+    ):
+        # map_size is discarded
+        if model_size is not None:
+            if model_size not in MODEL_SIZE_DRUNET:
+                raise ValueError(
+                    f"Unknown model size: {model_size}. "
+                    f"Available sizes: {list(MODEL_SIZE_DRUNET.keys())}."
+                )
+            kwargs.update(nc=MODEL_SIZE_DRUNET[model_size])
+        if not pretrained:
+            pretrained = None
+        else:
+            pretrained = 'download'
+        kwargs.update(
+            act_mode=act_mode, downsample_mode=downsample_mode,
+            pretrained=pretrained
+        )
+        return kwargs
+
+    def _get_fake_input_data(self):
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
+
+
+#=================================================================================
+# UNet (adapted from DeepMass)
+#=================================================================================
 
 class BaseUNet(nn.Module):
     """
@@ -203,97 +334,25 @@ class BaseUNet(nn.Module):
         return out
 
 
-class UNet(ModelMixin, BaseUNet):
-
+class UNetMixin:
     def _preprocess_kwargs(
             self, map_size=None, **kwargs
     ):
         # map_size is discarded
         return kwargs
 
-    def forward(self, inp, sigma=None, **kwargs):
-        r"""
-        The noise level is not used in this model.
 
-        :param torch.Tensor x: noisy image, of shape B, C, W, H.
-        :param float sigma: noise level (not used).
-        """
-        # The signature of this forward method follows the specifications of DeepInverse,
-        # to be able to use the `Trainer` class from DeepInverse for training.
-        return super().forward(inp, **kwargs)
-
-    def _get_fake_input_data(self, map_size, in_channels):
-        return (torch.randn(1, in_channels, map_size, map_size),)
+class UNet(UNetMixin, NoiseAgnosticModelMixin, BaseUNet):
+    pass
+class UNetNoiseAware(UNetMixin, NoiseAwareModelMixin, BaseUNet):
+    pass
 
 
-class DRUNet(ModelMixin, dinv.models.DRUNet):
+#=================================================================================
+# SUNet
+#=================================================================================
 
-    def _preprocess_kwargs(
-            self, map_size=None, model_size: str=None,
-            act_mode: str=ACT_MODE_DRUNET,
-            downsample_mode: str=DOWNSAMPLE_MODE_DRUNET,
-            pretrained=False, **kwargs
-    ):
-        # map_size is discarded
-        if model_size is not None:
-            if model_size not in MODEL_SIZE_DRUNET:
-                raise ValueError(
-                    f"Unknown model size: {model_size}. "
-                    f"Available sizes: {list(MODEL_SIZE_DRUNET.keys())}."
-                )
-            kwargs.update(nc=MODEL_SIZE_DRUNET[model_size])
-        if not pretrained:
-            pretrained = None
-        else:
-            pretrained = 'download'
-        kwargs.update(
-            act_mode=act_mode, downsample_mode=downsample_mode,
-            pretrained=pretrained
-        )
-
-        return kwargs
-
-
-    def _get_fake_input_data(self, map_size, in_channels):
-        return (torch.randn(1, in_channels, map_size, map_size), torch.randn(1,))
-
-
-class BaseSUNetNoiseAware(sunet.SUNet):
-
-    def __init__(self, in_chans=3, **kwargs):
-        # On additional input channel for noise level
-        super().__init__(in_chans=in_chans + 1, **kwargs)
-
-
-    def forward(self, x, sigma):
-        r"""
-        Run the denoiser on image with noise level :math:`\sigma`, similar to DRUNet.
-
-        :param torch.Tensor x: noisy image
-        :param float, torch.Tensor sigma: noise level. If ``sigma`` is a float, it is used for all images in the batch.
-            If ``sigma`` is a tensor, it must be of shape ``(batch_size,)``.
-        """
-        # This code block is copy-pasted from the original SUNet implementation
-        if isinstance(sigma, torch.Tensor):
-            if sigma.ndim > 0:
-                noise_level_map = sigma.view(x.size(0), 1, 1, 1)
-                noise_level_map = noise_level_map.expand(-1, 1, x.size(2), x.size(3))
-            else:
-                noise_level_map = torch.ones(
-                    (x.size(0), 1, x.size(2), x.size(3)), device=x.device
-                ) * sigma[None, None, None, None]
-        else:
-            noise_level_map = (
-                torch.ones((x.size(0), 1, x.size(2), x.size(3)), device=x.device)
-                * sigma
-            )
-        x = torch.cat((x, noise_level_map), 1)
-        # End of copy-pasted code block
-
-        return super().forward(x)
-
-
-class SUNetMixin(ModelMixin):
+class SUNetMixin:
 
     def _preprocess_kwargs(
             self, map_size=None, in_channels=1, out_channels=1,
@@ -329,37 +388,10 @@ class SUNetMixin(ModelMixin):
         return kwargs
 
 
-class SUNet(SUNetMixin, sunet.SUNet):
-
-    def forward(self, inp, sigma=None, **kwargs):
-        r"""
-        Run the denoiser on noisy image. The noise level is not used in this denoiser.
-
-        :param torch.Tensor x: noisy image, of shape B, C, W, H.
-        :param float sigma: noise level (not used).
-        """
-        # The signature of this forward method follows the specifications of DeepInverse,
-        # to be able to use the `Trainer` class from DeepInverse for training.
-        return super().forward(inp, **kwargs)
-
-
-    def _get_fake_input_data(self, map_size, in_channels):
-        return (torch.randn(1, in_channels, map_size, map_size),)
-
-
-class SUNetNoiseAware(SUNetMixin, BaseSUNetNoiseAware):
-
-    def _get_fake_input_data(self, map_size, in_channels):
-        return (torch.randn(1, in_channels, map_size, map_size), torch.randn(1,))
-
-
-class ScoreMatchingMixin:
-
-    def forward(self, inp):
-        inp, sigma = inp
-        out = super().forward(inp) # Shape = (batch_size, 1, map_size, map_size)
-        var = sigma**2 # Shape = (batch_size, 1, 1, 1)
-        return inp + var * out
+class SUNet(SUNetMixin, NoiseAgnosticModelMixin, sunet.SUNet):
+    pass
+class SUNetNoiseAware(SUNetMixin, NoiseAwareModelMixin, sunet.SUNet):
+    pass
 
 
 #=================================================================================
@@ -459,8 +491,11 @@ class WienerInitMixin:
         out = super().forward(inp, *args, **kwargs)
         return out
 
-    def _get_fake_input_data(self, map_size, in_channels):
-        return (torch.randn(1, in_channels, map_size, map_size, dtype=torch.complex64),)
+    def _get_fake_input_data(self):
+        return (torch.randn(
+            1, self.in_channels, self.map_size, self.map_size,
+            dtype=torch.complex64
+    ),)
 
 
 class UNetWienerInit(WienerInitMixin, UNet):
