@@ -40,7 +40,7 @@ def main(
     )
 
     # Load test set
-    test_dataloader = _commons.get_dataloader_massmapping(
+    test_dataset = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
         num_workers, std_noise, mask
     )
@@ -72,7 +72,7 @@ def main(
 
     for tau in step_size:
         # Initialize iterator
-        test_dataloader = iter(test_dataloader)
+        test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
         pnpmass = wlpnp.optim_builder(

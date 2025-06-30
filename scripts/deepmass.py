@@ -35,7 +35,7 @@ def main(
     ) # inpainting = True, as in training
 
     # Load test set
-    test_dataloader = _commons.get_dataloader_massmapping(
+    test_dataset = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
         num_workers, std_noise, mask
     )
@@ -52,7 +52,7 @@ def main(
     kwargs.update(args_wienerinit=args_wienerinit)
 
     # Initialize iterator
-    test_dataloader = iter(test_dataloader)
+    test_dataloader = iter(test_dataset)
 
     # Load trained model
     deepmass = _commons.load_trained_model(
