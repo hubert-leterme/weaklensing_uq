@@ -1,11 +1,12 @@
 import warnings
 
-import numpy as np
 from scipy import stats, optimize
+import torch
+from torch import nn
 
 from . import utils
 
-class BaseCQR:
+class BaseCQR(nn.Module):
     """
     Base class for conformalized quantile regression.
 
@@ -15,11 +16,22 @@ class BaseCQR:
         Target error level
 
     """
-    def __init__(self, alpha):
+    def __init__(self, alpha, map_size, in_channels=1):
+
+        super().__init__()
         self.alpha = alpha
+        self.map_size = map_size
+        self.in_channels = in_channels
+
+        self.adjusted_quantile = None
+        self.calib_param = nn.Parameter(
+            torch.zeros(in_channels, map_size, map_size),
+            requires_grad=False
+        )
+        self.nimgs_calib = 0
 
 
-    def _calibration_fun(self, lamb, res):
+    def _calibration_fun(self, res):
         raise NotImplementedError
 
 
@@ -27,62 +39,75 @@ class BaseCQR:
         raise NotImplementedError
 
 
-    def _adjusted_quantiles(self, conformity_scores):
+    def get_calibration_params(
+            self, pred_calib: torch.Tensor, res_calib: torch.Tensor | float,
+            kappa_calib: torch.Tensor
+    ):
         """
-        Get quantiles of a given array of conformity scores over a calibration
-        set, with finite-sample correction.
+        Get calibration parameters and store them as non-trainable parameters
+        of the model.
 
         Parameters
         ----------
-        conformity_scores (numpy.ndarray)
-            Array of shape (nimgs_calib, nx, ny), where nimgs_calib denotes
-            the number of images in the calibration set
-        
+        pred_calib, res_calib: torch.Tensor, shape = (nimgs, nx, ny)
+            Estimated convergence maps and residuals (calibration set).
+        kappa_calib: torch.Tensor, shape = (nimgs, nx, ny)
+            Ground-truth convergence maps (calibration set).
+
         Returns
         -------
-        quantile_vals (numpy.ndarray)
-            Array of shape (ns, ny): the adjusted quantiles
-        adjusted_quantile (float)
+        quantile_vals: torch.Tensor, shape = (nx, ny)
+            The per-pixel quantile values, used for estimating the calibration parameter.
+        adjusted_quantiles: torch.Tensor, shape = (1,)
             Adjusted quantile index (between 0 and 1)
-        
+
         """
-        nimgs_calib = conformity_scores.shape[0]
-        assert nimgs_calib >= utils.get_min_nimgs_calib(self.alpha)
-        adjusted_quantile = (1 - self.alpha) * (1 + 1/nimgs_calib)
-        quantile_vals = utils.quantile(conformity_scores, adjusted_quantile, axis=0)
+        assert pred_calib.shape == res_calib.shape == kappa_calib.shape
+        nimgs, in_channels, nx, ny = pred_calib.shape
+        assert nimgs >= utils.get_min_nimgs_calib(self.alpha)
+        assert in_channels == self.in_channels
+        assert nx == ny == self.map_size
+
+        with torch.no_grad():
+
+            conformity_scores = self._conformity_scores(pred_calib, res_calib, kappa_calib)
+            adjusted_quantile = (1 - self.alpha) * (1 + 1/nimgs) # For finite-sample correction
+            quantile_vals = utils.quantile(conformity_scores, adjusted_quantile, axis=0)
+            calib_param = (
+                self.nimgs_calib * self.calib_param + nimgs * quantile_vals
+            ) / (self.nimgs_calib + nimgs)
+
+            self.calib_param.copy_(calib_param)
+            self.nimgs_calib += nimgs
+
         return quantile_vals, adjusted_quantile
 
 
-    def conformalize(
-            self, res_test: np.ndarray | float, pred_calib: np.ndarray,
-            res_calib: np.ndarray | float, kappa_calib: np.ndarray
-    ):
+    def forward(self, res: torch.Tensor | float):
         """
         Perform conformal calibration.
 
         Parameters
         ----------
-        res_test (numpy.ndarray)
+        res (torch.Tensor or float)
             Estimated residuals to be calibrated (test set), shape = (nimgs_test, nx, ny).
-        pred_calib, res_calib (numpy.ndarray)
-            Estimated convergence maps and residuals (calibration set),
-            shape = (nimgs_calib, nx, ny).
-        kappa_calib (numpy.ndarray)
-            Ground-truth convergence maps (calibration set),
-            shape = (nimgs_calib, nx, ny).
-        
+
+        Returns
+        -------
+        res_cqr (torch.Tensor)
+            Calibrated residuals, shape = (nimgs_test, nx, ny).
+
         """
-        conformity_scores = self._conformity_scores(pred_calib, res_calib, kappa_calib)
-        quantile_vals, adjusted_quantile = self._adjusted_quantiles(conformity_scores)
-        res_cqr_test = self._calibration_fun(quantile_vals, res_test)
-        if isinstance(res_test, float):
-            res_cqr_test = res_cqr_test.reshape(1, *kappa_calib.shape[1:])
+        with torch.no_grad():
+            res_cqr = self._calibration_fun(res)
+            res_cqr = res_cqr.reshape(
+                -1, self.in_channels, self.map_size, self.map_size
+            )
+        return res_cqr
 
-        return res_cqr_test, quantile_vals, adjusted_quantile
 
-
-    def get_bounds_proba(self, nimgs_calib):
-        lower_bound_proba = self.alpha - 1 / (nimgs_calib + 1)
+    def get_bounds_proba(self):
+        lower_bound_proba = self.alpha - 1 / (self.nimgs_calib + 1)
         upper_bound_proba = self.alpha
         return lower_bound_proba, upper_bound_proba
 
@@ -102,8 +127,8 @@ class AddCQR(BaseCQR):
         Target error level
     
     """
-    def _calibration_fun(self, lamb, res):
-        return utils.maximum(res + lamb, 0)
+    def _calibration_fun(self, res):
+        return utils.maximum(res + self.calib_param, 0)
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         return utils.absolute(pred_calib - kappa_calib) - res_calib
@@ -128,16 +153,16 @@ class MultCQR(BaseCQR):
         Small value to avoid division by 0 (in case of zero residual)
 
     """
-    def __init__(self, alpha, eps=1e-9):
-        super().__init__(alpha)
+    def __init__(self, alpha, map_size, in_channels=1, eps=1e-9):
+        super().__init__(alpha, map_size, in_channels=in_channels)
         self.eps = eps
 
-    def _calibration_fun(self, lamb, res):
+    def _calibration_fun(self, res):
         if isinstance(res, float):
             res = self.eps if res <= self.eps else res
         else:
             res[res <= self.eps] = self.eps
-        return lamb * res
+        return self.calib_param * res
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         if isinstance(res_calib, float):
@@ -175,20 +200,21 @@ class GenCQR(BaseCQR):
         Target error level
     eps (float, default=1e-9)
         Small value to avoid division by 0 (in case of zero residual)
-    mask (numpy.ndarray, default=None)
+    mask (torch.Tensor, default=None)
         When proper calibration is impossible (due to the calibration function),
         a warning is triggered. However, the warning will be ignored if this happens
         outside the survey boundaries, delimited by this attribute. The shape is (nx, ny).
 
     """
     def __init__(
-            self, alpha, eps=1e-9, mask: np.ndarray=None
+            self, alpha, map_size, in_channels=1,
+            eps=1e-9, mask: torch.Tensor=None
     ):
-        super().__init__(alpha)
+        super().__init__(alpha, map_size, in_channels=in_channels)
         self.eps = eps
         if mask is not None:
             utils.check_mask(mask)
-        self.mask = mask
+        self.register_buffer('mask', mask)
 
     def _rho(self, res):
         raise NotImplementedError
@@ -201,8 +227,8 @@ class GenCQR(BaseCQR):
             out[out <= self.eps] = self.eps
         return out
 
-    def _calibration_fun(self, lamb, res):
-        return res + self._rho_nonzero(res) * (lamb - 1)
+    def _calibration_fun(self, res):
+        return res + self._rho_nonzero(res) * (self.calib_param - 1)
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         weights_calib = self._rho_nonzero(res_calib)
@@ -212,14 +238,8 @@ class GenCQR(BaseCQR):
         out[out < 0] = 0 # The calibration parameters must be positive
         return out
 
-    def conformalize(
-            self, res_test: np.ndarray | float, pred_calib: np.ndarray,
-            res_calib: np.ndarray | float, kappa_calib: np.ndarray
-    ):
-        res_cqr_test, quantile_vals, adjusted_quantile = super().conformalize(
-            res_test, pred_calib, res_calib, kappa_calib
-        )
-        iszero = quantile_vals == 0
+    def forward(self, res: torch.Tensor | float):
+        iszero = self.calib_param == 0
         if self.mask is not None:
             iszero[self.mask] = False
         sum_iszero = iszero.sum()
@@ -229,7 +249,7 @@ class GenCQR(BaseCQR):
                 f"Some pixels are impossible to calibrate ({sum_iszero / numel:.0%}); the "
                 "predictions will be overconservative. Choose another calibration function."
             )
-        return res_cqr_test, quantile_vals, adjusted_quantile
+        return super().forward(res)
 
 
 class ChisqCQR(GenCQR):
@@ -254,16 +274,17 @@ class ChisqCQR(GenCQR):
         Scaling factor
     df (int, default=3)
         Number of degrees of freedom
-    mask (numpy.ndarray, default=None)
+    mask (torch.Tensor, default=None)
         When proper calibration is impossible (due to the calibration function),
         a warning is triggered. However, the warning will be ignored if this happens
         outside the survey boundaries, delimited by this attribute. The shape is (nx, ny).
 
     """
     def __init__(
-            self, alpha, eps=1e-9, a=1., df=3, mask=None
+            self, alpha, map_size, in_channels=1,
+            eps=1e-9, a=1., df=3, mask: torch.Tensor=None
     ):
-        super().__init__(alpha, eps=eps, mask=mask)
+        super().__init__(alpha, map_size, in_channels=in_channels, eps=eps, mask=mask)
         self.a = a
         self.df = df
 
