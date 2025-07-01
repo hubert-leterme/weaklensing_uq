@@ -1,11 +1,13 @@
 """
 Code adapted from https://github.com/aangelopoulos/im2im-uq.git
 
+TODO: Inherit BaseRCPS from torch.nn.Module, like cqr.py.
+
 """
 import numpy as np
 from scipy import stats, optimize
 
-from . import utils
+from .. import utils
 
 
 class BaseRCPS:

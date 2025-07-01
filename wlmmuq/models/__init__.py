@@ -1,6 +1,6 @@
 from . import torch
 from . import deepinv
-from . import cqr
+from . import cqr, rcps
 
 MODEL_CLASSES = {
     "torch.UNet": (torch.UNet, False),
