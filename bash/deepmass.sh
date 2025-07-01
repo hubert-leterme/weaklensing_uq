@@ -11,18 +11,14 @@ if [ "$#" -lt 2 ]; then
   exit 1
 fi
 
-path_to_checkpoint="$2"
+checkpoint_dir="$2"
 optional_args="${@:3}"
 
 # Set output filename
-output_filename=results_deepmass
-
-# Apply `dirnames` three times to get the output directory
-output_dir=$(dirname "$(dirname "$(dirname "$path_to_checkpoint")")")
-path_to_output="${output_dir}/${output_filename}"
+path_to_output="${checkpoint_dir}/results_deepmass"
 
 # Command to execute
-cmd=$(echo "python scripts/deepmass.py ${path_to_test_dataset} ${path_to_checkpoint} ${path_to_ps} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/deepmass.py ${path_to_test_dataset} ${checkpoint_dir} ${path_to_ps} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
