@@ -6,11 +6,6 @@ import numpy as np
 import h5py
 import torch
 
-try:
-    import pycs.astro.wl.mass_mapping as csmm
-except ImportError:
-    warnings.warn("Module `pycs` not found.")
-
 from .. import utils
 
 SCALE = 1.
