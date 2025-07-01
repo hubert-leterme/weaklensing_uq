@@ -1,5 +1,6 @@
 from . import torch
 from . import deepinv
+from . import cqr
 
 MODEL_CLASSES = {
     "torch.UNet": (torch.UNet, False),
