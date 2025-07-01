@@ -392,11 +392,10 @@ def add_arguments_dataset(parser, batch_size):
         )
     )
     parser.add_argument(
-        "-f", "--filter-by-filename-ori",
+        "-f", "--min-idx-filename-ori",
         type=str, default=argparse.SUPPRESS,
         help=(
-            "Regex pattern to filter `filename_ori` values. If provided, only images "
-            "with `filename_ori` matching the pattern will be considered. "
+            "Filter images by filenames with indices equal or larger than this value. "
             "Default is None."
         )
     )

@@ -15,7 +15,7 @@ def main(
         load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
         step_size: float=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
-        nimgs_calib: int=_commons.NIMGS_CALIB, filter_by_filename_ori: str=None,
+        nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         confidence_uq: float=_commons.CONFIDENCE_UQ,
         num_workers: int=NUM_WORKERS, seed: int=None, verbose: bool=False, **kwargs
@@ -40,7 +40,7 @@ def main(
     calib_dataset = _commons.get_dataloader_massmapping(
         path_to_calib_dataset, nimgs_calib, imgsize, batch_size,
         num_workers, std_noise, mask,
-        shuffle=True, filter_by_filename_ori=filter_by_filename_ori
+        shuffle=True, min_idx_filename_ori=min_idx_filename_ori
     )
 
     # Load trained denoiser
