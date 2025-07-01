@@ -1,24 +1,32 @@
+import os
 import random
 import argparse
+import tqdm
 import numpy as np
 import torch
 import astropy.table as aptable
+import deepinv as dinv
 
 from wlmmuq import cosmos as wlcosmos
 from wlmmuq import kappatng as wlktng
 from wlmmuq import utils as wlutils
 from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
+from wlmmuq.models.deepinv import iterativemm as wlpnp
 
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 
 NINPIMGS = 100 # Number of input images before cropping
-NIMGS_TEST = 512 # Images extracted from the 57 first original files
+NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
+NIMGS_CALIB = 2048 # Images extracted from the 43 remaining original files(augmented dataset)
+EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
 KEYS_MODEL = ['model_size', 'args_wienerinit']
 MULTFACT_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
+NITER_PNPMASS = 8
+CONFIDENCE_UQ = 2 # 2-sigma confidence
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -132,36 +140,144 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def load_trained_model(path_to_checkpoint, arch, imgsize, verbose=False, **kwargs):
-
+def load_trained_model(
+        checkpoint_dir, arch, imgsize, timestamp, epoch,
+        load_model_uq=False, timestamp_uq=None, epoch_uq=None,
+        verbose=False, **kwargs
+):
     if arch is None:
         raise ValueError(
             "Model architecture must be provided with -a or --arch"
         )
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
+
+    if timestamp is None:
+        path_to_checkpoint_pe = checkpoint_dir
+    else:
+        path_to_checkpoint_pe = os.path.join(
+            checkpoint_dir, "pe", timestamp, f"ckp_{epoch}.pth.tar"
+        )
     model = cnn_class(
-        map_size=imgsize, **kwargs_model
+        map_size=imgsize, meancentering=True, onlypositive=False, **kwargs_model
     )
-    checkpoint = torch.load(path_to_checkpoint)
+    checkpoint = torch.load(path_to_checkpoint_pe)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     if verbose:
         model.summary()
 
-    return model
+    if not load_model_uq:
+        out = model
+    else:
+        path_to_checkpoint_uq = os.path.join(
+            checkpoint_dir, "var", timestamp_uq, f"ckp_{epoch_uq}.pth.tar"
+        )
+        model_uq = cnn_class(
+            map_size=imgsize, meancentering=False, onlypositive=True, **kwargs_model
+        )
+        checkpoint_uq = torch.load(path_to_checkpoint_uq)
+        model_uq.load_state_dict(checkpoint_uq['state_dict'])
+        model_uq.eval()
+        if verbose:
+            model_uq.summary()
+        out = (model, model_uq)
+
+    return out
 
 
 def get_dataloader_massmapping(
-        path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask
+        path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask,
+        **kwargs
 ):
     test_dataloader = wlbl.HDF5DatasetMassMapping(
         hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, shuffle=False,
-        output_shape=imgsize, newaxis=True, num_workers=num_workers
+        std_noise=std_noise, mask=mask, output_shape=imgsize,
+        newaxis=True, num_workers=num_workers, **kwargs
     ).to_dataloader()
 
     return test_dataloader
+
+
+def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
+
+    # Instantiate data fidelity, prior and metrics
+    data_fidelity = wlpnp.Mahalanobis(
+        sigma=torch.sqrt(std_noise)
+    ) # torch.sqrt is on purpose ("noise-whitenisng" data fidelity)
+    prior = dinv.optim.prior.PnP(denoiser)
+    if denoiser_uq is not None:
+        prior_uq = dinv.optim.prior.PnP(denoiser_uq)
+    else:
+        prior_uq = None
+    rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
+
+    # Instantiate physics (forward model)
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
+
+    return data_fidelity, prior, prior_uq, rmse, physics
+
+
+def get_pnpmass_step_size(
+        std_noise, mask, step_size=None, multfact_step_size=MULTFACT_STEP_SIZE
+):
+    if step_size is None:
+        upperbound_step_size = wlutils.get_sup_step_size(
+            std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
+            mask=mask
+        )
+        step_size = multfact_step_size * upperbound_step_size
+    if not isinstance(step_size, list):
+        step_size = [step_size]
+
+    return step_size
+
+
+def get_pnpmass(data_fidelity, prior, prior_uq, rmse, niter, step_size):
+    return wlpnp.optim_builder(
+        iteration="PGD", prior=prior, prior_uq=prior_uq,
+        data_fidelity=data_fidelity,
+        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+        metric_dict={"rmse": rmse}, verbose=True,
+        params_algo={"stepsize": step_size, "g_param": step_size},
+    )
+
+
+def run_pnpmass_batch(
+        pnpmass: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
+        dataloader, step_size, niter,
+        device="cpu", verbose=False
+):
+    listof_kappa_true = []
+    listof_kappa_pnpmass = []
+    listof_var_pnpmass = []
+    listof_rmse_iter = []
+
+    pbar = tqdm.tqdm(dataloader, disable=not verbose)
+    pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            out, metrics = pnpmass(
+                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+            )
+            if not isinstance(out, tuple):
+                kappa_pnpmass = out
+                var_pnpmass = torch.zeros(kappa_true.shape, device=device)
+            else:
+                kappa_pnpmass, var_pnpmass = out
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
+
+    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
+
+    return kappa_true, kappa_pnpmass, var_pnpmass, rmse_iter
 
 
 def add_arguments_create_dataset(parser):
@@ -215,6 +331,48 @@ def add_arguments_model(parser):
         )
     )
 
+def add_arguments_checkpoint(parser):
+
+    parser.add_argument(
+        "--timestamp", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Timestamp of the model to load. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--epoch", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Epoch of the model to load. "
+            f"Default = {EPOCH}"
+        )
+    )
+    parser.add_argument(
+        "-uq", "--load-model-uq", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Load the order-2 moment network, for UQ."
+        )
+    ) 
+    parser.add_argument(
+        "--timestamp_uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Timestamp of the model to load. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--epoch_uq", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Epoch of the model to load. "
+            f"Default = {EPOCH}"
+        )
+    )
+
 def add_arguments_dataset(parser, batch_size):
 
     parser.add_argument(
@@ -231,6 +389,15 @@ def add_arguments_dataset(parser, batch_size):
         help=(
             "Batch size. "
             f"Default = {batch_size}"
+        )
+    )
+    parser.add_argument(
+        "-f", "--filter-by-filename-ori",
+        type=str, default=argparse.SUPPRESS,
+        help=(
+            "Regex pattern to filter `filename_ori` values. If provided, only images "
+            "with `filename_ori` matching the pattern will be considered. "
+            "Default is None."
         )
     )
     parser.add_argument(

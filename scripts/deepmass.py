@@ -7,15 +7,15 @@ import wlmmuq.utils as wlutils
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
-from _commons import NIMGS_TEST, IMGSIZE, BATCH_SIZE, MULTFACT_STEP_SIZE
 
 def main(
-        path_to_test_dataset: str, path_to_checkpoint: str, path_to_ps: str, path_to_output: str,
-        arch: str=None, step_size: float=None,
-        multfact_step_size: float=MULTFACT_STEP_SIZE,
+        path_to_test_dataset: str, checkpoint_dir: str, path_to_ps: str, path_to_output: str,
+        arch: str=None, timestamp: str=None, epoch: int=None,
+        step_size: float=None,
+        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         cosmos_include_faint: bool=False,
-        nimgs_test: int=NIMGS_TEST,
-        imgsize: int=IMGSIZE, batch_size: int=BATCH_SIZE, num_workers: int=NUM_WORKERS,
+        nimgs_test: int=_commons.NIMGS_TEST,
+        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE, num_workers: int=NUM_WORKERS,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -56,7 +56,8 @@ def main(
 
     # Load trained model
     deepmass = _commons.load_trained_model(
-        path_to_checkpoint, arch, imgsize, verbose=verbose, **kwargs
+        checkpoint_dir, arch, imgsize, timestamp, epoch,
+        verbose=verbose, **kwargs
     ).to(device)
 
     # Run DeepMass for each batch
@@ -94,8 +95,8 @@ if __name__ == "__main__":
         help="Path to the test set (HDF5 file)"
     )
     parser.add_argument(
-        "path_to_checkpoint", type=str,
-        help="Path to the checkpoint containing the model's state dict (.pth.tar)"
+        "checkpoint_dir", type=str,
+        help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
     parser.add_argument(
         "path_to_ps", type=str,
@@ -106,12 +107,13 @@ if __name__ == "__main__":
         help="Path to the output file (without extension)"
     )
     _commons.add_arguments_model(parser)
+    _commons.add_arguments_checkpoint(parser)
     parser.add_argument(
         "-tau", "--step-size", type=float,
         default=argparse.SUPPRESS,
         help=(
             "Step size for Wiener initialization."
-            f"Default = {MULTFACT_STEP_SIZE:.2f} * upper_bound, "
+            f"Default = {_commons.MULTFACT_STEP_SIZE:.2f} * upper_bound, "
             "where upper_bound is computed from the noise standard deviation "
             "and the mask, using the power iteration method"
         )
@@ -121,10 +123,10 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Number of test images. "
-            f"Default = {NIMGS_TEST}"
+            f"Default = {_commons.NIMGS_TEST}"
         )
     )
-    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
+    _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()

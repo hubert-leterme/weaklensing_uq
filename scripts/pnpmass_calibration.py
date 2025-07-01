@@ -2,6 +2,7 @@ import argparse
 import time
 import torch
 
+import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
@@ -9,12 +10,14 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str, path_to_output: str,
-        arch: str=None, timestamp: str=None, epoch: int=None,
-        step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
+        path_to_calib_dataset: str, checkpoint_dir: str, path_to_output: str,
+        arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
+        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
+        step_size: float=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
-        nimgs_test: int=_commons.NIMGS_TEST,
+        nimgs_calib: int=_commons.NIMGS_CALIB, filter_by_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
+        confidence_uq: float=_commons.CONFIDENCE_UQ,
         num_workers: int=NUM_WORKERS, seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -33,22 +36,30 @@ def main(
         verbose=verbose
     )
 
-    # Load test set
-    test_dataset = _commons.get_dataloader_massmapping(
-        path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask
+    # Load calibration set
+    calib_dataset = _commons.get_dataloader_massmapping(
+        path_to_calib_dataset, nimgs_calib, imgsize, batch_size,
+        num_workers, std_noise, mask,
+        shuffle=True, filter_by_filename_ori=filter_by_filename_ori
     )
 
     # Load trained denoiser
-    denoiser = _commons.load_trained_model(
+    trained_models = _commons.load_trained_model(
         checkpoint_dir, arch, imgsize, timestamp, epoch,
+        load_model_uq=load_model_uq,
+        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
         verbose=verbose, **kwargs
     )
+    if not load_model_uq:
+        denoiser = trained_models
+        denoiser_uq = None
+    else:
+        denoiser, denoiser_uq = trained_models
 
     # Instantiate data fidelity, prior, metrics, and physics
     data_fidelity, prior, prior_uq, rmse, physics = _commons.get_pnpmass_modules(
-        std_noise, mask, denoiser
-    ) # TODO: add denoiser_uq
+        std_noise, mask, denoiser, denoiser_uq
+    )
     physics = physics.to(device)
 
     # Get step size
@@ -56,44 +67,45 @@ def main(
         std_noise, mask, step_size=step_size
     )
 
-    for tau in step_size:
-        # Initialize iterator
-        test_dataloader = iter(test_dataset)
+    # Initialize iterator
+    calib_dataloader = iter(calib_dataset)
 
-        # Instantiate the PnP model
-        prior_uq = None # TODO:
-        pnpmass = _commons.get_pnpmass(
-            data_fidelity, prior, prior_uq, rmse, niter, step_size=tau
-        ).to(device)
+    # Instantiate the PnP model
+    pnpmass = _commons.get_pnpmass(
+        data_fidelity, prior, prior_uq, rmse, niter, step_size=step_size
+    ).to(device)
 
-        # Run PnPMass for each batch
-        kappa_true, kappa_pnpmass, var_pnpmass, rmse_iter = _commons.run_pnpmass_batch(
-            pnpmass, physics, test_dataloader, step_size, niter,
-            device=device, verbose=verbose,
-        )
+    # Run PnPMass for each batch
+    kappa_true, kappa_pnpmass, var_pnpmass, _ = _commons.run_pnpmass_batch(
+        pnpmass, physics, calib_dataloader, step_size, niter,
+        device=device, verbose=verbose,
+    )
+    res_pnpmass = confidence_uq * var_pnpmass
 
-        inference_time = time.time() - beg_time
+    # Instantiate CQR model and compute the calibration parameters
+    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+    cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
+    cqr.calibrate(kappa_pnpmass, res_pnpmass, kappa_true)
 
-        out_dict = {
-            "rmse_iter": rmse_iter.cpu(),
-            "inference_time": inference_time,
-            "step_size": tau,
-            "arch": arch,
-            "niter": niter,
-            "nimgs_test": nimgs_test,
-            "imgsize": imgsize,
-            "kappa_true": kappa_true.cpu(),
-            "kappa_pnpmass": kappa_pnpmass.cpu(),
-            "var_pnpmass": var_pnpmass.cpu(),
-        }
-        path_to_output_completed = f"{path_to_output}_step-size_{tau:.3f}_{now}.pt"
-        torch.save(out_dict, path_to_output_completed)
+    inference_time = time.time() - beg_time
+
+    out_dict = {
+        "state_dict": cqr.state_dict(),
+        "inference_time": inference_time,
+        "step_size": step_size,
+        "arch": arch,
+        "niter": niter,
+        "nimgs_calib": nimgs_calib,
+        "imgsize": imgsize
+    }
+    path_to_output_completed = f"{path_to_output}_{now}.pt"
+    torch.save(out_dict, path_to_output_completed)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "path_to_test_dataset", type=str,
+        "path_to_calib_dataset", type=str,
         help="Path to the test set (HDF5 file)"
     )
     parser.add_argument(
@@ -107,7 +119,7 @@ if __name__ == "__main__":
     _commons.add_arguments_model(parser)
     _commons.add_arguments_checkpoint(parser)
     parser.add_argument(
-        "-tau", "--step-size", type=float, nargs='+',
+        "-tau", "--step-size", type=float,
         default=argparse.SUPPRESS,
         help=(
             "Step size for the PnPMass algorithm. Several values can be provided. "
@@ -125,11 +137,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--nimgs-test", type=int,
+        "--nimgs-calib", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of test images. "
-            f"Default = {_commons.NIMGS_TEST}"
+            "Number of calibration images. "
+            f"Default = {_commons.NIMGS_CALIB}"
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
