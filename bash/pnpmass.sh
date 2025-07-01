@@ -17,8 +17,8 @@ optional_args="${@:3}"
 optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
-  | sed 's/--timestamp [^ ]\+//g' \
-  | sed 's/--timestamp-uq [^ ]\+//g' \
+  | sed 's/-t [^ ]\+//g' \
+  | sed 's/-t0 [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
   | sed 's/-b [^ ]\+//g' \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \

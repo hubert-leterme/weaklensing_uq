@@ -334,7 +334,7 @@ def add_arguments_model(parser):
 def add_arguments_checkpoint(parser):
 
     parser.add_argument(
-        "--timestamp", type=str,
+        "-t", "--timestamp", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Timestamp of the model to load. "
@@ -357,7 +357,7 @@ def add_arguments_checkpoint(parser):
         )
     ) 
     parser.add_argument(
-        "--timestamp_uq", type=str,
+        "-t0", "--timestamp_uq", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Timestamp of the model to load. "
