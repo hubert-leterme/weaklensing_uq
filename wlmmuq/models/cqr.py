@@ -39,7 +39,7 @@ class BaseCQR(nn.Module):
         raise NotImplementedError
 
 
-    def get_calibration_params(
+    def calibrate(
             self, pred_calib: torch.Tensor, res_calib: torch.Tensor | float,
             kappa_calib: torch.Tensor
     ):
@@ -106,8 +106,8 @@ class BaseCQR(nn.Module):
         return res_cqr
 
 
-    def get_bounds_proba(self):
-        lower_bound_proba = self.alpha - 1 / (self.nimgs_calib + 1)
+    def get_bounds_proba(self, nimgs_calib):
+        lower_bound_proba = self.alpha - 1 / (nimgs_calib + 1)
         upper_bound_proba = self.alpha
         return lower_bound_proba, upper_bound_proba
 
