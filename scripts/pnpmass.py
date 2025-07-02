@@ -42,7 +42,7 @@ def main(
     # Load test set
     test_dataset = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask
+        num_workers, std_noise, mask, shuffle=False
     )
 
     # Load trained denoiser
@@ -116,7 +116,7 @@ def main(
             res_pnpmass_cqr = cqr(res_pnpmass)
             cqr_time = time.time() - beg_time
             if verbose:
-                print(f"CQR inference time: {cqr_time:.2f} seconds")
+                print(f"Calibration time: {cqr_time:.2f} seconds")
         else:
             res_pnpmass_cqr = None
             cqr_time = None
