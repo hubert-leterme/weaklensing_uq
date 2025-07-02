@@ -217,7 +217,8 @@ if __name__ == "__main__":
         help=(
             "If set, the tensors of the true convergence, "
             "the PnPMass estimate, the variance, and the residuals "
-            "will be saved in the output file"
+            "will be saved in the output file. WARNING: this will increase "
+            "the size of the output file significantly!"
         )
     )
     _commons.add_arguments_seed_verbose(parser)
