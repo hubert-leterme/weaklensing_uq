@@ -21,6 +21,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
+  | sed 's/-e [^ ]\+//g' \
   | sed 's/-t0 [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
   | sed 's/-b [^ ]\+//g' \
