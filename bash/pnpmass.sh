@@ -5,8 +5,8 @@ path_to_test_dataset=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped_
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <GPU_ID> <PATH_TO_CHECKPOINT> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 path/to/checkpoint -a torch.DRUNet -s small -t yyyymmdd_hhmmss [-i 3] [-w 8]"
+  echo "Usage: $0 <GPU_ID> <CHECKPOINT_DIR> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 checkpoint/dir/ -cqr path/to/cqr.pt -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss [-i 3] [-w 8]"
   exit 1
 fi
 
@@ -14,10 +14,11 @@ checkpoint_dir="$2"
 optional_args="${@:3}"
 
 # Create output directory if needed
-mkdir -p ${checkpoint_dir}/results
+mkdir -p ${checkpoint_dir}/results_pnpmass
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
+  | sed 's/-cqr [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
@@ -27,12 +28,12 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-f [^ ]\+//g' \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \
   | sed 's/-i /--niter /g' \
+  | sed 's/-uq //g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
 output_filename=$(echo "results_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g')
-
-path_to_output=$(echo "${checkpoint_dir}/results/${output_filename}" | sed 's|//|/|g' | xargs)
+path_to_output=$(echo "${checkpoint_dir}/results_pnpmass/${output_filename}" | sed 's|//|/|g' | xargs)
 
 # Command to execute
 cmd=$(echo "python scripts/pnpmass.py ${path_to_test_dataset} ${checkpoint_dir} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
