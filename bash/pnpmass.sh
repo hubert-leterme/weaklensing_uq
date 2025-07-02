@@ -30,6 +30,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-uq //g' \
+  | sed 's/--save-tensors //g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
