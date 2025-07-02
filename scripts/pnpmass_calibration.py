@@ -45,17 +45,12 @@ def main(
     )
 
     # Load trained denoiser
-    trained_models = _commons.load_trained_model(
+    denoiser, denoiser_uq = _commons.load_trained_model(
         checkpoint_dir, arch, imgsize, timestamp, epoch,
         load_model_uq=load_model_uq,
         timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
         verbose=verbose, **kwargs
     )
-    if not load_model_uq:
-        denoiser = trained_models
-        denoiser_uq = None
-    else:
-        denoiser, denoiser_uq = trained_models
 
     # Instantiate data fidelity, prior, metrics, and physics
     data_fidelity, prior, prior_uq, rmse, physics = _commons.get_pnpmass_modules(
@@ -100,7 +95,7 @@ def main(
         "imgsize": imgsize,
         "confidence_uq": confidence_uq,
     }
-    path_to_output_completed = f"{path_to_output}_{confidence_uq}sigma_{now}.pt"
+    path_to_output_completed = f"{path_to_output}_{confidence_uq}-sigma_{now}.pt"
     torch.save(out_dict, path_to_output_completed)
 
 

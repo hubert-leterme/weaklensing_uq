@@ -167,9 +167,7 @@ def load_trained_model(
     if verbose:
         model.summary()
 
-    if not load_model_uq:
-        out = model
-    else:
+    if load_model_uq:
         path_to_checkpoint_uq = os.path.join(
             checkpoint_dir, "var", timestamp_uq, f"ckp_{epoch_uq}.pth.tar"
         )
@@ -181,9 +179,11 @@ def load_trained_model(
         model_uq.eval()
         if verbose:
             model_uq.summary()
-        out = (model, model_uq)
+    
+    else:
+        model_uq = None
 
-    return out
+    return model, model_uq
 
 
 def get_dataloader_massmapping(

@@ -55,7 +55,7 @@ def main(
     test_dataloader = iter(test_dataset)
 
     # Load trained model
-    deepmass = _commons.load_trained_model(
+    deepmass, _ = _commons.load_trained_model(
         checkpoint_dir, arch, imgsize, timestamp, epoch,
         verbose=verbose, **kwargs
     ).to(device)
