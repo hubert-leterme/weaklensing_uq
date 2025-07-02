@@ -406,9 +406,10 @@ def create_augmented_dataset(
                 f['filename_ori'].resize((new_size,))
                 f['filename_ori'][-nimgs_batch:] = nangles * niter_per_angle * [
                     f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
-                        np.arange(beg_idx, end_idx)
+                        np.arange(beg_idx, end_idx) + 1
                     )
-                ]
+                ] # TODO: improve this by loading the original filenames from the KTNG dataset
+                # In particular, "LP001" should be adaptive.
 
                 f['angle'].resize((new_size,))
                 f['angle'][-nimgs_batch:] = np.repeat(
