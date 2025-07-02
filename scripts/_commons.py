@@ -277,7 +277,7 @@ def run_pnpmass_batch(
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
 
-    res_pnpmass = confidence_uq * var_pnpmass
+    res_pnpmass = confidence_uq * var_pnpmass**0.5
 
     return kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
 
