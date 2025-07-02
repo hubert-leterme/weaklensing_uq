@@ -295,7 +295,7 @@ def create_cropped_dataset(
         ) # Convergence maps
         # f.create_dataset(
         #     "filename_ori", shape=(0,), maxshape=(None,),
-        #     dtype=np.dtype('S17')
+        #     dtype=np.dtype('S17') # TODO: use regular strings instead
         # ) # Original data realizations (list of filenames)
         # f.create_dataset(
         #     "top_left_coord", shape=(0, 2), maxshape=(None, 2),
@@ -345,7 +345,7 @@ def create_augmented_dataset(
         ) # Convergence maps
         f.create_dataset(
             "filename_ori", shape=(0,), maxshape=(None,),
-            dtype=np.dtype('S17')
+            dtype=np.dtype('S17') # TODO: use regular strings instead
         ) # Original data realizations (list of filenames)
         f.create_dataset(
             "angle", shape=(0,), maxshape=(None,),
