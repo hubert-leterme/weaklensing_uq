@@ -20,7 +20,7 @@ def main(
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -135,21 +135,27 @@ def main(
             "nimgs_test": nimgs_test,
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
-            "kappa_true": kappa_true.cpu(),
-            "kappa_pnpmass": kappa_pnpmass.cpu(),
-            "var_pnpmass": var_pnpmass.cpu(),
-            "res_pnpmass": res_pnpmass.cpu(),
             "rmse_iter": rmse_iter.cpu(),
             "err_pnpmass": err_pnpmass.cpu(),
             "predinterv_pnpmass": predinterv_pnpmass.cpu(),
         }
+        if save_tensors:
+            out_dict.update({
+                "kappa_true": kappa_true.cpu(),
+                "kappa_pnpmass": kappa_pnpmass.cpu(),
+                "var_pnpmass": var_pnpmass.cpu(),
+                "res_pnpmass": res_pnpmass.cpu(),
+            })
         if cqr is not None:
             out_dict.update({
                 "nimgs_calib": nimgs_calib,
-                "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
                 "err_pnpmass_cqr": err_pnpmass_cqr.cpu(),
                 "predinterv_pnpmass_cqr": predinterv_pnpmass_cqr.cpu(),
             })
+            if save_tensors:
+                out_dict.update({
+                    "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
+                })
         path_to_output_completed = (
             f"{path_to_output}_step-size_{tau:.3f}_{confidence_uq}-sigma_{now}.pt"
         )
@@ -206,6 +212,14 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    parser.add_argument(
+        "--save-tensors", action='store_true',
+        help=(
+            "If set, the tensors of the true convergence, "
+            "the PnPMass estimate, the variance, and the residuals "
+            "will be saved in the output file"
+        )
+    )
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
