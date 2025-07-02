@@ -6,7 +6,7 @@ path_to_calibration_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP001
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <GPU_ID> <PATH_TO_CHECKPOINT> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 path/to/checkpoint -a torch.DRUNet -s small -t yyyymmdd_hhmmss -t0 yyyymmdd_hhmmss -f 58 [-i 3] [-w 8]"
+  echo "Example: $0 0 path/to/checkpoint -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss -f 58 [-i 3] [-w 8]"
   exit 1
 fi
 
@@ -27,6 +27,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-tau /--step-size /g' \
   | sed 's/-i /--niter /g' \
+  | sed 's/-uq //g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')

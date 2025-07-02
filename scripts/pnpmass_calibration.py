@@ -17,8 +17,9 @@ def main(
         cosmos_include_faint: bool=False,
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
-        confidence_uq: float=_commons.CONFIDENCE_UQ,
-        num_workers: int=NUM_WORKERS, seed: int=None, verbose: bool=False, **kwargs
+        num_workers: int=NUM_WORKERS,
+        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
 
@@ -76,15 +77,15 @@ def main(
     ).to(device)
 
     # Run PnPMass for each batch
-    kappa_true, kappa_pnpmass, var_pnpmass, _ = _commons.run_pnpmass_batch(
+    kappa_true, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_pnpmass_batch(
         pnpmass, physics, calib_dataloader, step_size, niter,
+        confidence_uq=confidence_uq,
         device=device, verbose=verbose,
     )
-    res_pnpmass = confidence_uq * var_pnpmass
 
     # Instantiate CQR model and compute the calibration parameters
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-    cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
+    cqr = wlcqr.AddCQR(alpha, map_size=imgsize).to(device)
     cqr.calibrate(kappa_pnpmass, res_pnpmass, kappa_true)
 
     inference_time = time.time() - beg_time
@@ -96,9 +97,10 @@ def main(
         "arch": arch,
         "niter": niter,
         "nimgs_calib": nimgs_calib,
-        "imgsize": imgsize
+        "imgsize": imgsize,
+        "confidence_uq": confidence_uq,
     }
-    path_to_output_completed = f"{path_to_output}_{now}.pt"
+    path_to_output_completed = f"{path_to_output}_{confidence_uq}sigma_{now}.pt"
     torch.save(out_dict, path_to_output_completed)
 
 

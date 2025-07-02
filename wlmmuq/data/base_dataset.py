@@ -9,7 +9,7 @@ import torch
 from .. import utils
 
 SCALE = 1.
-PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps\.hdf5" # Valid for kappaTNG, lensing potential 001
+PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing potential 001
 
 # TODO: Update docstrings
 
@@ -300,11 +300,6 @@ class BaseHDF5Dataset:
             self.min_idx_filename_ori = None
         nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
-        # Check if requested number of images exceeds total available
-        if self.beg_idx + self.nimgs > nimgs_tot:
-            self.file.close()  # Close the file in case of error
-            raise ValueError("The requested size exceeds the size of the dataset.")
-
         # Initialize list of indices
         if self.sort_by_filename_ori:
             idx = np.argsort(filename_ori)  # Sort indices of `filename_ori`
@@ -314,6 +309,8 @@ class BaseHDF5Dataset:
             pattern = re.compile(self.pattern_filename_ori)
             unique_filename_ori = np.unique(filename_ori)
             def keep_filename(s):
+                if isinstance(s, bytes):
+                    s = s.decode('utf-8')
                 match = pattern.match(s)
                 out = bool(match)
                 if out and self.min_idx_filename_ori is not None:
@@ -326,6 +323,11 @@ class BaseHDF5Dataset:
             mask = np.array([match_dict[filename_ori[i]] for i in idx])
             idx = idx[mask]
         self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
+
+        # Check if requested number of images exceeds total available
+        if self.beg_idx + self.nimgs > len(idx):
+            self.file.close()  # Close the file in case of error
+            raise ValueError("The requested size exceeds the size of the dataset.")
 
         # Get crop indices, if required
         if self.output_shape is not None:

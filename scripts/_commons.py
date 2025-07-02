@@ -19,7 +19,7 @@ from wlmmuq.data import NUM_WORKERS
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
-NIMGS_CALIB = 2048 # Images extracted from the 43 remaining original files(augmented dataset)
+NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files(augmented dataset)
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
@@ -227,8 +227,6 @@ def get_pnpmass_step_size(
             mask=mask
         )
         step_size = multfact_step_size * upperbound_step_size
-    if not isinstance(step_size, list):
-        step_size = [step_size]
 
     return step_size
 
@@ -245,7 +243,7 @@ def get_pnpmass(data_fidelity, prior, prior_uq, rmse, niter, step_size):
 
 def run_pnpmass_batch(
         pnpmass: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
-        dataloader, step_size, niter,
+        dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -277,7 +275,9 @@ def run_pnpmass_batch(
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
 
-    return kappa_true, kappa_pnpmass, var_pnpmass, rmse_iter
+    res_pnpmass = confidence_uq * var_pnpmass
+
+    return kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
 
 
 def add_arguments_create_dataset(parser):
@@ -393,7 +393,7 @@ def add_arguments_dataset(parser, batch_size):
     )
     parser.add_argument(
         "-f", "--min-idx-filename-ori",
-        type=str, default=argparse.SUPPRESS,
+        type=int, default=argparse.SUPPRESS,
         help=(
             "Filter images by filenames with indices equal or larger than this value. "
             "Default is None."
