@@ -79,6 +79,8 @@ def main(
     )
 
     # Instantiate CQR model and compute the calibration parameters
+    if verbose:
+        print("Instantiate CQR model and compute the calibration parameters")
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
     cqr = wlcqr.AddCQR(alpha, map_size=imgsize).to(device)
     cqr.calibrate(kappa_pnpmass, res_pnpmass, kappa_true)

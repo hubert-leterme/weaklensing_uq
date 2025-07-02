@@ -168,6 +168,8 @@ def load_trained_model(
         model.summary()
 
     if load_model_uq:
+        if epoch_uq is None:
+            epoch_uq = epoch
         path_to_checkpoint_uq = os.path.join(
             checkpoint_dir, "var", timestamp_uq, f"ckp_{epoch_uq}.pth.tar"
         )
@@ -342,7 +344,7 @@ def add_arguments_checkpoint(parser):
         )
     )
     parser.add_argument(
-        "--epoch", type=int,
+        "-e", "--epoch", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Epoch of the model to load. "
@@ -369,7 +371,7 @@ def add_arguments_checkpoint(parser):
         default=argparse.SUPPRESS,
         help=(
             "Epoch of the model to load. "
-            f"Default = {EPOCH}"
+            f"Default is the same value as `--epoch` ({EPOCH} if not provided)."
         )
     )
 

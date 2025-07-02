@@ -14,7 +14,7 @@ def main(
         path_to_test_dataset: str, checkpoint_dir: str, path_to_output: str,
         path_to_cqr: str=None,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
+        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=None,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
