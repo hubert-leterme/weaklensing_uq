@@ -14,7 +14,7 @@ checkpoint_dir="$2"
 optional_args="${@:3}"
 
 # Create output directory if needed
-mkdir -p ${checkpoint_dir}/cqr
+mkdir -p ${checkpoint_dir}/cqr_pnpmass
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
@@ -32,8 +32,8 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
-output_filename=$(echo "cqr_${optional_args_cleaned}" | sed 's/__/_/g')
-path_to_output=$(echo "${checkpoint_dir}/cqr/${output_filename}" | sed 's|//|/|g' | xargs)
+output_filename=$(echo "cqr_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g')
+path_to_output=$(echo "${checkpoint_dir}/cqr_pnpmass/${output_filename}" | sed 's|//|/|g' | xargs)
 
 # Command to execute
 cmd=$(echo "python scripts/pnpmass_calibration.py ${path_to_calibration_dataset} ${checkpoint_dir} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
