@@ -98,8 +98,11 @@ def main(
             device=device, verbose=verbose,
         )
 
+        inference_time = time.time() - beg_time
+
         # Calibrate with CQR, if available
         if cqr is not None:
+            beg_time = time.time()
             if verbose:
                 print("Calibrate residuals with CQR")
             if tau != checkpoint_cqr["step_size"]:
@@ -109,10 +112,13 @@ def main(
                     "Calibration may be inaccurate."
                 )
             res_pnpmass_cqr = cqr(res_pnpmass)
+            cqr_time = time.time() - beg_time
         else:
             res_pnpmass_cqr = None
+            cqr_time = None
 
         # Compute miscoverage rate and size of prediction intervals
+        beg_time = time.time()
         mask = mask.to(device)
         err_pnpmass, predinterv_pnpmass, _, _ = wlutils.get_metrics(
             kappa_pnpmass, res_pnpmass, kappa_true, mask=mask
@@ -124,11 +130,11 @@ def main(
         else:
             err_pnpmass_cqr = None
             predinterv_pnpmass_cqr = None
-
-        inference_time = time.time() - beg_time
+        metrics_time = time.time() - beg_time
 
         out_dict = {
             "inference_time": inference_time,
+            "metrics_time": metrics_time,
             "step_size": tau,
             "arch": arch,
             "niter": niter,
@@ -148,6 +154,7 @@ def main(
             })
         if cqr is not None:
             out_dict.update({
+                "cqr_time": cqr_time,
                 "nimgs_calib": nimgs_calib,
                 "err_pnpmass_cqr": err_pnpmass_cqr.cpu(),
                 "predinterv_pnpmass_cqr": predinterv_pnpmass_cqr.cpu(),
