@@ -99,6 +99,8 @@ def main(
         )
 
         inference_time = time.time() - beg_time
+        if verbose:
+            print(f"Total inference time: {inference_time:.2f} seconds")
 
         # Calibrate with CQR, if available
         if cqr is not None:
@@ -113,6 +115,8 @@ def main(
                 )
             res_pnpmass_cqr = cqr(res_pnpmass)
             cqr_time = time.time() - beg_time
+            if verbose:
+                print(f"CQR inference time: {cqr_time:.2f} seconds")
         else:
             res_pnpmass_cqr = None
             cqr_time = None
@@ -131,6 +135,8 @@ def main(
             err_pnpmass_cqr = None
             predinterv_pnpmass_cqr = None
         metrics_time = time.time() - beg_time
+        if verbose:
+            print(f"Metrics computation time: {metrics_time:.2f} seconds")
 
         out_dict = {
             "inference_time": inference_time,
@@ -166,6 +172,8 @@ def main(
         path_to_output_completed = (
             f"{path_to_output}_step-size_{tau:.3f}_{confidence_uq}-sigma_{now}.pt"
         )
+        if verbose:
+            print(f"Save results to {path_to_output_completed}")
         torch.save(out_dict, path_to_output_completed)
 
 
