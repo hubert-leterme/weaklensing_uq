@@ -58,7 +58,8 @@ def main(
     deepmass, _ = _commons.load_trained_model(
         checkpoint_dir, arch, imgsize, timestamp, epoch,
         verbose=verbose, **kwargs
-    ).to(device)
+    )
+    deepmass = deepmass.to(device)
 
     # Run DeepMass for each batch
     listof_rmse = []

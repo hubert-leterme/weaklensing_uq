@@ -181,7 +181,7 @@ def load_trained_model(
         model_uq.eval()
         if verbose:
             model_uq.summary()
-    
+
     else:
         model_uq = None
 
@@ -205,8 +205,8 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
 
     # Instantiate data fidelity, prior and metrics
     data_fidelity = wlpnp.Mahalanobis(
-        sigma=torch.sqrt(std_noise)
-    ) # torch.sqrt is on purpose ("noise-whitenisng" data fidelity)
+        sigma=std_noise**0.5
+    ) # Sqrt of noise stdev because we do not consider the negative log-likelihood
     prior = dinv.optim.prior.PnP(denoiser)
     if denoiser_uq is not None:
         prior_uq = dinv.optim.prior.PnP(denoiser_uq)

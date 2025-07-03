@@ -239,6 +239,12 @@ def get_masked_and_noisy_shear(
     else:
         randn = np.random.randn
 
+    if mask is None:
+        if torch.is_tensor(std_noise):
+            mask = torch.ones_like(std_noise, dtype=torch.bool)
+        else:
+            mask = np.ones_like(std_noise, dtype=bool)
+
     shape = test_array_shape([gamma, std_noise, mask])
     *shape0, nx, ny = shape
 
