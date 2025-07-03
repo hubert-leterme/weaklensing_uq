@@ -7,6 +7,7 @@ import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
+from wlmmuq.models.torch import NITER_WIENERINIT
 
 import _commons
 
@@ -20,6 +21,8 @@ def main(
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
+        wiener_init: bool=False, path_to_ps: str=None,
+        niter_wienerinit: int=NITER_WIENERINIT,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -53,18 +56,17 @@ def main(
         verbose=verbose, **kwargs
     )
 
-    # Instantiate data fidelity, prior, metrics, and physics
-    data_fidelity, prior, prior_uq, rmse, physics = _commons.get_pnpmass_modules(
-        std_noise, mask, denoiser, denoiser_uq
-    )
-    physics = physics.to(device)
-
     # Get step size
     step_size = _commons.get_pnpmass_step_size(
         std_noise, mask, step_size=step_size
     )
     if not isinstance(step_size, list):
         step_size = [step_size]
+
+    # Get arguments for Wiener initialization (if applicable)
+    kwargs_wienerinit = _commons.get_kwargs_wienerinit(
+        wiener_init, path_to_ps, std_noise, mask, niter_wienerinit
+    )
 
     # Load CQR, if available
     if path_to_cqr is not None:
@@ -86,9 +88,12 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass = _commons.get_pnpmass(
-            data_fidelity, prior, prior_uq, rmse, niter, step_size=tau
-        ).to(device)
+        pnpmass, physics = _commons.get_pnpmass(
+            std_noise, mask, denoiser, denoiser_uq, niter, step_size=tau,
+            wiener_init=wiener_init, **kwargs_wienerinit
+        )
+        pnpmass = pnpmass.to(device)
+        physics = physics.to(device)
 
         # Run PnPMass for each batch
         kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
@@ -227,6 +232,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_wienerinit(parser)
     parser.add_argument(
         "--save-tensors", action='store_true',
         help=(

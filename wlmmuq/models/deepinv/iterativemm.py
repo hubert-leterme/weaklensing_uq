@@ -207,7 +207,8 @@ class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
             self, *args, metric_dict: MetricDict=None,
-            prior_uq: dinv.optim.Prior=None, **kwargs
+            prior_uq: dinv.optim.Prior=None,
+            init_estimate: dinv.optim.BaseOptim=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -239,6 +240,8 @@ class BaseOptim(dinv.optim.BaseOptim):
                 out = get_output_0(X)
             return out
         self.get_output = _get_output
+
+        self.init_estimate = init_estimate
 
 
     def _update_metrics(
@@ -310,7 +313,41 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             raise ValueError
         return cur_prior
-    
+
+
+    def forward(
+            self, y, physics, x_gt=None, compute_metrics=False,
+            kwargs_init_estimate=None, **kwargs
+    ):
+        if self.init_estimate is not None:
+            if kwargs_init_estimate is None:
+                kwargs_init_estimate = {}
+            with torch.no_grad():
+                x_init = self.init_estimate(
+                    y, physics, x_gt=None,
+                    compute_metrics=False, **kwargs_init_estimate
+                )
+                y -= physics.A(x_init) # Get residual
+
+        out = super().forward(
+            y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
+        )
+
+        if self.init_estimate is not None:
+            with torch.no_grad():
+                if compute_metrics:
+                    x, metrics = out
+                else:
+                    x = out
+                    metrics = None
+                x += x_init # Add initial estimate
+                if compute_metrics:
+                    out = x, metrics
+                else:
+                    out = x
+
+        return out
+
 
 def zero_init(y: torch.Tensor, _unused_physics):
     """The optimization algorithm is initialized with zero-valued tensors"""

@@ -41,10 +41,10 @@ def main(
     )
 
     # Load arguments for Wiener initialization
-    powerspectrum = torch.load(path_to_ps)
-    step_size = multfact_step_size * wlutils.get_sup_step_size(
-        std_noise=std_noise, mask=mask
-    )
+    powerspectrum, step_size = \
+        _commons.get_powerspectrum_step_size_wienerinit(
+            path_to_ps, std_noise, mask
+        )
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
         std_noise=std_noise, mask=mask

@@ -16,6 +16,7 @@ from wlmmuq.models.deepinv import iterativemm as wlpnp
 
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
+from wlmmuq.models.torch import NITER_WIENERINIT
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
@@ -233,14 +234,36 @@ def get_pnpmass_step_size(
     return step_size
 
 
-def get_pnpmass(data_fidelity, prior, prior_uq, rmse, niter, step_size):
-    return wlpnp.optim_builder(
+def get_pnpmass(
+        std_noise, mask, denoiser, denoiser_uq, niter, step_size,
+        wiener_init=False, step_size_wienerinit=None, powerspectrum_wienerinit=None,
+        niter_wienerinit=None
+):
+    data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
+        std_noise, mask, denoiser, denoiser_uq
+    )
+
+    if wiener_init:
+        data_fidelity_wienerinit = wlpnp.Mahalanobis(sigma=std_noise)
+        prior_wienerinit = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum_wienerinit))
+        wienerinit = wlpnp.optim_builder(
+            iteration="PGD", prior=prior_wienerinit,
+            data_fidelity=data_fidelity_wienerinit,
+            early_stop=False, max_iter=niter_wienerinit, custom_init=wlpnp.zero_init,
+            params_algo={"stepsize": step_size_wienerinit, "g_param": step_size_wienerinit},
+        )
+    else:
+        wienerinit = None
+
+    pnpmass = wlpnp.optim_builder(
         iteration="PGD", prior=prior, prior_uq=prior_uq,
         data_fidelity=data_fidelity,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
         metric_dict={"rmse": rmse}, verbose=True,
         params_algo={"stepsize": step_size, "g_param": step_size},
+        init_estimate=wienerinit,
     )
+    return pnpmass, physics
 
 
 def run_pnpmass_batch(
@@ -280,6 +303,34 @@ def run_pnpmass_batch(
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
     return kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
+
+
+def get_powerspectrum_step_size_wienerinit(
+        path_to_ps, std_noise, mask, multfact_step_size=MULTFACT_STEP_SIZE,
+        verbose=False
+):
+    if verbose:
+        print("Get Wiener initialization parameters")
+    powerspectrum = torch.load(path_to_ps)
+    step_size = multfact_step_size * wlutils.get_sup_step_size(
+        std_noise=std_noise, mask=mask
+    )
+    return powerspectrum, step_size
+
+
+def get_kwargs_wienerinit(
+        wiener_init, path_to_ps, std_noise, mask, niter_wienerinit
+):
+    kwargs_wienerinit = {}
+    if wiener_init:
+        powerspectrum_wienerinit, step_size_wienerinit = \
+            get_powerspectrum_step_size_wienerinit(path_to_ps, std_noise, mask)
+        kwargs_wienerinit.update(
+            step_size_wienerinit=step_size_wienerinit,
+            powerspectrum_wienerinit=powerspectrum_wienerinit,
+            niter_wienerinit=niter_wienerinit,
+        )
+    return kwargs_wienerinit
 
 
 def add_arguments_create_dataset(parser):
@@ -409,6 +460,35 @@ def add_arguments_dataset(parser, batch_size):
             f"Default = {NUM_WORKERS}"
         )
     )
+
+
+def add_arguments_wienerinit(parser):
+
+    parser.add_argument(
+        "--wiener-init", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use Wiener initialization. "
+            "Default = False"
+        )
+    )
+    parser.add_argument(
+        "--path-to-ps", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the power spectrum file used for Wiener initialization. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--niter-wienerinit", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for Wiener initialization. "
+            f"Default = {NITER_WIENERINIT}"
+        )
+    )
+
 
 def add_arguments_seed_verbose(parser):
 

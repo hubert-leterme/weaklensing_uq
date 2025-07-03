@@ -467,7 +467,7 @@ class IterativeWiener(nn.Module):
         self.optim = iterativemm.optim_builder(
             iteration="PGD", prior=prior,
             data_fidelity=data_fidelity,
-            early_stop=False, max_iter=niter, custom_init=zero_init,
+            early_stop=False, max_iter=niter, custom_init=iterativemm.zero_init,
             params_algo={"stepsize": step_size, "g_param": step_size},
         )
         self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
@@ -503,13 +503,6 @@ class UNetWienerInit(WienerInitMixin, UNet):
 
 class SUNetWienerInit(WienerInitMixin, SUNet):
     pass
-
-
-def zero_init(y: torch.Tensor, _unused_physics):
-    """The optimization algorithm is initialized with zero-valued tensors"""
-    x_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
-    z_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
-    return {"est": (x_init, z_init)}
 
 
 #=================================================================================

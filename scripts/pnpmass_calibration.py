@@ -6,6 +6,7 @@ import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
+from wlmmuq.models.torch import NITER_WIENERINIT
 
 import _commons
 
@@ -18,6 +19,8 @@ def main(
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
+        wiener_init: bool=False, path_to_ps: str=None,
+        niter_wienerinit: int=NITER_WIENERINIT,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -52,24 +55,26 @@ def main(
         verbose=verbose, **kwargs
     )
 
-    # Instantiate data fidelity, prior, metrics, and physics
-    data_fidelity, prior, prior_uq, rmse, physics = _commons.get_pnpmass_modules(
-        std_noise, mask, denoiser, denoiser_uq
-    )
-    physics = physics.to(device)
-
     # Get step size
     step_size = _commons.get_pnpmass_step_size(
         std_noise, mask, step_size=step_size
+    )
+
+    # Get arguments for Wiener initialization (if applicable)
+    kwargs_wienerinit = _commons.get_kwargs_wienerinit(
+        wiener_init, path_to_ps, std_noise, mask, niter_wienerinit
     )
 
     # Initialize iterator
     calib_dataloader = iter(calib_dataset)
 
     # Instantiate the PnP model
-    pnpmass = _commons.get_pnpmass(
-        data_fidelity, prior, prior_uq, rmse, niter, step_size=step_size
-    ).to(device)
+    pnpmass, physics = _commons.get_pnpmass(
+        std_noise, mask, denoiser, denoiser_uq, niter, step_size=step_size,
+        wiener_init=wiener_init, **kwargs_wienerinit
+    )
+    pnpmass = pnpmass.to(device)
+    physics = physics.to(device)
 
     # Run PnPMass for each batch
     kappa_true, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_pnpmass_batch(
@@ -144,6 +149,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_wienerinit(parser)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
