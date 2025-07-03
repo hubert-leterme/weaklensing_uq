@@ -807,27 +807,46 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, extent, boundaries, vmin=None, vmax=None,
-            vmax_bounds=None, plot_colorbar=False
+            self, kappa_true, kappa_pred, var_pred, res_pred,
+            extent, boundaries, mask=None, imgsize=None,
+            vmin=None, vmax=None, vmax_sqdiff=None, vmax_bounds=None,
+            plot_colorbar=False,
     ):
+        self.kappa_true = kappa_true
+        self.kappa_pred = kappa_pred
+        self.var_pred = var_pred
+        self.res_pred = res_pred
         self.extent = extent
         self.boundaries = boundaries
-        self.plot_colorbar = plot_colorbar
+        self.mask = mask
+        self.imgsize = imgsize
         self.vmin = vmin
         self.vmax = vmax
+        self.vmax_sqdiff = vmax_sqdiff
         self.vmax_bounds = vmax_bounds
+        self.plot_colorbar = plot_colorbar
 
 
-    def skyshow_pointestimate(self, pred: np.ndarray | torch.Tensor, **kwargs):
+    @property
+    def bounds(self):
+        lowerbound = self.kappa_pred - self.res_pred - self.kappa_true
+        upperbound = self.kappa_pred + self.res_pred - self.kappa_true
+        if self.mask is not None:
+            lowerbound *= self.mask
+            upperbound *= self.mask
+        return lowerbound, upperbound
 
-        if torch.is_tensor(pred):
-            pred = pred.cpu().numpy()
+
+    def _skyshow_kappamap(self, kappa, **kwargs):
+
+        if torch.is_tensor(kappa):
+            kappa = kappa.cpu().numpy()
 
         out = skyshow(
-            pred, vmin=self.vmin, vmax=self.vmax, extent=self.extent,
+            kappa, vmin=self.vmin, vmax=self.vmax, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
             printxticks=False, printyticks=False, printcolorbar=False,
-            **kwargs
+            imgsize=self.imgsize, **kwargs
         )
         if self.plot_colorbar:
             plt.colorbar()
@@ -835,8 +854,35 @@ class KappamapVisualizer:
         return out
 
 
-    def skyshow_bound(self, bound: np.ndarray | torch.Tensor, **kwargs):
+    def skyshow_truth(self, **kwargs):
+        return self._skyshow_kappamap(self.kappa_true, **kwargs)
 
+    def skyshow_pointestimate(self, **kwargs):
+        return self._skyshow_kappamap(self.kappa_pred, **kwargs)
+
+
+    def skyshow_variance(self, **kwargs):
+
+        var_pred = self.var_pred
+        if torch.is_tensor(var_pred):
+            var_pred = var_pred.cpu().numpy()
+        skyshow(
+            var_pred, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
+            boundaries=self.boundaries, printxylabels=False,
+            printxticks=False, printyticks=False, printcolorbar=True,
+            imgsize=self.imgsize, **kwargs
+        )
+
+
+    def skyshow_bound(self, which, **kwargs):
+
+        lower_bound, upper_bound = self.bounds
+        if which == "lower":
+            bound = lower_bound
+        elif which == "upper":
+            bound = upper_bound
+        else:
+            raise ValueError("Argument `which` must be either 'lower' or 'upper'")
         if torch.is_tensor(bound):
             bound = bound.cpu().numpy()
 
@@ -845,7 +891,7 @@ class KappamapVisualizer:
             cmap="coolwarm", vmin=-self.vmax_bounds, vmax=self.vmax_bounds,
             extent=self.extent, boundaries=self.boundaries,
             printcolorbar=False, printxylabels=False, printxticks=False, printyticks=False,
-            **kwargs
+            imgsize=self.imgsize, **kwargs
         )
         if self.plot_colorbar:
             cbar = plt.colorbar()
@@ -854,23 +900,8 @@ class KappamapVisualizer:
         return out
 
 
-    def _visualize(self, pred, lowerbound, upperbound, **kwargs):
+    def visualize(self, **kwargs):
         raise NotImplementedError
-
-
-    def __call__(
-            self, pred, res, kappa, mask=None, visualize=False, **kwargs
-    ):
-        lowerbound = pred - res - kappa
-        upperbound = pred + res - kappa
-        if mask is not None:
-            lowerbound *= mask
-            upperbound *= mask
-
-        if visualize:
-            self._visualize(pred, lowerbound, upperbound, **kwargs)
-
-        return lowerbound, upperbound
 
 
 class KappamapVisualizerCompact(KappamapVisualizer):
@@ -879,19 +910,18 @@ class KappamapVisualizerCompact(KappamapVisualizer):
         super().__init__(*args, **kwargs)
         self.msg = msg
 
-    def _visualize(
-            self, pred: np.ndarray | torch.Tensor,
-            lowerbound: np.ndarray | torch.Tensor,
-            upperbound: np.ndarray | torch.Tensor,
-            **kwargs
-    ):
-        plt.figure(figsize=(14, 3))
-        plt.subplot(131)
-        self.skyshow_pointestimate(pred, title='Point estimate')
-        plt.subplot(132)
-        self.skyshow_bound(lowerbound, title=f'Lower bound ({self.msg})')
-        plt.subplot(133)
-        self.skyshow_bound(upperbound, title=f'Upper bound ({self.msg})')
+    def visualize(self):
+        plt.figure(figsize=(12, 6))
+        plt.subplot(231)
+        self.skyshow_truth(title='Ground truth')
+        plt.subplot(232)
+        self.skyshow_pointestimate(title=f'Point estimate ({self.msg})')
+        plt.subplot(233)
+        self.skyshow_variance(title=f'Variance ({self.msg})')
+        plt.subplot(234)
+        self.skyshow_bound("lower", title=f'Lower bound ({self.msg})')
+        plt.subplot(235)
+        self.skyshow_bound("upper", title=f'Upper bound ({self.msg})')
         plt.show()
 
 
@@ -908,15 +938,10 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         self.showpred = showpred
 
 
-    def _visualize(
-            self, pred: np.ndarray | torch.Tensor,
-            lowerbound: np.ndarray | torch.Tensor,
-            upperbound: np.ndarray | torch.Tensor,
-            filename: str=None, **kwargs
-    ):
+    def visualize(self, filename: str=None, **kwargs):
         if self.showpred:
             plt.figure(figsize=(5, 3))
-            self.skyshow_pointestimate(pred)
+            self.skyshow_pointestimate()
             if self.savefig:
                 plt.savefig(
                     os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
@@ -924,7 +949,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
             plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound(lowerbound)
+        self.skyshow_bound("lower")
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
@@ -932,7 +957,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound(upperbound)
+        self.skyshow_bound("upper")
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
