@@ -12,7 +12,7 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENERINIT
 
 import _commons
-from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL
+from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, MULTFACT_STEP_SIZE
 
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
@@ -30,7 +30,9 @@ def main(
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
         wiener_init=False, nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
-        niter_wienerinit=NITER_WIENERINIT, multfact_step_size_wienerinit=0.99,
+        niter_wienerinit=NITER_WIENERINIT,
+        multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
+        nongaussian=False, sigma_wiener=None,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -55,6 +57,16 @@ def main(
     else:
         kwargs_model.update(bias=not no_bias)
 
+    # Compute the power spectrum for Wiener initialization
+    if wiener_init or nongaussian:
+        powerspectrum = _commons.get_powerspectrum_from_dataset(
+            path_to_augmented_dataset, nimgs=nimgs_ps,
+            batch_size=batch_size_ps, output_shape=imgsize,
+            num_workers=num_workers, device=device, verbose=verbose
+        )
+    else:
+        powerspectrum = None
+
     if not denoiser or use_stdnoise_mask:
         std_noise, mask = _commons.get_stdnoise_mask(
             imgsize, cosmos_include_faint=cosmos_include_faint,
@@ -65,13 +77,6 @@ def main(
 
         if wiener_init:
             assert not denoiser
-
-            # Compute power spectrum
-            powerspectrum = _commons.get_powerspectrum_from_dataset(
-                path_to_augmented_dataset, nimgs=nimgs_ps,
-                batch_size=batch_size_ps, output_shape=imgsize,
-                num_workers=num_workers, device=device, verbose=verbose
-            )
 
             # Compute step size
             step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
@@ -167,6 +172,14 @@ def main(
         loss_fun = wlnn.torch.Order2SupLoss(
             order1_model=order1_model, metric=metric
         )
+    elif nongaussian:
+        loss_fun = wlnn.torch.NonGaussianSupLoss(
+            powerspectrum_wiener=powerspectrum,
+            sigma_wiener=sigma_wiener, niter_wiener=niter_wienerinit,
+            multfact_step_size_wiener=multfact_step_size_wienerinit,
+            metric=metric
+        )
+        # TODO: non-Gaussian loss function for order-2 networks
     else:
         loss_fun = dinv.loss.SupLoss(metric=metric)
 
@@ -278,6 +291,21 @@ if __name__ == "__main__":
         help=(
             "Number of iterations for the Wiener initialization. "
             f"Default = {NITER_WIENERINIT}"
+        )
+    )
+    parser.add_argument(
+        "--nongaussian", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Train the network on the non-Gaussian part of the convergence maps."
+        )
+    )
+    parser.add_argument(
+        "--sigma-wiener", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Noise standard deviation on which to estimate the Gaussian part of the "
+            "convergence maps. This argument must be provided if `--nongaussian` is used."
         )
     )
     parser.add_argument(

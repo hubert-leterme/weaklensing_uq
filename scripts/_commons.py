@@ -16,7 +16,7 @@ from wlmmuq.models.deepinv import iterativemm as wlpnp
 
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENERINIT
+from wlmmuq.models.torch import NITER_WIENERINIT, MULTFACT_STEP_SIZE
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
@@ -25,7 +25,7 @@ EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
 KEYS_MODEL = ['model_size', 'args_wienerinit']
-MULTFACT_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
+
 NITER_PNPMASS = 8
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 

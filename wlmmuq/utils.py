@@ -207,11 +207,12 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
-        mask: np.ndarray | torch.Tensor,
+        mask: np.ndarray | torch.Tensor=None,
         inpainting: bool=False,
         output_shape_wider: tuple[int, int]=None,
         std_noise_wider: np.ndarray | torch.Tensor=None,
-        mask_wider: np.ndarray | torch.Tensor=None
+        mask_wider: np.ndarray | torch.Tensor=None,
+        device=None
 ):
     """
     Parameters
@@ -219,7 +220,7 @@ def get_masked_and_noisy_shear(
     gamma (numpy.ndarray | torch.tensor, shape = (nimgs, nx, ny), dtype=complex)
     std_noise (numpy.ndarray, shape = (nx, ny))
         Array of noise standard deviation.
-    mask (numpy.ndarray, shape = (nx, ny))
+    mask (numpy.ndarray, shape = (nx, ny), default=None)
         Array of masked data.
     inpainting (bool, default=False)
         If True, apply noise to the masked regions.
@@ -227,6 +228,7 @@ def get_masked_and_noisy_shear(
         If provided, also compute wider images with zero-padding.
     std_noise_wider (numpy.ndarray, shape = output_shape_wider, default=None)
     mask_wider (numpy.ndarray, shape = output_shape_wider, default=None)
+    device
 
     Returns
     -------
@@ -245,6 +247,9 @@ def get_masked_and_noisy_shear(
         else:
             mask = np.ones_like(std_noise, dtype=bool)
 
+    if device is not None:
+        mask = mask.to(device)
+
     shape = test_array_shape([gamma, std_noise, mask])
     *shape0, nx, ny = shape
 
@@ -253,7 +258,10 @@ def get_masked_and_noisy_shear(
     gamma_masked = mask * gamma
 
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
-        noise = std_noise * (randn(*shape) + 1j * randn(*shape))
+        noise = randn(*shape) + 1j * randn(*shape)
+        if device is not None:
+            noise = noise.to(device)
+        noise *= std_noise
         if not inpainting:
             noise[..., ~mask] = 0.
         return gamma_masked + noise
