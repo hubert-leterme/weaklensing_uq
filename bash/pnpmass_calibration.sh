@@ -29,6 +29,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-tau /--step-size /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-uq //g' \
+  | sed 's/--path-to-ps [^ ]\+//g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
