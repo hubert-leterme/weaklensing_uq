@@ -9,7 +9,7 @@ import wlmmuq.models as wlnn
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import SCALE, NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENERINIT
+from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, MULTFACT_STEP_SIZE
@@ -30,7 +30,7 @@ def main(
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
         wiener_init=False, nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
-        niter_wienerinit=NITER_WIENERINIT,
+        niter_wiener=NITER_WIENER,
         multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
         nongaussian=False, sigma_wiener=None,
         order2=False, path_to_pred_dataset=None,
@@ -87,7 +87,7 @@ def main(
 
             args_wienerinit = dict(
                 step_size=step_size, powerspectrum=powerspectrum,
-                std_noise=std_noise, mask=mask, niter=niter_wienerinit
+                std_noise=std_noise, mask=mask, niter=niter_wiener
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
@@ -175,7 +175,7 @@ def main(
     elif nongaussian:
         loss_fun = wlnn.torch.NonGaussianSupLoss(
             powerspectrum_wiener=powerspectrum,
-            sigma_wiener=sigma_wiener, niter_wiener=niter_wienerinit,
+            sigma_wiener=sigma_wiener, niter_wiener=niter_wiener,
             multfact_step_size_wiener=multfact_step_size_wienerinit,
             metric=metric
         )
@@ -286,11 +286,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--niter-wienerinit", type=int,
+        "--niter-wiener", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of iterations for the Wiener initialization. "
-            f"Default = {NITER_WIENERINIT}"
+            f"Default = {NITER_WIENER}"
         )
     )
     parser.add_argument(

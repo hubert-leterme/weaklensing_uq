@@ -7,7 +7,7 @@ import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENERINIT
+from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
@@ -22,7 +22,7 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         wiener_init: bool=False, path_to_ps: str=None,
-        niter_wienerinit: int=NITER_WIENERINIT,
+        niter_wiener: int=NITER_WIENER,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -63,9 +63,9 @@ def main(
     if not isinstance(step_size, list):
         step_size = [step_size]
 
-    # Get arguments for Wiener initialization (if applicable)
-    kwargs_wienerinit = _commons.get_kwargs_wienerinit(
-        wiener_init, path_to_ps, std_noise, mask, niter_wienerinit
+    # Get iterative Wiener filtering (may be used for initialization)
+    wiener = _commons.get_wiener(
+        path_to_ps, std_noise, mask, niter=niter_wiener
     )
 
     # Load CQR, if available
@@ -88,17 +88,22 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
+        if wiener_init:
+            init_estimate = wiener
+        else:
+            init_estimate = None
         pnpmass, physics = _commons.get_pnpmass(
             std_noise, mask, denoiser, denoiser_uq, niter, step_size=tau,
-            wiener_init=wiener_init, **kwargs_wienerinit
+            init_estimate=init_estimate
         )
         pnpmass = pnpmass.to(device)
+        wiener = wiener.to(device)
         physics = physics.to(device)
 
         # Run PnPMass for each batch
-        kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
-                _commons.run_pnpmass_batch(
-            pnpmass, physics, test_dataloader, tau, niter,
+        kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
+                _commons.run_wiener_pnpmass_batch(
+            wiener, pnpmass, physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
         )
@@ -159,6 +164,7 @@ def main(
         if save_tensors:
             out_dict.update({
                 "kappa_true": kappa_true.cpu(),
+                "kappa_wiener": kappa_wiener.cpu(),
                 "kappa_pnpmass": kappa_pnpmass.cpu(),
                 "var_pnpmass": var_pnpmass.cpu(),
                 "res_pnpmass": res_pnpmass.cpu(),

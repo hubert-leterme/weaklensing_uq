@@ -16,7 +16,7 @@ from wlmmuq.models.deepinv import iterativemm as wlpnp
 
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENERINIT, MULTFACT_STEP_SIZE
+from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
@@ -234,44 +234,47 @@ def get_pnpmass_step_size(
     return step_size
 
 
+def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
+
+    powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
+        path_to_ps, std_noise, mask
+    )
+    data_fidelity = wlpnp.Mahalanobis(sigma=std_noise)
+    prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
+    out = wlpnp.optim_builder(
+        iteration="PGD", prior=prior,
+        data_fidelity=data_fidelity,
+        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+        params_algo={"stepsize": step_size, "g_param": step_size},
+    )
+    return out
+
+
 def get_pnpmass(
-        std_noise, mask, denoiser, denoiser_uq, niter, step_size,
-        wiener_init=False, step_size_wienerinit=None, powerspectrum_wienerinit=None,
-        niter_wienerinit=None
+        std_noise, mask, denoiser, denoiser_uq, niter, step_size, init_estimate=None
 ):
     data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
         std_noise, mask, denoiser, denoiser_uq
     )
-
-    if wiener_init:
-        data_fidelity_wienerinit = wlpnp.Mahalanobis(sigma=std_noise)
-        prior_wienerinit = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum_wienerinit))
-        wienerinit = wlpnp.optim_builder(
-            iteration="PGD", prior=prior_wienerinit,
-            data_fidelity=data_fidelity_wienerinit,
-            early_stop=False, max_iter=niter_wienerinit, custom_init=wlpnp.zero_init,
-            params_algo={"stepsize": step_size_wienerinit, "g_param": step_size_wienerinit},
-        )
-    else:
-        wienerinit = None
-
     pnpmass = wlpnp.optim_builder(
         iteration="PGD", prior=prior, prior_uq=prior_uq,
         data_fidelity=data_fidelity,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
         metric_dict={"rmse": rmse}, verbose=True,
         params_algo={"stepsize": step_size, "g_param": step_size},
-        init_estimate=wienerinit,
+        init_estimate=init_estimate,
     )
     return pnpmass, physics
 
 
-def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
+def run_wiener_pnpmass_batch(
+        wiener: wlpnp.BaseOptim, pnpmass: wlpnp.BaseOptim,
+        physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
+    listof_kappa_wiener = []
     listof_kappa_pnpmass = []
     listof_var_pnpmass = []
     listof_rmse_iter = []
@@ -282,6 +285,7 @@ def run_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
+            kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
             out, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
@@ -291,18 +295,20 @@ def run_pnpmass_batch(
             else:
                 kappa_pnpmass, var_pnpmass = out
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
 
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
-    return kappa_true, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
+    return kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
 
 
 def get_powerspectrum_step_size_wienerinit(
@@ -316,21 +322,6 @@ def get_powerspectrum_step_size_wienerinit(
         std_noise=std_noise, mask=mask
     )
     return powerspectrum, step_size
-
-
-def get_kwargs_wienerinit(
-        wiener_init, path_to_ps, std_noise, mask, niter_wienerinit
-):
-    kwargs_wienerinit = {}
-    if wiener_init:
-        powerspectrum_wienerinit, step_size_wienerinit = \
-            get_powerspectrum_step_size_wienerinit(path_to_ps, std_noise, mask)
-        kwargs_wienerinit.update(
-            step_size_wienerinit=step_size_wienerinit,
-            powerspectrum_wienerinit=powerspectrum_wienerinit,
-            niter_wienerinit=niter_wienerinit,
-        )
-    return kwargs_wienerinit
 
 
 def add_arguments_create_dataset(parser):
@@ -481,11 +472,11 @@ def add_arguments_wienerinit(parser):
         )
     )
     parser.add_argument(
-        "--niter-wienerinit", type=int,
+        "--niter-wiener", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of iterations for Wiener initialization. "
-            f"Default = {NITER_WIENERINIT}"
+            f"Default = {NITER_WIENER}"
         )
     )
 

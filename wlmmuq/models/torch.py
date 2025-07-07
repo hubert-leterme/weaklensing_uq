@@ -13,7 +13,7 @@ METRIC_DICT = {
     'mae': dinv.metric.MAE()
 }
 
-NITER_WIENERINIT = 12 # For DeepMass
+NITER_WIENER = 12 # For DeepMass
 MULTFACT_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
 
 # Default parameters for DRUNet
@@ -461,7 +461,7 @@ class NonGaussianSupLoss(dinv.loss.SupLoss):
     """
     def __init__(
             self, powerspectrum_wiener: torch.Tensor, sigma_wiener: float=None,
-            niter_wiener: int=NITER_WIENERINIT,
+            niter_wiener: int=NITER_WIENER,
             multfact_step_size_wiener: float=MULTFACT_STEP_SIZE, **kwargs
     ):
         super().__init__(**kwargs)
@@ -525,7 +525,7 @@ class IterativeWiener(nn.Module):
     def __init__(
             self, step_size: float,
             powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor=None, niter: int=NITER_WIENERINIT
+            mask:torch.Tensor=None, niter: int=NITER_WIENER
     ):
         super().__init__()
         data_fidelity = iterativemm.Mahalanobis(sigma=std_noise)
