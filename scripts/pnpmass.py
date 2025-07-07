@@ -89,6 +89,8 @@ def main(
 
         # Instantiate the PnP model
         if wiener_init:
+            if wiener is None:
+                raise ValueError("The path to the power spectrum must be provided.")
             init_estimate = wiener
         else:
             init_estimate = None
@@ -97,7 +99,8 @@ def main(
             init_estimate=init_estimate
         )
         pnpmass = pnpmass.to(device)
-        wiener = wiener.to(device)
+        if wiener is not None:
+            wiener = wiener.to(device)
         physics = physics.to(device)
 
         # Run PnPMass for each batch
@@ -164,11 +167,14 @@ def main(
         if save_tensors:
             out_dict.update({
                 "kappa_true": kappa_true.cpu(),
-                "kappa_wiener": kappa_wiener.cpu(),
                 "kappa_pnpmass": kappa_pnpmass.cpu(),
                 "var_pnpmass": var_pnpmass.cpu(),
                 "res_pnpmass": res_pnpmass.cpu(),
             })
+            if wiener is not None:
+                out_dict.update({
+                    "kappa_wiener": kappa_wiener.cpu(),
+                })
         if cqr is not None:
             out_dict.update({
                 "cqr_time": cqr_time,

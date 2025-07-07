@@ -70,6 +70,8 @@ def main(
 
     # Instantiate the PnP model
     if wiener_init:
+        if wiener is None:
+            raise ValueError("The path to the power spectrum must be provided.")
         init_estimate = wiener
     else:
         init_estimate = None
@@ -78,11 +80,12 @@ def main(
         init_estimate=init_estimate
     )
     pnpmass = pnpmass.to(device)
-    wiener = wiener.to(device)
+    if wiener is not None:
+        wiener = wiener.to(device)
     physics = physics.to(device)
 
     # Run PnPMass for each batch
-    kappa_true, kappa_wiener, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_wiener_pnpmass_batch(
+    kappa_true, _, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_wiener_pnpmass_batch(
         wiener, pnpmass, physics, calib_dataloader, step_size, niter,
         confidence_uq=confidence_uq,
         device=device, verbose=verbose,

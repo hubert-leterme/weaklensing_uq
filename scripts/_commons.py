@@ -1,6 +1,7 @@
 import os
 import random
 import argparse
+import warnings
 import tqdm
 import numpy as np
 import torch
@@ -236,6 +237,12 @@ def get_pnpmass_step_size(
 
 def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
 
+    if path_to_ps is None:
+        warnings.warn(
+            "Unknown power spectrum; the Wiener estimate "
+            "will not be computed."
+        )
+        return None
     powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
         path_to_ps, std_noise, mask
     )
@@ -285,7 +292,10 @@ def run_wiener_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
+            if wiener is not None:
+                kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
+            else:
+                kappa_wiener = None
             out, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
@@ -295,13 +305,17 @@ def run_wiener_pnpmass_batch(
             else:
                 kappa_pnpmass, var_pnpmass = out
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
+            if wiener is not None:
+                listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if wiener is not None:
+        kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    else:
+        kappa_wiener = None
     kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
