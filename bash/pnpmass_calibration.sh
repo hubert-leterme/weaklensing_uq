@@ -21,12 +21,12 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
-  | sed 's/-e [^ ]\+//g' \
   | sed 's/-t0 [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
   | sed 's/-b [^ ]\+//g' \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-tau /--step-size /g' \
+  | sed 's/-e /--epoch /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-uq //g' \
   | sed 's/--path-to-ps [^ ]\+//g' \
