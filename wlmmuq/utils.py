@@ -815,8 +815,8 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, kappa_true, kappa_pred, var_pred, res_pred,
-            extent, boundaries, mask=None, imgsize=None,
+            self, kappa_true=None, kappa_pred=None, var_pred=None, res_pred=None,
+            extent=None, boundaries=None, mask=None, imgsize=None,
             vmin=None, vmax=None, vmax_sqdiff=None, vmax_bounds=None,
             plot_colorbar=False,
     ):
@@ -845,7 +845,7 @@ class KappamapVisualizer:
         return lowerbound, upperbound
 
 
-    def _skyshow_kappamap(self, kappa, **kwargs):
+    def skyshow_kappamap(self, kappa, **kwargs):
 
         if torch.is_tensor(kappa):
             kappa = kappa.cpu().numpy()
@@ -863,10 +863,10 @@ class KappamapVisualizer:
 
 
     def skyshow_truth(self, **kwargs):
-        return self._skyshow_kappamap(self.kappa_true, **kwargs)
+        return self.skyshow_kappamap(self.kappa_true, **kwargs)
 
     def skyshow_pointestimate(self, **kwargs):
-        return self._skyshow_kappamap(self.kappa_pred, **kwargs)
+        return self.skyshow_kappamap(self.kappa_pred, **kwargs)
 
 
     def skyshow_variance(self, **kwargs):
