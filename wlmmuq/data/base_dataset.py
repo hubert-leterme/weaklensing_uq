@@ -463,6 +463,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
 
     def _postprocess(self, out_dict, idx):
+        # TODO: use physics = iterativemm.MassMapping(...) 
         out_dict = super()._postprocess(out_dict, idx)
 
         # Generate noisy shear maps

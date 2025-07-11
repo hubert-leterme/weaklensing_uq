@@ -28,8 +28,9 @@ NDECAYS = 4 # Number of decays for the learning rate scheduler
 def main(
         path_to_augmented_dataset,
         cosmos_include_faint=False,
-        backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
-        wiener_init=False, nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
+        backend=None, arch=None, denoiser=False,
+        wiener_init=False, path_to_ps=None,
+        nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
         niter_wiener=NITER_WIENER,
         multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
         nongaussian=False, sigma_wiener=None,
@@ -59,28 +60,40 @@ def main(
 
     # Compute the power spectrum for Wiener initialization
     if wiener_init or nongaussian:
-        powerspectrum = _commons.get_powerspectrum_from_dataset(
-            path_to_augmented_dataset, nimgs=nimgs_ps,
-            batch_size=batch_size_ps, output_shape=imgsize,
-            num_workers=num_workers, device=device, verbose=verbose
-        )
+        # TODO: consisteny and redundancies
+        if path_to_ps is None:
+            powerspectrum = _commons.get_powerspectrum_from_dataset(
+                path_to_augmented_dataset, nimgs=nimgs_ps,
+                batch_size=batch_size_ps, output_shape=imgsize,
+                num_workers=num_workers, device=device, verbose=verbose
+            )
+        else:
+            powerspectrum = torch.load(path_to_ps)
     else:
         powerspectrum = None
 
-    if not denoiser or use_stdnoise_mask:
+    if denoiser:
+        dataset_class = wlds.HDF5DatasetDenoiser
+        physics = dinv.physics.LinearPhysics()
+
+    else:
+        # Get noise srtandard deviation and mask
         std_noise, mask = _commons.get_stdnoise_mask(
             imgsize, cosmos_include_faint=cosmos_include_faint,
             convert_to_torch_tensor=True, inpainting=True,
             verbose=verbose
         )
+        # Update arguments for data loading
         kwargs.update(std_noise=std_noise, mask=mask)
 
-        if wiener_init:
-            assert not denoiser
+        dataset_class = wlds.HDF5DatasetMassMapping
+        physics = wlnn.deepinv.iterativemm.MassMapping(
+            sigma=std_noise, mask=mask
+        )
 
-            # Compute step size
+        if wiener_init:
             step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
-                std_noise=std_noise, mask=mask
+                std_noise=std_noise, physics=physics
             )
             if verbose:
                 print(f"Wiener initialization with step size {step_size:.1e}")
@@ -117,11 +130,6 @@ def main(
             kwargs_model.update(
                 meancentering=False, onlypositive=True
             )
-
-    if denoiser:
-        dataset_class = wlds.HDF5DatasetDenoiser
-    else:
-        dataset_class = wlds.HDF5DatasetMassMapping
 
     if verbose:
         print("Initialize batch generators for training and validation")
@@ -172,14 +180,6 @@ def main(
         loss_fun = wlnn.torch.Order2SupLoss(
             order1_model=order1_model, metric=metric
         )
-    elif nongaussian:
-        loss_fun = wlnn.torch.NonGaussianSupLoss(
-            powerspectrum_wiener=powerspectrum,
-            sigma_wiener=sigma_wiener, niter_wiener=niter_wiener,
-            multfact_step_size_wiener=multfact_step_size_wienerinit,
-            metric=metric
-        )
-        # TODO: non-Gaussian loss function for order-2 networks
     else:
         loss_fun = dinv.loss.SupLoss(metric=metric)
 
@@ -199,6 +199,13 @@ def main(
 
     loss_fun.to(device)
     kwargs_trainer = {}
+    if nongaussian:
+        assert denoiser # Only for training a denoiser
+        std_noise_wiener = sigma_wiener * torch.ones((imgsize, imgsize))
+        wiener = _commons.get_wiener(
+            path_to_ps, std_noise_wiener, physics=physics, verbose=verbose
+        ).to(device)
+        kwargs_trainer.update(preproc=wiener)
     if resume:
         ckpt_pretrained = os.path.join(
             checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
@@ -212,7 +219,7 @@ def main(
         save_path=checkpoint_dir,
         verbose=verbose,
         scale_as_input=scale_as_input,
-        physics=None,
+        physics=physics,
         online_measurements=False,
         epochs=nepochs,
         scheduler=scheduler,
@@ -262,13 +269,7 @@ if __name__ == "__main__":
             "by a white Gaussian noise."
         )
     )
-    parser.add_argument(
-        "--wiener-init", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use Wiener initialization, for DeepMass."
-        )
-    )
+    _commons.add_arguments_wienerinit(parser)
     parser.add_argument(
         "--nimgs-ps", type=int,
         default=argparse.SUPPRESS,
@@ -283,14 +284,6 @@ if __name__ == "__main__":
         help=(
             "Batch size used to compute the power spectrum for Wiener initialization. "
             f"Default = {BATCH_SIZE_PS}"
-        )
-    )
-    parser.add_argument(
-        "--niter-wiener", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for the Wiener initialization. "
-            f"Default = {NITER_WIENER}"
         )
     )
     parser.add_argument(

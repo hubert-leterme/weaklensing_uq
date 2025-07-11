@@ -222,20 +222,7 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
     return data_fidelity, prior, prior_uq, rmse, physics
 
 
-def get_pnpmass_step_size(
-        std_noise, mask, step_size=None, multfact_step_size=MULTFACT_STEP_SIZE
-):
-    if step_size is None:
-        upperbound_step_size = wlutils.get_sup_step_size(
-            std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
-            mask=mask
-        )
-        step_size = multfact_step_size * upperbound_step_size
-
-    return step_size
-
-
-def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
+def get_wiener(path_to_ps, std_noise, physics=None, niter=NITER_WIENER, verbose=False):
 
     if path_to_ps is None:
         warnings.warn(
@@ -244,7 +231,7 @@ def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
         )
         return None
     powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
-        path_to_ps, std_noise, mask
+        path_to_ps, std_noise, physics=physics, verbose=verbose
     )
     data_fidelity = wlpnp.Mahalanobis(sigma=std_noise)
     prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
@@ -257,12 +244,29 @@ def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
     return out
 
 
-def get_pnpmass(
-        std_noise, mask, denoiser, denoiser_uq, niter, step_size, init_estimate=None
+def get_pnpmass_wiener(
+        std_noise, mask, denoiser, denoiser_uq, step_size,
+        path_to_ps, niter=NITER_PNPMASS, niter_wiener=NITER_WIENER,
+        multfact_step_size=MULTFACT_STEP_SIZE, wiener_init=False
 ):
     data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
         std_noise, mask, denoiser, denoiser_uq
     )
+    if step_size is None:
+        upperbound_step_size = wlutils.get_sup_step_size(
+            std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
+            physics=physics,
+        )
+        step_size = multfact_step_size * upperbound_step_size
+    wiener = get_wiener(
+        path_to_ps, std_noise, physics, niter=niter_wiener
+    )
+    if wiener_init:
+        if wiener is None:
+            raise ValueError("The path to the power spectrum must be provided.")
+        init_estimate = wiener
+    else:
+        init_estimate = None
     pnpmass = wlpnp.optim_builder(
         iteration="PGD", prior=prior, prior_uq=prior_uq,
         data_fidelity=data_fidelity,
@@ -271,7 +275,7 @@ def get_pnpmass(
         params_algo={"stepsize": step_size, "g_param": step_size},
         init_estimate=init_estimate,
     )
-    return pnpmass, physics
+    return pnpmass, wiener, physics, step_size
 
 
 def run_wiener_pnpmass_batch(
@@ -326,14 +330,14 @@ def run_wiener_pnpmass_batch(
 
 
 def get_powerspectrum_step_size_wienerinit(
-        path_to_ps, std_noise, mask, multfact_step_size=MULTFACT_STEP_SIZE,
-        verbose=False
+        path_to_ps, std_noise, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE, verbose=False
 ):
     if verbose:
         print("Get Wiener initialization parameters")
     powerspectrum = torch.load(path_to_ps)
     step_size = multfact_step_size * wlutils.get_sup_step_size(
-        std_noise=std_noise, mask=mask
+        std_noise=std_noise, physics=physics
     )
     return powerspectrum, step_size
 

@@ -55,29 +55,16 @@ def main(
         verbose=verbose, **kwargs
     )
 
-    # Get step size
-    step_size = _commons.get_pnpmass_step_size(
-        std_noise, mask, step_size=step_size
-    )
-
-    # Get iterative Wiener filtering (may be used for initialization)
-    wiener = _commons.get_wiener(
-        path_to_ps, std_noise, mask, niter=niter_wiener
-    )
-
     # Initialize iterator
     calib_dataloader = iter(calib_dataset)
 
     # Instantiate the PnP model
-    if wiener_init:
-        if wiener is None:
-            raise ValueError("The path to the power spectrum must be provided.")
-        init_estimate = wiener
-    else:
-        init_estimate = None
-    pnpmass, physics = _commons.get_pnpmass(
-        std_noise, mask, denoiser, denoiser_uq, niter, step_size=step_size,
-        init_estimate=init_estimate
+    pnpmass, wiener, physics, step_size = _commons.get_pnpmass_wiener(
+        std_noise, mask, denoiser, denoiser_uq,
+        step_size=step_size,
+        path_to_ps=path_to_ps,
+        niter=niter,
+        wiener_init=wiener_init,
     )
     pnpmass = pnpmass.to(device)
     if wiener is not None:

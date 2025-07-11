@@ -19,11 +19,13 @@ from ... import utils
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=True, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=True,
+            preproc: dinv.optim.BaseOptim=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
         self.pbar_logs = pbar_logs
+        self.preproc = preproc
 
         self.current_iterators = None
         self.total_training_time = 0
@@ -357,7 +359,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Optional argument `callbacks`
+        - Optional argument `callbacks`
+        - Optional pre-processing
 
         ************************************************************
 
@@ -494,6 +497,12 @@ class Trainer(dinv.Trainer):
 
         for g in G_perm:  # for each dataloader
             x, y, physics_cur = self.get_samples(self.current_iterators, g)
+
+            # If required, compute residuals for both the input and the ground truth
+            if self.preproc is not None:
+                x_preproc = self.preproc(y, self.physics[g])
+                x = x - x_preproc
+                y = y - self.physics[g].A(x_preproc)
 
             # Compute loss and perform backprop
             x_net, logs = self.compute_loss(

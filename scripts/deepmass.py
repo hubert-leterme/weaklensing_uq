@@ -2,7 +2,9 @@ import argparse
 import time
 import tqdm
 import torch
+
 import wlmmuq.utils as wlutils
+import wlmmuq.models.deepinv.iterativemm as wlmm
 
 from wlmmuq.data import NUM_WORKERS
 
@@ -41,10 +43,10 @@ def main(
     )
 
     # Load arguments for Wiener initialization
-    powerspectrum, step_size = \
-        _commons.get_powerspectrum_step_size_wienerinit(
-            path_to_ps, std_noise, mask
-        )
+    physics = wlmm.MassMapping(sigma=std_noise, mask=mask)
+    powerspectrum, step_size = _commons.get_powerspectrum_step_size_wienerinit(
+        path_to_ps, std_noise, physics
+    )
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
         std_noise=std_noise, mask=mask
