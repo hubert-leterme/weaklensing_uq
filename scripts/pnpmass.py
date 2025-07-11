@@ -62,7 +62,7 @@ def main(
 
     # Get iterative Wiener filtering (may be used for initialization)
     wiener = _commons.get_wiener(
-        path_to_ps, std_noise, niter=niter_wiener
+        path_to_ps, std_noise, mask, niter=niter_wiener
     )
 
     # Load CQR, if available
