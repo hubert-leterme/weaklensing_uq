@@ -12,10 +12,9 @@ from wlmmuq.models.torch import NITER_WIENER
 import _commons
 
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str, path_to_output: str,
-        path_to_cqr: str=None,
-        arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=None,
+        path_to_test_dataset: str, model_dir: str,
+        output_filename: str, path_to_cqr: str=None,
+        arch: str=None, load_model_uq: bool=False,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
@@ -50,10 +49,8 @@ def main(
 
     # Load trained denoiser
     denoiser, denoiser_uq = _commons.load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
-        load_model_uq=load_model_uq,
-        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        verbose=verbose, **kwargs
+        arch, imgsize, checkpoint_dir=model_dir,
+        load_model_uq=load_model_uq, verbose=verbose, **kwargs
     )
 
     # Get step size
@@ -65,7 +62,7 @@ def main(
 
     # Get iterative Wiener filtering (may be used for initialization)
     wiener = _commons.get_wiener(
-        path_to_ps, std_noise, mask, niter=niter_wiener
+        path_to_ps, std_noise, niter=niter_wiener
     )
 
     # Load CQR, if available
@@ -186,12 +183,11 @@ def main(
                 out_dict.update({
                     "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
                 })
-        path_to_output_completed = (
-            f"{path_to_output}_step-size_{tau:.3f}_{confidence_uq}-sigma_{now}.pt"
+        _commons.save_results(
+            out_dict, model_dir, "pnpmass",
+            f"{output_filename}_step-size_{tau:.3f}_{confidence_uq}-sigma_{now}.pt",
+            verbose=verbose
         )
-        if verbose:
-            print(f"Save results to {path_to_output_completed}")
-        torch.save(out_dict, path_to_output_completed)
 
 
 if __name__ == "__main__":
@@ -200,14 +196,7 @@ if __name__ == "__main__":
         "path_to_test_dataset", type=str,
         help="Path to the test set (HDF5 file)"
     )
-    parser.add_argument(
-        "checkpoint_dir", type=str,
-        help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
-    )
-    parser.add_argument(
-        "path_to_output", type=str,
-        help="Path to the output file (without extension)"
-    )
+    _commons.add_arguments_model_dir(parser)
     parser.add_argument(
         "-cqr", "--path-to-cqr", type=str, default=None,
         help=(

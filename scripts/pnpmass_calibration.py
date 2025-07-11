@@ -1,6 +1,5 @@
 import argparse
 import time
-import torch
 
 import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
@@ -11,9 +10,9 @@ from wlmmuq.models.torch import NITER_WIENER
 import _commons
 
 def main(
-        path_to_calib_dataset: str, checkpoint_dir: str, path_to_output: str,
-        arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
+        path_to_calib_dataset: str, model_dir: str,
+        output_filename: str,
+        arch: str=None, load_model_uq: bool=False,
         step_size: float=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
@@ -49,10 +48,8 @@ def main(
 
     # Load trained denoiser
     denoiser, denoiser_uq = _commons.load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
-        load_model_uq=load_model_uq,
-        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        verbose=verbose, **kwargs
+        arch, imgsize, checkpoint_dir=model_dir,
+        load_model_uq=load_model_uq, verbose=verbose, **kwargs
     )
 
     # Get step size
@@ -110,24 +107,20 @@ def main(
         "imgsize": imgsize,
         "confidence_uq": confidence_uq,
     }
-    path_to_output_completed = f"{path_to_output}_{confidence_uq}-sigma_{now}.pt"
-    torch.save(out_dict, path_to_output_completed)
+    _commons.save_results(
+        out_dict, model_dir, "pnpmass",
+        f"{output_filename}_{confidence_uq}-sigma_{now}.pt",
+        verbose=verbose
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "path_to_calib_dataset", type=str,
-        help="Path to the test set (HDF5 file)"
+        help="Path to the calibration set (HDF5 file)"
     )
-    parser.add_argument(
-        "checkpoint_dir", type=str,
-        help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
-    )
-    parser.add_argument(
-        "path_to_output", type=str,
-        help="Path to the output file (without extension)"
-    )
+    _commons.add_arguments_model_dir(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_checkpoint(parser)
     parser.add_argument(

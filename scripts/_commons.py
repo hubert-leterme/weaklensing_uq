@@ -143,7 +143,7 @@ def get_powerspectrum_from_dataset(
 
 
 def load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
+        arch, imgsize, checkpoint_dir=None, timestamp=None, epoch=None,
         load_model_uq=False, timestamp_uq=None, epoch_uq=None,
         verbose=False, **kwargs
 ):
@@ -154,40 +154,46 @@ def load_trained_model(
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
 
-    if timestamp is None:
-        path_to_checkpoint_pe = checkpoint_dir
-    else:
-        path_to_checkpoint_pe = os.path.join(
-            checkpoint_dir, "pe", timestamp, f"ckp_{epoch}.pth.tar"
-        )
     model = cnn_class(
         map_size=imgsize, meancentering=True, onlypositive=False, **kwargs_model
     )
-    checkpoint = torch.load(path_to_checkpoint_pe)
-    model.load_state_dict(checkpoint['state_dict'])
     model.eval()
+    if timestamp is not None:
+        _load_model_checkpoint(
+            model, checkpoint_dir, "pe", timestamp, epoch, verbose
+        )
     if verbose:
         model.summary()
 
     if load_model_uq:
-        if epoch_uq is None:
-            epoch_uq = epoch
-        path_to_checkpoint_uq = os.path.join(
-            checkpoint_dir, "var", timestamp_uq, f"ckp_{epoch_uq}.pth.tar"
-        )
         model_uq = cnn_class(
             map_size=imgsize, meancentering=False, onlypositive=True, **kwargs_model
         )
-        checkpoint_uq = torch.load(path_to_checkpoint_uq)
-        model_uq.load_state_dict(checkpoint_uq['state_dict'])
         model_uq.eval()
+        if timestamp_uq is not None:
+            if epoch_uq is None:
+                epoch_uq = epoch
+            _load_model_checkpoint(
+                model_uq, checkpoint_dir, "var", timestamp_uq, epoch_uq, verbose
+            )
         if verbose:
             model_uq.summary()
-
     else:
         model_uq = None
 
     return model, model_uq
+
+
+def _load_model_checkpoint(
+        model, checkpoint_dir, model_type, timestamp, epoch, verbose
+):
+    path_to_checkpoint_pe = os.path.join(
+        checkpoint_dir, model_type, timestamp, f"ckp_{epoch}.pth.tar"
+    )
+    if verbose:
+        print(f"Load checkpoint from {path_to_checkpoint_pe}")
+    checkpoint = torch.load(path_to_checkpoint_pe)
+    model.load_state_dict(checkpoint['state_dict'])
 
 
 def get_dataloader_massmapping(
@@ -338,6 +344,18 @@ def get_powerspectrum_step_size_wienerinit(
     return powerspectrum, step_size
 
 
+def save_results(result, model_dir, method, output_filename, verbose=False):
+
+    output_dir = os.path.join(
+        model_dir, f"{method}_results"
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    path_to_output = os.path.join(output_dir, output_filename)
+    if verbose:
+        print(f"Save results to {path_to_output}")
+    torch.save(result, path_to_output)
+
+
 def add_arguments_create_dataset(parser):
 
     parser.add_argument(
@@ -368,6 +386,20 @@ def add_arguments_create_dataset(parser):
             "Batch size, to avoid memory overload. "
             "Default = 50"
         )
+    )
+
+def add_arguments_model_dir(parser):
+
+    parser.add_argument(
+        "model_dir", type=str,
+        help=(
+            "Root directory containing the checkpoints ('./pe' and './var'), and "
+            "where the results will be saved."
+        )
+    )
+    parser.add_argument(
+        "output_filename", type=str,
+        help="Name of the output file (without extension)"
     )
 
 def add_arguments_model(parser):

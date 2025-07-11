@@ -9,13 +9,13 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str, path_to_ps: str, path_to_output: str,
-        arch: str=None, timestamp: str=None, epoch: int=None,
-        step_size: float=None,
-        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
+        path_to_test_dataset: str, path_to_ps: str, model_dir: str,
+        output_filename: str,
+        arch: str=None, step_size: float=None,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
-        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE, num_workers: int=NUM_WORKERS,
+        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
+        num_workers: int=NUM_WORKERS,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -56,7 +56,7 @@ def main(
 
     # Load trained model
     deepmass, _ = _commons.load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
+        arch, imgsize, checkpoint_dir=model_dir,
         verbose=verbose, **kwargs
     )
     deepmass = deepmass.to(device)
@@ -85,8 +85,10 @@ def main(
         "step_size_wienerinit": step_size,
         "powerspectrum_wienerinit": powerspectrum
     }
-    path_to_output_completed = f"{path_to_output}_{now}.pt"
-    torch.save(out_dict, path_to_output_completed)
+    _commons.save_results(
+        out_dict, model_dir, "deepmass", f"{output_filename}_{now}.pt",
+        verbose=verbose
+    )
 
 
 if __name__ == "__main__":
@@ -96,17 +98,10 @@ if __name__ == "__main__":
         help="Path to the test set (HDF5 file)"
     )
     parser.add_argument(
-        "checkpoint_dir", type=str,
-        help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
-    )
-    parser.add_argument(
         "path_to_ps", type=str,
         help="Path to the power spectrum (for Wiener initialization)"
     )
-    parser.add_argument(
-        "path_to_output", type=str,
-        help="Path to the output file (without extension)"
-    )
+    _commons.add_arguments_model_dir(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_checkpoint(parser)
     parser.add_argument(
