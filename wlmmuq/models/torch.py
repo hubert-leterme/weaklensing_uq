@@ -80,7 +80,7 @@ class ModelMixin:
 
 
     def _preprocess_kwargs(self, **kwargs):
-        raise NotImplementedError
+        return kwargs # By default, do nothing
 
 
     def forward(self, inp, *args, **kwargs):
