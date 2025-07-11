@@ -6,7 +6,6 @@ from scipy import ndimage, signal, stats, sparse, linalg
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
-import deepinv as dinv
 
 #from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
@@ -974,7 +973,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         plt.show()
 
 
-def get_sup_step_size(std_noise, its=20, physics=None):
+def get_sup_step_size(std_noise, mask=None, its=20):
     """
     Get the upper bound for the step size in PGD algorithms where the data
     fidelity term is the negative log-likelihood. This function uses the power
@@ -982,16 +981,15 @@ def get_sup_step_size(std_noise, its=20, physics=None):
     """
     if torch.is_tensor(std_noise):
         std_noise = std_noise.cpu().numpy()
+    if mask is not None and torch.is_tensor(mask):
+        mask = mask.cpu().numpy()
     nx, ny = std_noise.shape
-
-    if physics is None:
-        physics = dinv.physics.LinearPhysics() # Identity
 
     def matvec(kappa_flattened):
         kappa = kappa_flattened.reshape(nx, ny)
-        gamma = physics.A(kappa)
+        gamma = get_shear_from_convergence(kappa, mask=mask, return_complex=True)
         gamma /= std_noise**2
-        out = physics.A_adjoint(gamma)
+        out = get_convergence_from_shear(gamma, mask=mask, return_complex=True)
         return out.flatten()
 
     linearop = sparse.linalg.LinearOperator(
