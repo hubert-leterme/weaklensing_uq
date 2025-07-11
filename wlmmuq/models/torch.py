@@ -9,6 +9,8 @@ from .sunet import sunet
 from .deepinv import iterativemm
 from .. import utils
 
+from .. import LEARNLETS_PRETRAINED_WEIGHTS_DIR
+
 METRIC_DICT = {
     'mse': dinv.metric.MSE(),
     'mae': dinv.metric.MAE()
