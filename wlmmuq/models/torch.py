@@ -80,7 +80,7 @@ class ModelMixin:
 
 
     def _preprocess_kwargs(self, **kwargs):
-        return kwargs # By default, do nothing
+        raise NotImplementedError
 
 
     def forward(self, inp, *args, **kwargs):
@@ -235,14 +235,31 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
 class Learnlet(ModelMixin, learnlet.Learnlet):
 
     def __init__(
-            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+            self, map_size=None, in_channels=1, out_channels=1,
+            pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
     ):
         self.map_size = map_size
         self.in_channels = in_channels
         self.out_channels = out_channels
         if in_channels != 1 or out_channels != 1:
             raise NotImplementedError
-        super().__init__(**kwargs)
+        super().__init__(
+            map_size=map_size,
+            in_channels=in_channels, out_channels=out_channels,
+            pretrained_weights_dir=pretrained_weights_dir, **kwargs
+        )
+
+    def _preprocess_kwargs(
+            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+    ):
+        # map_size, in_channels and out_channels discarded
+        return kwargs
+
+    def _get_fake_input_data(self):
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
 
 
 #=================================================================================
