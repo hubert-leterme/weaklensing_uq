@@ -347,7 +347,7 @@ def get_powerspectrum_step_size_wienerinit(
 def save_results(result, model_dir, method, output_filename, verbose=False):
 
     output_dir = os.path.join(
-        model_dir, f"{method}_results"
+        model_dir, f"results_{method}"
     )
     os.makedirs(output_dir, exist_ok=True)
     path_to_output = os.path.join(output_dir, output_filename)
