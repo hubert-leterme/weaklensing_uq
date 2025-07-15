@@ -326,6 +326,7 @@ def run_wiener_pnpmass_batch(
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     if wiener is not None:
         kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+        mask = mask.to(device)
         rmse_wiener = wlutils.rmse(kappa_wiener, kappa_true, mask=mask)
     else:
         kappa_wiener = None
