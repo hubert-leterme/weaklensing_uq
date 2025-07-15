@@ -26,6 +26,7 @@ NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augm
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
+NIMGS_SAVE = 16
 KEYS_MODEL = ['model_size', 'args_wienerinit']
 
 NITER_PNPMASS = 8
@@ -719,6 +720,14 @@ def add_arguments_output(parser, output_filename):
             "the kappa map estimate, the variance, and the residuals "
             "will be saved in the output file. WARNING: this will increase "
             "the size of the output file significantly!"
+        )
+    )
+    parser.add_argument(
+        "--nimgs-save", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of images to save. "
+            f"Default = {NIMGS_SAVE}"
         )
     )
 

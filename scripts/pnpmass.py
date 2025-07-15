@@ -33,7 +33,8 @@ def main(
         nongaussian: bool=False, switch_mode_for_uq: bool=False,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
+        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -181,10 +182,10 @@ def main(
         }
         if save_tensors:
             out_dict.update({
-                "kappa_true": kappa_true.cpu(),
-                "kappa_pnpmass": kappa_pnpmass.cpu(),
-                "var_pnpmass": var_pnpmass.cpu(),
-                "res_pnpmass": res_pnpmass.cpu(),
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+                "kappa_pnpmass": kappa_pnpmass[:nimgs_save].cpu(),
+                "var_pnpmass": var_pnpmass[:nimgs_save].cpu(),
+                "res_pnpmass": res_pnpmass[:nimgs_save].cpu(),
             })
             if wiener is not None:
                 out_dict.update({
@@ -199,7 +200,7 @@ def main(
             })
             if save_tensors:
                 out_dict.update({
-                    "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
+                    "res_pnpmass_cqr": res_pnpmass_cqr[:nimgs_save].cpu(),
                 })
         _commons.save_output_pnpmass(
             out_dict, path_to_output, tau, now,
