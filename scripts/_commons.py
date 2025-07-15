@@ -241,7 +241,7 @@ def get_pnpmass_step_size(
     return step_size
 
 
-def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
+def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER, verbose=False):
 
     if path_to_ps is None:
         warnings.warn(
@@ -249,6 +249,8 @@ def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER):
             "will not be computed."
         )
         return None
+    if verbose:
+        print("Get optimizer for iterative Wiener filtering")
     powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
         path_to_ps, std_noise, mask
     )
