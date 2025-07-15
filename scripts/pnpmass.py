@@ -101,8 +101,9 @@ def main(
         physics = physics.to(device)
 
         # Run PnPMass for each batch
-        kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
-                _commons.run_wiener_pnpmass_batch(
+        gamma_noisy, kappa_true, kappa_wiener, \
+                kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
+                    _commons.run_wiener_pnpmass_batch(
             wiener, pnpmass, physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
@@ -163,6 +164,7 @@ def main(
         }
         if save_tensors:
             out_dict.update({
+                "gamma_noisy": gamma_noisy.cpu(),
                 "kappa_true": kappa_true.cpu(),
                 "kappa_pnpmass": kappa_pnpmass.cpu(),
                 "var_pnpmass": var_pnpmass.cpu(),

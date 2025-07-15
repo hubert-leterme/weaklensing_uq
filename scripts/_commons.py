@@ -286,6 +286,7 @@ def run_wiener_pnpmass_batch(
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         device="cpu", verbose=False
 ):
+    listof_gamma_noisy = []
     listof_kappa_true = []
     listof_kappa_wiener = []
     listof_kappa_pnpmass = []
@@ -310,6 +311,7 @@ def run_wiener_pnpmass_batch(
                 var_pnpmass = torch.zeros(kappa_true.shape, device=device)
             else:
                 kappa_pnpmass, var_pnpmass = out
+            listof_gamma_noisy.append(gamma_noisy) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
             if wiener is not None:
                 listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
@@ -317,6 +319,7 @@ def run_wiener_pnpmass_batch(
             listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
 
+    gamma_noisy = torch.cat(listof_gamma_noisy, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     if wiener is not None:
         kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
@@ -328,7 +331,8 @@ def run_wiener_pnpmass_batch(
 
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
-    return kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
+    return gamma_noisy, kappa_true, kappa_wiener, \
+        kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
 
 
 def get_powerspectrum_step_size_wienerinit(
