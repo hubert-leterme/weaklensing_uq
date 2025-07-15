@@ -165,6 +165,10 @@ def main(
             "err_pnpmass": err_pnpmass.cpu(),
             "predinterv_pnpmass": predinterv_pnpmass.cpu(),
         }
+        if wiener is not None:
+            out_dict.update({
+                "rmse_wiener": rmse_wiener.cpu(),
+            })
         if save_tensors:
             out_dict.update({
                 "gamma_noisy": gamma_noisy[:nimgs_save].cpu(),
@@ -176,7 +180,6 @@ def main(
             if wiener is not None:
                 out_dict.update({
                     "kappa_wiener": kappa_wiener.cpu(),
-                    "rmse_wiener": rmse_wiener.cpu(),
                 })
         if cqr is not None:
             out_dict.update({
