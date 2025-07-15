@@ -105,10 +105,10 @@ def main(
 
         # Run PnPMass for each batch
         gamma_noisy, kappa_true, kappa_wiener, \
-                kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
+                kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_wiener, rmse_iter = \
                     _commons.run_wiener_pnpmass_batch(
             wiener, pnpmass, physics, test_dataloader, tau, niter,
-            confidence_uq=confidence_uq,
+            confidence_uq=confidence_uq, mask=mask,
             device=device, verbose=verbose,
         )
 
@@ -176,6 +176,7 @@ def main(
             if wiener is not None:
                 out_dict.update({
                     "kappa_wiener": kappa_wiener.cpu(),
+                    "rmse_wiener": rmse_wiener.cpu(),
                 })
         if cqr is not None:
             out_dict.update({

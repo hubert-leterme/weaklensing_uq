@@ -82,9 +82,10 @@ def main(
     physics = physics.to(device)
 
     # Run PnPMass for each batch
-    _, kappa_true, _, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_wiener_pnpmass_batch(
+    _, kappa_true, _, kappa_pnpmass, _, \
+            res_pnpmass, _, _ = _commons.run_wiener_pnpmass_batch(
         wiener, pnpmass, physics, calib_dataloader, step_size, niter,
-        confidence_uq=confidence_uq,
+        confidence_uq=confidence_uq, mask=mask,
         device=device, verbose=verbose,
     )
 
