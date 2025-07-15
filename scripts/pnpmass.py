@@ -9,6 +9,8 @@ import wlmmuq.utils as wlutils
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
+NIMGS_SAVE = 16
+
 import _commons
 
 def main(
@@ -22,7 +24,8 @@ def main(
         num_workers: int=NUM_WORKERS,
         wiener_init: bool=False, path_to_ps: str=None,
         niter_wiener: int=NITER_WIENER,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
+        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        save_tensors: bool=False, nimgs_save: int=NIMGS_SAVE,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -164,11 +167,11 @@ def main(
         }
         if save_tensors:
             out_dict.update({
-                "gamma_noisy": gamma_noisy.cpu(),
-                "kappa_true": kappa_true.cpu(),
-                "kappa_pnpmass": kappa_pnpmass.cpu(),
-                "var_pnpmass": var_pnpmass.cpu(),
-                "res_pnpmass": res_pnpmass.cpu(),
+                "gamma_noisy": gamma_noisy[:nimgs_save].cpu(),
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+                "kappa_pnpmass": kappa_pnpmass[:nimgs_save].cpu(),
+                "var_pnpmass": var_pnpmass[:nimgs_save].cpu(),
+                "res_pnpmass": res_pnpmass[:nimgs_save].cpu(),
             })
             if wiener is not None:
                 out_dict.update({
@@ -183,7 +186,7 @@ def main(
             })
             if save_tensors:
                 out_dict.update({
-                    "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
+                    "res_pnpmass_cqr": res_pnpmass_cqr[:nimgs_save].cpu(),
                 })
         _commons.save_results(
             out_dict, model_dir, "pnpmass",
@@ -243,6 +246,14 @@ if __name__ == "__main__":
             "the PnPMass estimate, the variance, and the residuals "
             "will be saved in the output file. WARNING: this will increase "
             "the size of the output file significantly!"
+        )
+    )
+    parser.add_argument(
+        "--nimgs-save", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of images to save. "
+            f"Default = {NIMGS_SAVE}"
         )
     )
     _commons.add_arguments_seed_verbose(parser)
