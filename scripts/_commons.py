@@ -143,7 +143,7 @@ def get_powerspectrum_from_dataset(
 
 
 def load_trained_model(
-        arch, imgsize, checkpoint_dir=None, timestamp=None, epoch=None,
+        arch, imgsize, checkpoint_dir=None, timestamp=None, epoch=EPOCH,
         load_model_uq=False, timestamp_uq=None, epoch_uq=None,
         verbose=False, **kwargs
 ):
@@ -185,7 +185,8 @@ def load_trained_model(
 
 
 def _load_model_checkpoint(
-        model, checkpoint_dir, model_type, timestamp, epoch, verbose
+        model, checkpoint_dir, model_type, timestamp,
+        epoch=EPOCH, verbose=False
 ):
     path_to_checkpoint_pe = os.path.join(
         checkpoint_dir, model_type, timestamp, f"ckp_{epoch}.pth.tar"
