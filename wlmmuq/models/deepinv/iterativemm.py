@@ -4,6 +4,7 @@ from torch import nn
 import deepinv as dinv
 
 from ... import utils
+from . import callbacks
 
 #########################################################################
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
@@ -116,12 +117,32 @@ class ProximalWiener(nn.Module):
         self.register_buffer("powerspectrum", powerspectrum)
 
 
-    def forward(self, inp, step_size):
+    def forward(
+            self, inp: torch.Tensor,
+            g_param: float | torch.Tensor
+    ):
+        # Either one scalar parameter for the whole batch, or one specific
+        # parameter for each image
         out = torch.fft.fft2(inp)
-        out /= (1 + step_size / self.powerspectrum)
+        out /= (1 + g_param / self.powerspectrum)
         out = torch.fft.ifft2(out)
 
         return out.real
+
+
+class WienerWhiteNoiseParamsAlgoUpdater(callbacks.BaseCallback):
+
+    def __init__(self, optim: dinv.optim.BaseOptim):
+        self.optim = optim
+
+    def on_get_samples_end(self, physics):
+        # Get white noise standard deviation
+        # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
+        sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
+        for i, step_size in enumerate(
+            self.optim.init_params_algo["stepsize"]
+        ): # Possibly, one step size per iteration
+            self.optim.init_params_algo["g_param"][i] = step_size * sigma**2
 
 
 #########################################################################

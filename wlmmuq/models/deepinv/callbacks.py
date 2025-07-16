@@ -3,6 +3,7 @@ import time
 import cProfile
 import threading
 import torch
+import deepinv as dinv
 
 class BaseCallback:
     def on_train_begin(self):
@@ -20,6 +21,8 @@ class BaseCallback:
     def on_eval_batch_begin(self, batch):
         pass
     def on_eval_batch_end(self, batch):
+        pass
+    def on_get_samples_end(self, physics):
         pass
     def on_forward_end(self):
         pass
@@ -176,6 +179,8 @@ class CallbackList(BaseCallback):
         self._loop_over_callbacks("on_eval_batch_begin", batch)
     def on_eval_batch_end(self, batch):
         self._loop_over_callbacks("on_eval_batch_end", batch)
+    def on_get_samples_end(self, physics):
+        self._loop_over_callbacks("on_get_samples_end", physics)
     def on_forward_end(self):
         self._loop_over_callbacks("on_forward_end")
     def on_loss_end(self, loss):

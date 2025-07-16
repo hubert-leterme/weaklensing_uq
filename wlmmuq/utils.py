@@ -974,15 +974,29 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         plt.show()
 
 
-def get_sup_step_size(std_noise, its=20, physics=None):
+def get_sup_step_size(
+        param_mahalanobis: float | torch.Tensor, its=20, physics=None
+):
     """
     Get the upper bound for the step size in PGD algorithms where the data
-    fidelity term is the negative log-likelihood. This function uses the power
-    iteration method.
+    fidelity term is the MSE using the Mahalanobis norm.
+    This function uses the power iteration method.
+
+    Parameters
+    ----------
+    param_mahalanobis: float or torch.Tensor
+        SPD matrix for the Mahalanobis norm (std_noise**2 for the negative log-likelihood,
+        std_noise for the noise-whitening data fidelity)
+    its: int, optional
+        Number of iterations. Default is 20
+    physics: dinv.physics, optional
+        Physical model (forward and operator and the corresponding adjoint).
+        The noise model is not used for this function. If none is given,
+        then the identity is used.
     """
-    if torch.is_tensor(std_noise):
-        std_noise = std_noise.cpu().numpy()
-    nx, ny = std_noise.shape
+    if torch.is_tensor(param_mahalanobis):
+        param_mahalanobis = param_mahalanobis.cpu().numpy()
+    nx, ny = param_mahalanobis.shape
 
     if physics is None:
         physics = dinv.physics.LinearPhysics() # Identity
@@ -990,7 +1004,7 @@ def get_sup_step_size(std_noise, its=20, physics=None):
     def matvec(kappa_flattened):
         kappa = kappa_flattened.reshape(nx, ny)
         gamma = physics.A(kappa)
-        gamma /= std_noise**2
+        gamma /= param_mahalanobis
         out = physics.A_adjoint(gamma)
         return out.flatten()
 

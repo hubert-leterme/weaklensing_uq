@@ -8,6 +8,7 @@ import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
 import wlmmuq.utils as wlutils
 
+from wlmmuq import PATH_TO_PS
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
@@ -29,12 +30,11 @@ def main(
         path_to_augmented_dataset,
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False,
-        wiener_init=False, path_to_ps=None,
+        wiener_init=False, path_to_ps=PATH_TO_PS,
         nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
         niter_wiener=NITER_WIENER,
         multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
-        nongaussian=False, sigma_wiener=None,
-        order2=False, path_to_pred_dataset=None,
+        nongaussian=False, order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
@@ -49,6 +49,8 @@ def main(
     device = _commons.get_device(verbose=verbose)
     if verbose:
         print(f"Number of workers: {num_workers}")
+
+    callback_list = []
 
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     try:
@@ -74,7 +76,8 @@ def main(
 
     if denoiser:
         dataset_class = wlds.HDF5DatasetDenoiser
-        physics = dinv.physics.LinearPhysics()
+        noise_model = dinv.physics.GaussianNoise(sigma=0) # sigma to be updated
+        physics = dinv.physics.LinearPhysics(noise_model=noise_model)
 
     else:
         # Get noise srtandard deviation and mask
@@ -93,7 +96,8 @@ def main(
 
         if wiener_init:
             step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
-                std_noise=std_noise, physics=physics
+                param_mahalanobis=std_noise**2, # Negative log-likelihood as data fidelity
+                physics=physics
             )
             if verbose:
                 print(f"Wiener initialization with step size {step_size:.1e}")
@@ -199,13 +203,19 @@ def main(
 
     loss_fun.to(device)
     kwargs_trainer = {}
+
     if nongaussian:
         assert denoiser # Only for training a denoiser
-        std_noise_wiener = sigma_wiener * torch.ones((imgsize, imgsize))
         wiener = _commons.get_wiener(
-            path_to_ps, std_noise_wiener, physics=physics, verbose=verbose
+            path_to_ps, physics=physics, white_noise=True, verbose=verbose
         ).to(device)
         kwargs_trainer.update(preproc=wiener)
+        callback_list.append(
+            wlnn.deepinv.iterativemm.WienerWhiteNoiseParamsAlgoUpdater(
+                optim=wiener
+            )
+        )
+
     if resume:
         ckpt_pretrained = os.path.join(
             checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
@@ -231,17 +241,18 @@ def main(
         **kwargs_trainer
     )
 
-    # Define profiling callbacks
+    # Profiling callback
     if cprofiler:
-        cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
-            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
-            cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
+        callback_list.append(
+            wlnn.deepinv.callbacks.CProfilerCallback(
+                trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+                cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
+            )
         )
-    else:
-        cprofiler_callback = None
 
     # Train model
-    trainer.train(callbacks=cprofiler_callback)
+    callbacks = wlnn.deepinv.callbacks.CallbackList(callback_list)
+    trainer.train(callbacks=callbacks)
 
     train_dataset.close()
     val_dataset.close()
@@ -291,14 +302,6 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Train the network on the non-Gaussian part of the convergence maps."
-        )
-    )
-    parser.add_argument(
-        "--sigma-wiener", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Noise standard deviation on which to estimate the Gaussian part of the "
-            "convergence maps. This argument must be provided if `--nongaussian` is used."
         )
     )
     parser.add_argument(

@@ -9,3 +9,4 @@ verbose: true
 
 cosmos_dir: path/to/COSMOS/v1.0
 ktng_dir: path/to/kappaTNG
+path_to_ps: path/to/powerspectrum.pt
