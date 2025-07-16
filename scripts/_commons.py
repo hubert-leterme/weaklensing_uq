@@ -227,13 +227,14 @@ def get_wiener(
         path_to_ps, physics=None, niter=NITER_WIENER,
         white_noise=False, verbose=False
 ):
-
     if path_to_ps is None:
         warnings.warn(
             "Unknown power spectrum; the Wiener estimate "
             "will not be computed."
         )
         return None
+    if verbose:
+        print("Get optimizer for iterative Wiener filtering")
     powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
         path_to_ps, physics=physics, white_noise=white_noise, verbose=verbose
     )

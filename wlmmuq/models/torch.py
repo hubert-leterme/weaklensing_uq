@@ -3,10 +3,13 @@ import torch
 from torch import nn
 import torchinfo
 import deepinv as dinv
+import learnlet
 
 from .sunet import sunet
 from .deepinv import iterativemm
 from .. import utils
+
+from .. import LEARNLETS_PRETRAINED_WEIGHTS_DIR
 
 METRIC_DICT = {
     'mse': dinv.metric.MSE(),
@@ -190,7 +193,6 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         self.map_size = map_size
         self.in_channels = in_channels
         self.out_channels = out_channels
-        # On additional input channel for noise level
         super().__init__(
             map_size=map_size, in_channels=in_channels,
             out_channels=out_channels, **kwargs
@@ -218,6 +220,41 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
             act_mode=act_mode, downsample_mode=downsample_mode,
             pretrained=pretrained
         )
+        return kwargs
+
+    def _get_fake_input_data(self):
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
+
+
+#=================================================================================
+# Learnlet
+#=================================================================================
+
+# Learnlet is inherently noise-aware, no need to inherit from NoiseAwareModelMixin
+class Learnlet(ModelMixin, learnlet.Learnlet):
+
+    def __init__(
+            self, map_size=None, in_channels=1, out_channels=1,
+            pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
+    ):
+        self.map_size = map_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        if in_channels != 1 or out_channels != 1:
+            raise NotImplementedError
+        super().__init__(
+            map_size=map_size,
+            in_channels=in_channels, out_channels=out_channels,
+            pretrained_weights_dir=pretrained_weights_dir, **kwargs
+        )
+
+    def _preprocess_kwargs(
+            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+    ):
+        # map_size, in_channels and out_channels discarded
         return kwargs
 
     def _get_fake_input_data(self):
