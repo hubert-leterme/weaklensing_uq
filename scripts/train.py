@@ -34,7 +34,8 @@ def main(
         nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
         niter_wiener=NITER_WIENER,
         multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
-        nongaussian=False, order2=False, path_to_pred_dataset=None,
+        nongaussian=False, noise_whitening_wiener=False,
+        order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=NEPOCHS, batch_size=BATCH_SIZE,
@@ -206,13 +207,16 @@ def main(
 
     if nongaussian:
         assert denoiser # Only for training a denoiser
+        # The Wiener algorithm converges in one single iteration in this case
+        # (equivalent to applying the proximal mapping)
         wiener = _commons.get_wiener(
-            path_to_ps, physics=physics, white_noise=True, verbose=verbose
+            path_to_ps, physics=physics, white_noise=True,
+            niter=1, verbose=verbose
         ).to(device)
         kwargs_trainer.update(preproc=wiener)
         callback_list.append(
             wlnn.deepinv.iterativemm.WienerWhiteNoiseParamsAlgoUpdater(
-                optim=wiener
+                optim=wiener, noise_whitening=noise_whitening_wiener
             )
         )
 
@@ -302,6 +306,13 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Train the network on the non-Gaussian part of the convergence maps."
+        )
+    )
+    parser.add_argument(
+        "--noise-whitening-wiener", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Compute the Gaussian part using noise-whitening Wiener filtering."
         )
     )
     parser.add_argument(

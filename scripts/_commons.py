@@ -354,11 +354,11 @@ def get_powerspectrum_step_size_wienerinit(
             param_mahalanobis=std_noise**2, # Negative log-likelihood as data fidelity
             physics=physics
         )
+        step_size *= multfact_step_size
     else:
         # The standard MSE is used as data fidelity
         # The parameter `g_param` for the proximal operator must be updated accordingly
-        step_size = 2
-    step_size *= multfact_step_size
+        step_size = 1
 
     return powerspectrum, step_size
 

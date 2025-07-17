@@ -132,17 +132,22 @@ class ProximalWiener(nn.Module):
 
 class WienerWhiteNoiseParamsAlgoUpdater(callbacks.BaseCallback):
 
-    def __init__(self, optim: dinv.optim.BaseOptim):
+    def __init__(self, optim: dinv.optim.BaseOptim, noise_whitening=False):
         self.optim = optim
+        self.noise_whitening = noise_whitening
 
     def on_get_samples_end(self, physics):
         # Get white noise standard deviation
         # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
         sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
+        if not self.noise_whitening:
+            g_param = sigma**2 # Bayesian iterative Wiener filtering
+        else:
+            g_param = sigma
         for i, step_size in enumerate(
             self.optim.init_params_algo["stepsize"]
         ): # Possibly, one step size per iteration
-            self.optim.init_params_algo["g_param"][i] = step_size * sigma**2
+            self.optim.init_params_algo["g_param"][i] = step_size * g_param
 
 
 #########################################################################
