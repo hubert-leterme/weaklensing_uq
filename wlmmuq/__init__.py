@@ -37,6 +37,12 @@ USE_PYCS = CONFIG_DATA.get('use_pycs', False)
 
 COSMOS_DIR = os.path.expanduser(CONFIG_DATA.get('cosmos_dir', None))
 KTNG_DIR = os.path.expanduser(CONFIG_DATA.get('ktng_dir', None))
+PATH_TO_KTNG_TRAINING_SET = os.path.expanduser(
+    CONFIG_DATA.get('path_to_ktng_training_set', None)
+)
+PATH_TO_KTNG_TEST_SET = os.path.expanduser(
+    CONFIG_DATA.get('path_to_ktng_test_set', None)
+)
 LEARNLETS_PRETRAINED_WEIGHTS_DIR = os.path.expanduser(
     CONFIG_DATA.get('learnlets_pretrained_weights_dir', None)
 )
