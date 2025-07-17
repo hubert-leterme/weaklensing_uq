@@ -1,6 +1,6 @@
 
 import h5py
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import torch
 import torchvision.transforms as T
