@@ -1,5 +1,6 @@
 
 import h5py
+import tqdm
 import numpy as np
 import torch
 import torchvision.transforms as T
@@ -56,7 +57,8 @@ def main():
         patches = patches.squeeze(0).permute(1, 0).reshape(-1, patch_size, patch_size)
         return patches
 
-    # ## 3. Load Original Data
+    # ## 3. Load Original Data (in Batches)
+    BATCH_SIZE = 50  # adjust depending on memory constraints
     try:
         with h5py.File(INPUT_FILE_PATH, 'r') as f:
             # Assuming the dataset key is 'maps' as in your previous notebook
@@ -68,8 +70,21 @@ def main():
                 else:
                     available_keys = list(f.keys())
                     raise KeyError(f"'{dataset_key}' and 'kappa' not found in HDF5 file. Available keys: {available_keys}")
-            all_maps = torch.tensor(f[dataset_key][:], dtype=torch.float32)
-        print(f"Loaded {all_maps.shape[0]} maps, each of shape {all_maps.shape[1:]}")
+            
+            dataset = f[dataset_key]
+            num_total_maps = dataset.shape[0]
+            map_shape = dataset.shape[1:]
+            
+            print(f"Found dataset '{dataset_key}' with {num_total_maps} maps, each of shape {map_shape}")
+            all_maps_chunks = []
+
+            for i in tqdm(range(0, num_total_maps, BATCH_SIZE), desc="Loading maps in batches"):
+                batch_data = dataset[i:i+BATCH_SIZE]  # NumPy array
+                batch_tensor = torch.tensor(batch_data, dtype=torch.float32)
+                all_maps_chunks.append(batch_tensor)
+
+            all_maps = torch.cat(all_maps_chunks, dim=0)
+            print(f"Successfully loaded {all_maps.shape[0]} maps.")
     except Exception as e:
         print(f"Error loading data from {INPUT_FILE_PATH}: {e}")
         # You might want to stop execution here or handle it appropriately
