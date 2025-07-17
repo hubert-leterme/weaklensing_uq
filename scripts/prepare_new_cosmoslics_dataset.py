@@ -189,13 +189,15 @@ def main():
             # map_tensor is expected to be 2D (H,W) by extract_patches
             patches_from_map = extract_patches(map_tensor, PATCH_SIZE, STRIDE)
 
+            list_of_augmented_patches = []
             for patch_idx, patch in tqdm(
-                    enumerate(patches_from_map), total=patches_from_map.shape[0], desc=f"Processing patches for map {i}/{nmaps}"
+                    enumerate(patches_from_map),
+                    total=patches_from_map.shape[0],
+                    desc=f"Processing patches for map {i}/{nmaps}"
             ):
                 # patch is a 2D tensor (PATCH_SIZE, PATCH_SIZE)
                 # Add a channel dimension for torchvision transforms: (1, PATCH_SIZE, PATCH_SIZE)
                 patch_for_transform = patch.unsqueeze(0)
-                list_of_augmented_patches = []
                 for transform_idx, transform in enumerate(augmentation_transforms):
                     # Apply transform. Most torchvision transforms handle 2D (H,W) tensors.
                     augmented_patch = transform(patch_for_transform)
@@ -206,16 +208,16 @@ def main():
 
                     list_of_augmented_patches.append(augmented_patch)
 
-                augmented_patch = np.concatenate(list_of_augmented_patches, axis=0)
-                with h5py.File(AUGMENTED_TRAIN_DATA_PATH, 'r+') as f:
-                    nimgs_batch = augmented_patch.shape[0]
-                    shape_dataset = f['kappa'].shape
-                    new_size = shape_dataset[0] + nimgs_batch
-                    f['kappa'].resize((new_size, PATCH_SIZE, PATCH_SIZE))
-                    f['kappa'][-nimgs_batch:] = augmented_patch
-            
+            augmented_patch = np.concatenate(list_of_augmented_patches, axis=0)
+            with h5py.File(AUGMENTED_TRAIN_DATA_PATH, 'r+') as f:
+                nimgs_batch = augmented_patch.shape[0]
+                shape_dataset = f['kappa'].shape
+                new_size = shape_dataset[0] + nimgs_batch
+                f['kappa'].resize((new_size, PATCH_SIZE, PATCH_SIZE))
+                f['kappa'][-nimgs_batch:] = augmented_patch
+
             if (i + 1) % 10 == 0 or (i+1) == len(train_maps): # Print progress every 10 maps
-                 print(f"Processed map {i+1}/{len(train_maps)}: extracted {patches_from_map.shape[0]} patches, applied {len(augmentation_transforms)} augmentations to each.")
+                print(f"Processed map {i+1}/{len(train_maps)}: extracted {patches_from_map.shape[0]} patches, applied {len(augmentation_transforms)} augmentations to each.")
 
         print(f"\nTotal augmented training patches: {shape_dataset[0]}")
         print(f"Shape of augmented training dataset: {shape_dataset}")
