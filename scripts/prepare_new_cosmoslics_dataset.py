@@ -175,12 +175,19 @@ def main():
         all_augmented_patches = []
         torch.manual_seed(RANDOM_SEED) # For reproducibility of transforms if they have internal randomness
         np.random.seed(RANDOM_SEED)
-        
+
+        with h5py.File(AUGMENTED_TRAIN_DATA_PATH, 'w') as f:
+            f.create_dataset(
+                'kappa', shape=(0, PATCH_SIZE, PATCH_SIZE),
+                maxshape=(None, PATCH_SIZE, PATCH_SIZE),
+                dtype='float32'
+            )
+
         print(f"Starting augmentation for {train_maps.shape[0]} training maps...")
         for i, map_tensor in enumerate(train_maps):
             # map_tensor is expected to be 2D (H,W) by extract_patches
             patches_from_map = extract_patches(map_tensor, PATCH_SIZE, STRIDE)
-            
+
             for patch_idx, patch in enumerate(patches_from_map):
                 # patch is a 2D tensor (PATCH_SIZE, PATCH_SIZE)
                 # Add a channel dimension for torchvision transforms: (1, PATCH_SIZE, PATCH_SIZE)
@@ -188,43 +195,23 @@ def main():
                 for transform_idx, transform in enumerate(augmentation_transforms):
                     # Apply transform. Most torchvision transforms handle 2D (H,W) tensors.
                     augmented_patch = transform(patch_for_transform)
-                    all_augmented_patches.append(augmented_patch.numpy())
+                    augmented_patch = augmented_patch.cpu().numpy()
+
+                    if augmented_patch.ndim == 4 and augmented_patch.shape[1] == 1:
+                        augmented_patch = augmented_patch.squeeze(axis=1)
+
+                    with h5py.File(AUGMENTED_TRAIN_DATA_PATH, 'r+') as f:
+                        nimgs_batch = augmented_patch.shape[0]
+                        shape_dataset = f['kappa'].shape
+                        new_size = shape_dataset[0] + nimgs_batch
+                        f['kappa'].resize((new_size, PATCH_SIZE, PATCH_SIZE))
+                        f['kappa'][-nimgs_batch:] = augmented_patch
             
             if (i + 1) % 10 == 0 or (i+1) == len(train_maps): # Print progress every 10 maps
                  print(f"Processed map {i+1}/{len(train_maps)}: extracted {patches_from_map.shape[0]} patches, applied {len(augmentation_transforms)} augmentations to each.")
-        
-        if all_augmented_patches:
-            all_augmented_patches_np = np.array(all_augmented_patches, dtype=np.float32)
-            np.random.shuffle(all_augmented_patches_np) # Shuffle all augmented patches together
-            print(f"\nTotal augmented training patches: {all_augmented_patches_np.shape[0]}")
-            print(f"Shape of augmented training dataset: {all_augmented_patches_np.shape}")
-        else:
-            print("\nNo augmented patches were generated. Check input data and patch extraction.")
-            all_augmented_patches_np = np.array([]) # Empty array for saving
-    else:
-        print("Skipping augmentation due to data splitting or loading failure.")
-        all_augmented_patches_np = np.array([])
 
-    if all_augmented_patches_np.ndim == 4 and all_augmented_patches_np.shape[1] == 1:
-        all_augmented_patches_np = all_augmented_patches_np.squeeze(axis=1)
-        print(f"Squeezed augmented training dataset to shape: {all_augmented_patches_np.shape}")
-
-    if 'all_augmented_patches_np' in locals() and all_augmented_patches_np.size > 0:
-      print(all_augmented_patches_np.shape)
-    else:
-      print("Augmented training data not available or empty.")
-
-    # ## 8. Save Augmented Training Set
-    if all_augmented_patches_np.size > 0 :
-        try:
-            with h5py.File(AUGMENTED_TRAIN_DATA_PATH, 'w') as f:
-                f.create_dataset('kappa', data=all_augmented_patches_np)
-            print(f"Saved {all_augmented_patches_np.shape[0]} augmented training patches to {AUGMENTED_TRAIN_DATA_PATH}")
-        except Exception as e:
-            print(f"Error saving augmented training data to {AUGMENTED_TRAIN_DATA_PATH}: {e}")
-    elif train_maps is not None: # Only print if data splitting was successful but no patches made
-        print(f"No augmented training patches to save.")
-
+        print(f"\nTotal augmented training patches: {shape_dataset[0]}")
+        print(f"Shape of augmented training dataset: {shape_dataset}")
 
 
 if __name__ == '__main__':
