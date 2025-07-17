@@ -9,7 +9,4 @@ verbose: true
 
 cosmos_dir: path/to/COSMOS/v1.0
 ktng_dir: path/to/kappaTNG
-path_to_ktng_training_set: path/to/LP002_augmented_384.hdf5
-path_to_ktng_test_set: path/to/LP001_cropped_384.hdf5
-path_to_ps: path/to/powerspectrum.pt
 learnlets_pretrained_weights_dir: path/to/weights
