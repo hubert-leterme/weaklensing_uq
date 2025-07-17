@@ -182,13 +182,16 @@ def main():
                 maxshape=(None, PATCH_SIZE, PATCH_SIZE),
                 dtype='float32'
             )
-
-        print(f"Starting augmentation for {train_maps.shape[0]} training maps...")
+        
+        nmaps = train_maps.shape[0]
+        print(f"Starting augmentation for {nmaps} training maps...")
         for i, map_tensor in enumerate(train_maps):
             # map_tensor is expected to be 2D (H,W) by extract_patches
             patches_from_map = extract_patches(map_tensor, PATCH_SIZE, STRIDE)
 
-            for patch_idx, patch in tqdm(enumerate(patches_from_map), desc="Processing patches"):
+            for patch_idx, patch in tqdm(
+                    enumerate(patches_from_map), total=patches_from_map.shape[0], desc=f"Processing patches for map {i}/{nmaps}"
+            ):
                 # patch is a 2D tensor (PATCH_SIZE, PATCH_SIZE)
                 # Add a channel dimension for torchvision transforms: (1, PATCH_SIZE, PATCH_SIZE)
                 patch_for_transform = patch.unsqueeze(0)
