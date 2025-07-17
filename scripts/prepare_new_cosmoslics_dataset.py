@@ -4,9 +4,7 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 from torch.nn.functional import unfold
-from sklearn.model_selection import train_test_split
 import os
-import matplotlib.pyplot as plt
 
 def main():
     # # Prepare CosmoSLICS Dataset: Train/Test Split and Augmentation
