@@ -225,7 +225,8 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
 
 def get_wiener(
         path_to_ps, physics=None, niter=NITER_WIENER,
-        white_noise=False, noise_whitening=False, verbose=False
+        white_noise=False, noise_whitening=False,
+        multfact_step_size=MULTFACT_STEP_SIZE, verbose=False
 ):
     if path_to_ps is None:
         warnings.warn(
@@ -238,7 +239,9 @@ def get_wiener(
     powerspectrum, step_size, param_mahalanobis = \
             get_powerspectrum_step_size_wienerinit(
         path_to_ps, physics=physics, white_noise=white_noise,
-        noise_whitening=noise_whitening, verbose=verbose
+        noise_whitening=noise_whitening,
+        multfact_step_size=multfact_step_size,
+        verbose=verbose
     )
     if not white_noise:
         data_fidelity = wlpnp.Mahalanobis(param_vector=param_mahalanobis)
@@ -275,7 +278,8 @@ def get_pnpmass_wiener(
         step_size = multfact_step_size * upperbound_step_size
     wiener = get_wiener(
         path_to_ps, physics, niter=niter_wiener,
-        noise_whitening=noise_whitening_wiener, verbose=verbose
+        noise_whitening=noise_whitening_wiener,
+        multfact_step_size=multfact_step_size, verbose=verbose
     )
     if nongaussian:
         if wiener is None:
@@ -343,6 +347,27 @@ def run_wiener_pnpmass_batch(
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
     return kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
+
+
+def get_args_wienerinit(
+        std_noise, mask, path_to_ps=PATH_TO_PS, noise_whitening=False,
+        multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
+        verbose=False
+):
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
+    powerspectrum, step_size, _ = \
+            get_powerspectrum_step_size_wienerinit(
+        path_to_ps, physics=physics,
+        noise_whitening=noise_whitening,
+        multfact_step_size=multfact_step_size,
+        verbose=verbose
+    ) # Bayesian Wiener filtering
+    args_wienerinit = dict(
+        step_size=step_size, powerspectrum=powerspectrum,
+        std_noise=std_noise, mask=mask, niter=niter,
+        noise_whitening=noise_whitening
+    )
+    return args_wienerinit
 
 
 def get_powerspectrum_step_size_wienerinit(
@@ -501,15 +526,8 @@ def add_arguments_dataset(parser, batch_size):
     )
 
 
-def add_arguments_nongaussian(parser):
+def add_arguments_wiener(parser):
 
-    parser.add_argument(
-        "-ng", "--nongaussian", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Split the Gaussian and non-Gaussian parts of the convergence maps."
-        )
-    )
     parser.add_argument(
         "-ps", "--path-to-ps", type=str,
         default=argparse.SUPPRESS,
@@ -530,9 +548,21 @@ def add_arguments_nongaussian(parser):
         "-nw", "--noise-whitening-wiener", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Compute the Gaussian part using noise-whitening Wiener filtering."
+            "Iterative Wiener filtering with noise-whitening data fidelity."
         )
     )
+
+
+def add_arguments_nongaussian(parser):
+
+    parser.add_argument(
+        "-ng", "--nongaussian", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Split the Gaussian and non-Gaussian parts of the convergence maps."
+        )
+    )
+    add_arguments_wiener(parser)
 
 
 def add_arguments_seed_verbose(parser):

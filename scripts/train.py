@@ -6,7 +6,6 @@ import deepinv as dinv
 
 import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
-import wlmmuq.utils as wlutils
 
 from wlmmuq import PATH_TO_PS
 from wlmmuq.data import SCALE, NUM_WORKERS
@@ -30,11 +29,11 @@ def main(
         path_to_augmented_dataset,
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False,
-        wiener_init=False, path_to_ps=PATH_TO_PS,
-        nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
+        wiener_init=False, nongaussian=False,
+        path_to_ps=PATH_TO_PS,
         niter_wiener=NITER_WIENER,
-        multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
-        nongaussian=False, noise_whitening_wiener=False,
+        noise_whitening_wiener=False,
+        multfact_step_size_wiener=MULTFACT_STEP_SIZE,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -61,20 +60,6 @@ def main(
     else:
         kwargs_model.update(bias=not no_bias)
 
-    # Compute the power spectrum for Wiener initialization
-    if wiener_init or nongaussian:
-        # TODO: consisteny and redundancies
-        if path_to_ps is None:
-            powerspectrum = _commons.get_powerspectrum_from_dataset(
-                path_to_augmented_dataset, nimgs=nimgs_ps,
-                batch_size=batch_size_ps, output_shape=imgsize,
-                num_workers=num_workers, device=device, verbose=verbose
-            )
-        else:
-            powerspectrum = torch.load(path_to_ps)
-    else:
-        powerspectrum = None
-
     if denoiser:
         dataset_class = wlds.HDF5DatasetDenoiser
         noise_model = dinv.physics.GaussianNoise(sigma=0) # sigma to be updated
@@ -96,16 +81,12 @@ def main(
         )
 
         if wiener_init:
-            step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
-                param_mahalanobis=std_noise**2, # Negative log-likelihood as data fidelity
-                physics=physics
-            )
-            if verbose:
-                print(f"Wiener initialization with step size {step_size:.1e}")
-
-            args_wienerinit = dict(
-                step_size=step_size, powerspectrum=powerspectrum,
-                std_noise=std_noise, mask=mask, niter=niter_wiener
+            # Load arguments for Wiener initialization
+            args_wienerinit = _commons.get_args_wienerinit(
+                std_noise, mask, path_to_ps=path_to_ps,
+                noise_whitening=noise_whitening_wiener,
+                multfact_step_size=multfact_step_size_wiener,
+                niter=niter_wiener, verbose=verbose
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
@@ -213,7 +194,8 @@ def main(
         # `white_noise` is set to True.
         wiener = _commons.get_wiener(
             path_to_ps, physics=physics, white_noise=True,
-            niter=1, verbose=verbose
+            niter=1, multfact_step_size=multfact_step_size_wiener,
+            verbose=verbose
         ).to(device)
         kwargs_trainer.update(preproc=wiener)
         callback_list.append(
@@ -295,23 +277,6 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_nongaussian(parser)
-    # TODO: integrate the two following arguments to `add_arguments_nongaussian`
-    parser.add_argument(
-        "--nimgs-ps", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images used to compute the power spectrum for Wiener initialization. "
-            f"Default = {NIMGS_PS}"
-        )
-    )
-    parser.add_argument(
-        "--batch-size-ps", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size used to compute the power spectrum for Wiener initialization. "
-            f"Default = {BATCH_SIZE_PS}"
-        )
-    )
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,

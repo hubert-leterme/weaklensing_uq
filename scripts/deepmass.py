@@ -4,20 +4,23 @@ import tqdm
 import torch
 
 import wlmmuq.utils as wlutils
-import wlmmuq.models.deepinv.iterativemm as wlmm
 
+from wlmmuq import PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
+from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str, path_to_ps: str, path_to_output: str,
+        path_to_test_dataset: str, checkpoint_dir: str,
+        path_to_output: str,
         arch: str=None, timestamp: str=None, epoch: int=None,
-        step_size: float=None,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
-        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE, num_workers: int=NUM_WORKERS,
+        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
+        num_workers: int=NUM_WORKERS, path_to_ps: str=PATH_TO_PS,
+        niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -43,14 +46,11 @@ def main(
     )
 
     # Load arguments for Wiener initialization
-    physics = wlmm.MassMapping(sigma=std_noise, mask=mask)
-    powerspectrum, step_size, _ = \
-            _commons.get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics
-    ) # Bayesian Wiener filtering
-    args_wienerinit = dict(
-        step_size=step_size, powerspectrum=powerspectrum,
-        std_noise=std_noise, mask=mask
+    args_wienerinit = _commons.get_args_wienerinit(
+        std_noise, mask, path_to_ps=path_to_ps, 
+        noise_whitening=noise_whitening_wiener,
+        multfact_step_size=multfact_step_size, niter=niter_wiener,
+        verbose=verbose
     )
     kwargs.update(args_wienerinit=args_wienerinit)
 
@@ -85,8 +85,7 @@ def main(
         "arch": arch,
         "nimgs_test": nimgs_test,
         "imgsize": imgsize,
-        "step_size_wienerinit": step_size,
-        "powerspectrum_wienerinit": powerspectrum
+        "args_wienerinit": args_wienerinit,
     }
     path_to_output_completed = f"{path_to_output}_{now}.pt"
     torch.save(out_dict, path_to_output_completed)
@@ -101,10 +100,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
-    )
-    parser.add_argument(
-        "path_to_ps", type=str,
-        help="Path to the power spectrum (for Wiener initialization)"
     )
     parser.add_argument(
         "path_to_output", type=str,
@@ -131,6 +126,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_wiener(parser)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
