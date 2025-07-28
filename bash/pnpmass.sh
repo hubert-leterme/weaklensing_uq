@@ -29,8 +29,10 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \
   | sed 's/-e /--epoch /g' \
   | sed 's/-i /--niter /g' \
+  | sed 's/-ng /--nongaussian /g' \
+  | sed 's/-nw /--noise-whitening-wiener /g' \
   | sed 's/-uq //g' \
-  | sed 's/--path-to-ps [^ ]\+//g' \
+  | sed 's/-ps [^ ]\+//g' \
   | sed 's/--save-tensors //g' \
   | sed 's/--//g' \
   | xargs \
