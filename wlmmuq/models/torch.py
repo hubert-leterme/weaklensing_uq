@@ -562,10 +562,15 @@ class IterativeWiener(nn.Module):
     def __init__(
             self, step_size: float,
             powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor=None, niter: int=NITER_WIENER
+            mask:torch.Tensor=None, niter: int=NITER_WIENER,
+            noise_whitening: bool=False
     ):
         super().__init__()
-        data_fidelity = iterativemm.Mahalanobis(param_vector=std_noise**2)
+        if not noise_whitening:
+            param_vector = std_noise**2 # Bayesian data fidelity
+        else:
+            param_vector = std_noise # Noise whitening data fidelity
+        data_fidelity = iterativemm.Mahalanobis(param_vector=param_vector)
         prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
 
         self.optim = iterativemm.optim_builder(
