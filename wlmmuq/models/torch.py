@@ -115,7 +115,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
             map_size=map_size, in_channels=in_channels, out_channels=out_channels, **kwargs
         )
 
-    def forward(self, inp, sigma=None, *args, **kwargs):
+    def forward(self, inp, sigma, *args, **kwargs):
         r"""
         The noise level is not used in this model.
 
