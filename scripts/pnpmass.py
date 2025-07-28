@@ -81,7 +81,7 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass, wiener, physics, step_size = _commons.get_pnpmass_wiener(
+        pnpmass, wiener, physics, tau = _commons.get_pnpmass_wiener(
             std_noise, mask, denoiser, denoiser_uq,
             step_size=tau,
             path_to_ps=path_to_ps,
