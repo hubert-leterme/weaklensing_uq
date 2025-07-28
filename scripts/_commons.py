@@ -208,8 +208,8 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
 
     # Instantiate data fidelity, prior and metrics
     data_fidelity = wlpnp.Mahalanobis(
-        sigma=std_noise**0.5
-    ) # Sqrt of noise stdev because we do not consider the negative log-likelihood
+        param_vector=std_noise
+    ) # Noise-whitening data fidelity
     prior = dinv.optim.prior.PnP(denoiser)
     if denoiser_uq is not None:
         prior_uq = dinv.optim.prior.PnP(denoiser_uq)
@@ -225,7 +225,7 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
 
 def get_wiener(
         path_to_ps, physics=None, niter=NITER_WIENER,
-        white_noise=False, verbose=False
+        white_noise=False, noise_whitening=False, verbose=False
 ):
     if path_to_ps is None:
         warnings.warn(
@@ -235,12 +235,13 @@ def get_wiener(
         return None
     if verbose:
         print("Get optimizer for iterative Wiener filtering")
-    powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics=physics, white_noise=white_noise, verbose=verbose
+    powerspectrum, step_size, param_mahalanobis = \
+            get_powerspectrum_step_size_wienerinit(
+        path_to_ps, physics=physics, white_noise=white_noise,
+        noise_whitening=noise_whitening, verbose=verbose
     )
     if not white_noise:
-        std_noise = physics.noise_model.sigma
-        data_fidelity = wlpnp.Mahalanobis(sigma=std_noise)
+        data_fidelity = wlpnp.Mahalanobis(param_vector=param_mahalanobis)
         g_param = step_size
     else:
         # Regular L2 data fidelity with unitary variance
@@ -258,8 +259,10 @@ def get_wiener(
 
 def get_pnpmass_wiener(
         std_noise, mask, denoiser, denoiser_uq, step_size,
-        path_to_ps, niter=NITER_PNPMASS, niter_wiener=NITER_WIENER,
-        multfact_step_size=MULTFACT_STEP_SIZE, wiener_init=False
+        path_to_ps, niter=NITER_PNPMASS,
+        multfact_step_size=MULTFACT_STEP_SIZE, nongaussian=False,
+        niter_wiener=NITER_WIENER, noise_whitening_wiener=False,
+        verbose=False
 ):
     data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
         std_noise, mask, denoiser, denoiser_uq
@@ -271,9 +274,10 @@ def get_pnpmass_wiener(
         )
         step_size = multfact_step_size * upperbound_step_size
     wiener = get_wiener(
-        path_to_ps, physics, niter=niter_wiener
+        path_to_ps, physics, niter=niter_wiener,
+        noise_whitening=noise_whitening_wiener, verbose=verbose
     )
-    if wiener_init:
+    if nongaussian:
         if wiener is None:
             raise ValueError("The path to the power spectrum must be provided.")
         init_estimate = wiener
@@ -342,7 +346,7 @@ def run_wiener_pnpmass_batch(
 
 
 def get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics=None, white_noise=False,
+        path_to_ps, physics=None, white_noise=False, noise_whitening=False,
         multfact_step_size=MULTFACT_STEP_SIZE, verbose=False
 ):
     if verbose:
@@ -350,8 +354,12 @@ def get_powerspectrum_step_size_wienerinit(
     powerspectrum = torch.load(path_to_ps)
     if not white_noise:
         std_noise = physics.noise_model.sigma
+        if not noise_whitening:
+            param_mahalanobis = std_noise**2 # Negative log-likelihood as data fidelity
+        else:
+            param_mahalanobis = std_noise # Noise-whitening data fidelity
         step_size = wlutils.get_sup_step_size(
-            param_mahalanobis=std_noise**2, # Negative log-likelihood as data fidelity
+            param_mahalanobis=param_mahalanobis,
             physics=physics
         )
         step_size *= multfact_step_size
@@ -359,8 +367,9 @@ def get_powerspectrum_step_size_wienerinit(
         # The standard MSE is used as data fidelity
         # The parameter `g_param` for the proximal operator must be updated accordingly
         step_size = 1
+        param_mahalanobis = None
 
-    return powerspectrum, step_size
+    return powerspectrum, step_size, param_mahalanobis
 
 
 def add_arguments_create_dataset(parser):
@@ -492,18 +501,17 @@ def add_arguments_dataset(parser, batch_size):
     )
 
 
-def add_arguments_wienerinit(parser):
+def add_arguments_nongaussian(parser):
 
     parser.add_argument(
-        "--wiener-init", action='store_true',
+        "-ng", "--nongaussian", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Use Wiener initialization. "
-            "Default = False"
+            "Split the Gaussian and non-Gaussian parts of the convergence maps."
         )
     )
     parser.add_argument(
-        "--path-to-ps", type=str,
+        "-ps", "--path-to-ps", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Path to the power spectrum file used for Wiener initialization. "
@@ -516,6 +524,13 @@ def add_arguments_wienerinit(parser):
         help=(
             "Number of iterations for Wiener initialization. "
             f"Default = {NITER_WIENER}"
+        )
+    )
+    parser.add_argument(
+        "-nw", "--noise-whitening-wiener", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Compute the Gaussian part using noise-whitening Wiener filtering."
         )
     )
 

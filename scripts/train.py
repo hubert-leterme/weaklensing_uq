@@ -208,7 +208,9 @@ def main(
     if nongaussian:
         assert denoiser # Only for training a denoiser
         # The Wiener algorithm converges in one single iteration in this case
-        # (equivalent to applying the proximal mapping)
+        # (equivalent to applying the proximal mapping).
+        # Argument `noise_whitening` does not need to be provided since
+        # `white_noise` is set to True.
         wiener = _commons.get_wiener(
             path_to_ps, physics=physics, white_noise=True,
             niter=1, verbose=verbose
@@ -284,7 +286,16 @@ if __name__ == "__main__":
             "by a white Gaussian noise."
         )
     )
-    _commons.add_arguments_wienerinit(parser)
+    parser.add_argument(
+        "--wiener-init", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use Wiener initialization. "
+            "Default = False"
+        )
+    )
+    _commons.add_arguments_nongaussian(parser)
+    # TODO: integrate the two following arguments to `add_arguments_nongaussian`
     parser.add_argument(
         "--nimgs-ps", type=int,
         default=argparse.SUPPRESS,
@@ -299,20 +310,6 @@ if __name__ == "__main__":
         help=(
             "Batch size used to compute the power spectrum for Wiener initialization. "
             f"Default = {BATCH_SIZE_PS}"
-        )
-    )
-    parser.add_argument(
-        "--nongaussian", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Train the network on the non-Gaussian part of the convergence maps."
-        )
-    )
-    parser.add_argument(
-        "--noise-whitening-wiener", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Compute the Gaussian part using noise-whitening Wiener filtering."
         )
     )
     parser.add_argument(

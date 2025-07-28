@@ -1,4 +1,5 @@
 import shutil
+import warnings
 import torch
 from torch import nn
 import deepinv as dinv
@@ -29,25 +30,41 @@ class MahalanobisDistance(dinv.optim.Distance):
     .. math::
         f(x) = \frac{1}{2}\|x-y\|_{\Sigma^{-1}}^2 = \frac{1}{2} (x-y)^\top \Sigma^{-1} (x-y)
 
-    where :math:`\Sigma` is a diagonal covariance matrix with positive entries.
+    where :math:`\Sigma` is a diagonal matrix with positive entries.
 
-    :param torch.Tensor sigma: standard deviation for each pixel (square root of the variance).
-        Default: None.
+    :param torch.Tensor param_vector: tensor representing the diagonal of
+    the matrix :math:`\Sigma`. Default: ``None``.
     """
 
-    def __init__(self, sigma: float | torch.Tensor=1.):
+    def __init__(
+            self, param_vector: float | torch.Tensor=None,
+            sigma: float | torch.Tensor=None
+    ):
         super().__init__()
+        if sigma is not None:
+            if param_vector is not None:
+                raise ValueError(
+                    "Either `sigma` or `param_vector` should be provided, not both."
+                )
+            warnings.warn(
+                "The `sigma` parameter is deprecated and will be removed in future versions. "
+                "Please use `param_vector` instead (`sigma**2`).",
+                DeprecationWarning
+            )
+            param_vector = sigma**2
         # The tensor is properly sent to GPU when applying `self.to(device)`
-        if torch.is_tensor(sigma):
-            self.register_buffer("var", sigma**2)
+        if torch.is_tensor(param_vector):
+            self.register_buffer("param_vector", param_vector)
         else:
-            self.var = sigma**2
+            self.param_vector = param_vector
 
 
     def fn(self, x: torch.Tensor, y: torch.Tensor, *args, **kwargs):
         z = x - y # Shape = ([batch_size], [nchannels], nx, ny)
         dim = tuple(range(1, z.dim())) # Exclude batch dimension
-        d = 0.5 * torch.sum(torch.abs(z)**2 / self.var, dim=dim) # Shape = ([batch_size],)
+        d = 0.5 * torch.sum(
+            torch.abs(z)**2 / self.param_vector, dim=dim
+        ) # Shape = ([batch_size],)
         return d
 
 
@@ -64,7 +81,7 @@ class MahalanobisDistance(dinv.optim.Distance):
         :param torch.Tensor y: Observation :math:`y`.
         :return: (:class:`torch.Tensor`) gradient of the distance function :math:`\nabla_{x}\distance{x}{y}`.
         """
-        return (x - y) / self.var # Shape = ([batch_size], [nchannels], nx, ny)
+        return (x - y) / self.param_vector # Shape = ([batch_size], [nchannels], nx, ny)
 
 
     def prox(self, x, y, *args, gamma=1.0, **kwargs):
@@ -73,9 +90,14 @@ class MahalanobisDistance(dinv.optim.Distance):
 
 class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
 
-    def __init__(self, sigma: float | torch.Tensor=1.):
+    def __init__(
+            self, param_vector: float | torch.Tensor=None,
+            sigma: float | torch.Tensor=None
+    ):
         super().__init__()
-        self.d = MahalanobisDistance(sigma=sigma)
+        self.d = MahalanobisDistance(
+            param_vector=param_vector, sigma=sigma
+        )
 
 
 class MassMapping(dinv.physics.LinearPhysics):

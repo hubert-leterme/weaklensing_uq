@@ -565,7 +565,7 @@ class IterativeWiener(nn.Module):
             mask:torch.Tensor=None, niter: int=NITER_WIENER
     ):
         super().__init__()
-        data_fidelity = iterativemm.Mahalanobis(sigma=std_noise)
+        data_fidelity = iterativemm.Mahalanobis(param_vector=std_noise**2)
         prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
 
         self.optim = iterativemm.optim_builder(

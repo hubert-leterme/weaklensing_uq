@@ -44,9 +44,10 @@ def main(
 
     # Load arguments for Wiener initialization
     physics = wlmm.MassMapping(sigma=std_noise, mask=mask)
-    powerspectrum, step_size = _commons.get_powerspectrum_step_size_wienerinit(
+    powerspectrum, step_size, _ = \
+            _commons.get_powerspectrum_step_size_wienerinit(
         path_to_ps, physics
-    )
+    ) # Bayesian Wiener filtering
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
         std_noise=std_noise, mask=mask

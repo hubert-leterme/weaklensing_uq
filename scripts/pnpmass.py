@@ -6,6 +6,7 @@ import torch
 import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
+from wlmmuq import PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
@@ -21,8 +22,8 @@ def main(
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        wiener_init: bool=False, path_to_ps: str=None,
-        niter_wiener: int=NITER_WIENER,
+        nongaussian: bool=False, path_to_ps: str=PATH_TO_PS,
+        niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -85,7 +86,10 @@ def main(
             step_size=tau,
             path_to_ps=path_to_ps,
             niter=niter,
-            wiener_init=wiener_init,
+            nongaussian=nongaussian,
+            niter_wiener=niter_wiener,
+            noise_whitening_wiener=noise_whitening_wiener,
+            verbose=verbose,
         )
         pnpmass = pnpmass.to(device)
         if wiener is not None:
@@ -233,7 +237,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _commons.add_arguments_wienerinit(parser)
+    _commons.add_arguments_nongaussian(parser)
     parser.add_argument(
         "--save-tensors", action='store_true',
         help=(

@@ -19,8 +19,8 @@ def main(
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        wiener_init: bool=False, path_to_ps: str=None,
-        niter_wiener: int=NITER_WIENER,
+        nongaussian: bool=False, path_to_ps: str=None,
+        niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -64,7 +64,10 @@ def main(
         step_size=step_size,
         path_to_ps=path_to_ps,
         niter=niter,
-        wiener_init=wiener_init,
+        nongaussian=nongaussian,
+        niter_wiener=niter_wiener,
+        noise_whitening_wiener=noise_whitening_wiener,
+        verbose=verbose,
     )
     pnpmass = pnpmass.to(device)
     if wiener is not None:
@@ -144,7 +147,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _commons.add_arguments_wienerinit(parser)
+    _commons.add_arguments_nongaussian(parser)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
