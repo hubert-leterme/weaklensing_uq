@@ -15,7 +15,7 @@ from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
 
-from wlmmuq import PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
@@ -47,30 +47,43 @@ def get_device(verbose=False):
 
 
 def get_stdnoise_mask(
-        imgsize, cosmos_include_faint=False, convert_to_torch_tensor=False,
+        path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
+        imgsize=IMGSIZE,
+        cosmos_include_faint=False, convert_to_torch_tensor=False,
         inpainting=False, verbose=False
 ):
-    if verbose:
-        print("Load COSMOS galaxy shape catalog")
-    cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
-    if cosmos_include_faint:
-        cat_cosmos = aptable.vstack(
-            [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
+    if path_to_std_noise is not None:
+        assert path_to_mask is not None, (
+            "If `path_to_std_noise` is provided, `path_to_mask` must also be provided."
         )
+        if verbose:
+            print("Load noise standard deviation and mask from files")
+        std_noise = torch.load(path_to_std_noise)
+        mask = torch.load(path_to_mask)
     else:
-        cat_cosmos = cat_cosmos_bright
-    data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
-    shapedisp = data_dict["shapedisp"]
-    ngal = data_dict["ngal"]
-    mask = data_dict["mask"]
-    std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-    if inpainting:
-        std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
+        if verbose:
+            print("Load COSMOS galaxy shape catalog")
+        cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
+        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+        if cosmos_include_faint:
+            cat_cosmos = aptable.vstack(
+                [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
+            )
+        else:
+            cat_cosmos = cat_cosmos_bright
+        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
+        shapedisp = data_dict["shapedisp"]
+        ngal = data_dict["ngal"]
+        mask = data_dict["mask"]
+        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
 
-    if convert_to_torch_tensor:
-        mask = torch.tensor(mask, dtype=bool)
-        std_noise = torch.tensor(std_noise, dtype=torch.float32)
+        if convert_to_torch_tensor:
+            mask = torch.tensor(mask, dtype=bool)
+            std_noise = torch.tensor(std_noise, dtype=torch.float32)
+
+    if inpainting:
+        # Set the noise standard deviation for masked data
+        std_noise[~mask] = std_noise.max()
 
     return std_noise, mask
 

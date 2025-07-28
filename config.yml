@@ -9,5 +9,9 @@ verbose: true
 
 cosmos_dir: path/to/COSMOS/v1.0
 ktng_dir: path/to/kappaTNG
+
+path_to_std_noise: path/to/std_noise.pt
+path_to_mask: path/to/mask.pt
 path_to_ps: path/to/powerspectrum.pt
+
 learnlets_pretrained_weights_dir: path/to/weights

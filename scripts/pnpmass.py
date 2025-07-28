@@ -6,7 +6,7 @@ import torch
 import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
-from wlmmuq import PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
@@ -15,6 +15,9 @@ import _commons
 def main(
         path_to_test_dataset: str, checkpoint_dir: str, path_to_output: str,
         path_to_cqr: str=None,
+        path_to_std_noise: str=PATH_TO_STD_NOISE,
+        path_to_mask: str=PATH_TO_MASK,
+        path_to_ps: str=PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=None,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
@@ -22,7 +25,7 @@ def main(
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        nongaussian: bool=False, path_to_ps: str=PATH_TO_PS,
+        nongaussian: bool=False,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
@@ -38,7 +41,9 @@ def main(
 
     # Load noise standard deviation and mask
     std_noise, mask = _commons.get_stdnoise_mask(
-        imgsize, cosmos_include_faint=cosmos_include_faint,
+        path_to_std_noise=path_to_std_noise,
+        path_to_mask=path_to_mask,
+        imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
         convert_to_torch_tensor=True, inpainting=False,
         verbose=verbose
     )

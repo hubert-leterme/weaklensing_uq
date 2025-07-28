@@ -15,6 +15,7 @@ try:
 except ImportError:
     warnings.warn("Module `pycs` not found.")
 
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
@@ -28,6 +29,8 @@ METHOD_LIST = ["wiener", "mcalens"]
 
 def main(
         method, pickledir, picklename, path_to_test_dataset,
+        path_to_std_noise: str=PATH_TO_STD_NOISE,
+        path_to_mask: str=PATH_TO_MASK,
         cosmos_include_faint=False, imgsize=IMGSIZE,
         nimgs=NIMGS, nimgs_ps=NIMGS_PS, path_to_powerspectrum=None,
         batch_size=None, uq=False, nsamples=None,
@@ -45,7 +48,9 @@ def main(
     kwargs_massmapping = {k: kwargs.pop(k) for k in keys_massmapping if k in kwargs}
 
     std_noise, mask = _commons.get_stdnoise_mask(
-        imgsize, cosmos_include_faint=cosmos_include_faint,
+        path_to_std_noise=path_to_std_noise,
+        path_to_mask=path_to_mask,
+        imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
         convert_to_torch_tensor=True, verbose=verbose
     )
 

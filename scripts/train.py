@@ -7,7 +7,7 @@ import deepinv as dinv
 import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
 
-from wlmmuq import PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
@@ -27,10 +27,12 @@ NDECAYS = 4 # Number of decays for the learning rate scheduler
 
 def main(
         path_to_augmented_dataset,
+        path_to_std_noise: str=PATH_TO_STD_NOISE,
+        path_to_mask: str=PATH_TO_MASK,
+        path_to_ps=PATH_TO_PS,
         cosmos_include_faint=False,
         backend=None, arch=None, denoiser=False,
         wiener_init=False, nongaussian=False,
-        path_to_ps=PATH_TO_PS,
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
         multfact_step_size_wiener=MULTFACT_STEP_SIZE,
@@ -68,7 +70,9 @@ def main(
     else:
         # Get noise srtandard deviation and mask
         std_noise, mask = _commons.get_stdnoise_mask(
-            imgsize, cosmos_include_faint=cosmos_include_faint,
+            path_to_std_noise=path_to_std_noise,
+            path_to_mask=path_to_mask,
+            imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
             convert_to_torch_tensor=True, inpainting=True,
             verbose=verbose
         )

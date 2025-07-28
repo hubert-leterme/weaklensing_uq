@@ -5,7 +5,7 @@ import torch
 
 import wlmmuq.utils as wlutils
 
-from wlmmuq import PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
@@ -14,12 +14,15 @@ import _commons
 def main(
         path_to_test_dataset: str, checkpoint_dir: str,
         path_to_output: str,
+        path_to_std_noise: str=PATH_TO_STD_NOISE,
+        path_to_mask: str=PATH_TO_MASK,
+        path_to_ps: str=PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=None,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
-        num_workers: int=NUM_WORKERS, path_to_ps: str=PATH_TO_PS,
+        num_workers: int=NUM_WORKERS,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -34,7 +37,9 @@ def main(
 
     # Load noise standard deviation and mask
     std_noise, mask = _commons.get_stdnoise_mask(
-        imgsize, cosmos_include_faint=cosmos_include_faint,
+        path_to_std_noise=path_to_std_noise,
+        path_to_mask=path_to_mask,
+        imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
         convert_to_torch_tensor=True, inpainting=True,
         verbose=verbose
     ) # inpainting = True, as in training
