@@ -90,7 +90,7 @@ def main(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
                 multfact_step_size=multfact_step_size_wiener,
-                niter=niter_wiener, verbose=verbose
+                niter=niter_wiener, device=device, verbose=verbose
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
@@ -197,10 +197,11 @@ def main(
         # Argument `noise_whitening` does not need to be provided since
         # `white_noise` is set to True.
         wiener = _commons.get_wiener(
-            path_to_ps, physics=physics, white_noise=True,
-            niter=1, multfact_step_size=multfact_step_size_wiener,
-            verbose=verbose
-        ).to(device)
+            path_to_ps=path_to_ps,
+            white_noise=True, physics=physics,
+            multfact_step_size=multfact_step_size_wiener, niter=1,
+            device=device, verbose=verbose
+        ) # `noise_whitening` and `std_noise` are not used here (`white_noise=True`)
         kwargs_trainer.update(preproc=wiener)
         callback_list.append(
             wlnn.deepinv.iterativemm.WienerWhiteNoiseParamsAlgoUpdater(

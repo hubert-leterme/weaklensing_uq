@@ -52,10 +52,10 @@ def main(
 
     # Load arguments for Wiener initialization
     args_wienerinit = _commons.get_args_wienerinit(
-        std_noise, mask, path_to_ps=path_to_ps, 
+        std_noise, mask, path_to_ps=path_to_ps,
         noise_whitening=noise_whitening_wiener,
         multfact_step_size=multfact_step_size, niter=niter_wiener,
-        verbose=verbose
+        device=device, verbose=verbose
     )
     kwargs.update(args_wienerinit=args_wienerinit)
 
@@ -112,16 +112,6 @@ if __name__ == "__main__":
     )
     _commons.add_arguments_model(parser)
     _commons.add_arguments_checkpoint(parser)
-    parser.add_argument(
-        "-tau", "--step-size", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Step size for Wiener initialization."
-            f"Default = {_commons.MULTFACT_STEP_SIZE:.2f} * upper_bound, "
-            "where upper_bound is computed from the noise standard deviation "
-            "and the mask, using the power iteration method"
-        )
-    )
     parser.add_argument(
         "--nimgs-test", type=int,
         default=argparse.SUPPRESS,

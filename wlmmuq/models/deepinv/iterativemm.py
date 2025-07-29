@@ -162,10 +162,7 @@ class WienerWhiteNoiseParamsAlgoUpdater(callbacks.BaseCallback):
         # Get white noise standard deviation
         # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
         sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
-        if not self.noise_whitening:
-            g_param = sigma**2 # Bayesian iterative Wiener filtering
-        else:
-            g_param = sigma
+        g_param = utils.get_g_param(sigma, self.noise_whitening)
         for i, step_size in enumerate(
             self.optim.init_params_algo["stepsize"]
         ): # Possibly, one step size per iteration

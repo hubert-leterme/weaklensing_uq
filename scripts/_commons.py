@@ -1,7 +1,6 @@
 import os
 import random
 import argparse
-import warnings
 import tqdm
 import numpy as np
 import torch
@@ -230,31 +229,25 @@ def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
         prior_uq = None
     rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
 
-    # Instantiate physics (forward model)
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
-
-    return data_fidelity, prior, prior_uq, rmse, physics
+    return data_fidelity, prior, prior_uq, rmse
 
 
 def get_wiener(
-        path_to_ps, physics=None, niter=NITER_WIENER,
+        path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
-        multfact_step_size=MULTFACT_STEP_SIZE, verbose=False
+        std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
+        device="cpu", verbose=False
 ):
-    if path_to_ps is None:
-        warnings.warn(
-            "Unknown power spectrum; the Wiener estimate "
-            "will not be computed."
-        )
-        return None
     if verbose:
         print("Get optimizer for iterative Wiener filtering")
     powerspectrum, step_size, param_mahalanobis = \
             get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics=physics, white_noise=white_noise,
-        noise_whitening=noise_whitening,
+        path_to_ps=path_to_ps,
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
         multfact_step_size=multfact_step_size,
-        verbose=verbose
+        device=device, verbose=verbose
     )
     if not white_noise:
         data_fidelity = wlpnp.Mahalanobis(param_vector=param_mahalanobis)
@@ -269,34 +262,30 @@ def get_wiener(
         data_fidelity=data_fidelity,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
         params_algo={"stepsize": step_size, "g_param": g_param},
-    )
+    ).to(device)
+
     return out
 
 
-def get_pnpmass_wiener(
-        std_noise, mask, denoiser, denoiser_uq, step_size,
-        path_to_ps, niter=NITER_PNPMASS,
+def get_pnpmass(
+        denoiser, denoiser_uq,
+        std_noise=None, mask=None, physics=None,
+        step_size=None, niter=NITER_PNPMASS,
         multfact_step_size=MULTFACT_STEP_SIZE, nongaussian=False,
-        niter_wiener=NITER_WIENER, noise_whitening_wiener=False,
-        verbose=False
+        wiener=None, device="cpu"
 ):
-    data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
+    data_fidelity, prior, prior_uq, rmse = get_pnpmass_modules(
         std_noise, mask, denoiser, denoiser_uq
     )
-    if step_size is None:
+    if step_size is None or step_size <= 0:
         upperbound_step_size = wlutils.get_sup_step_size(
             param_mahalanobis=std_noise, # Noise-whitening data fidelity term
-            physics=physics,
+            physics=physics, device=device
         )
         step_size = multfact_step_size * upperbound_step_size
-    wiener = get_wiener(
-        path_to_ps, physics, niter=niter_wiener,
-        noise_whitening=noise_whitening_wiener,
-        multfact_step_size=multfact_step_size, verbose=verbose
-    )
     if nongaussian:
         if wiener is None:
-            raise ValueError("The path to the power spectrum must be provided.")
+            raise ValueError("Missing model for iterative Wiener filtering.")
         init_estimate = wiener
     else:
         init_estimate = None
@@ -307,8 +296,9 @@ def get_pnpmass_wiener(
         metric_dict={"rmse": rmse}, verbose=True,
         params_algo={"stepsize": step_size, "g_param": step_size},
         init_estimate=init_estimate,
-    )
-    return pnpmass, wiener, physics, step_size
+    ).to(device)
+
+    return pnpmass, step_size
 
 
 def run_wiener_pnpmass_batch(
@@ -363,17 +353,19 @@ def run_wiener_pnpmass_batch(
 
 
 def get_args_wienerinit(
-        std_noise, mask, path_to_ps=PATH_TO_PS, noise_whitening=False,
+        std_noise, mask, path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
         multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
-        verbose=False
+        device="cpu", verbose=False
 ):
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     powerspectrum, step_size, _ = \
             get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics=physics,
-        noise_whitening=noise_whitening,
+        path_to_ps=path_to_ps,
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
         multfact_step_size=multfact_step_size,
-        verbose=verbose
+        device=device, verbose=verbose
     ) # Bayesian Wiener filtering
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
@@ -384,21 +376,20 @@ def get_args_wienerinit(
 
 
 def get_powerspectrum_step_size_wienerinit(
-        path_to_ps, physics=None, white_noise=False, noise_whitening=False,
-        multfact_step_size=MULTFACT_STEP_SIZE, verbose=False
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE,
+        device="cpu", verbose=False
 ):
     if verbose:
         print("Get Wiener initialization parameters")
     powerspectrum = torch.load(path_to_ps)
     if not white_noise:
-        std_noise = physics.noise_model.sigma
-        if not noise_whitening:
-            param_mahalanobis = std_noise**2 # Negative log-likelihood as data fidelity
-        else:
-            param_mahalanobis = std_noise # Noise-whitening data fidelity
+        param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
         step_size = wlutils.get_sup_step_size(
             param_mahalanobis=param_mahalanobis,
-            physics=physics
+            physics=physics, device=device
         )
         step_size *= multfact_step_size
     else:
@@ -442,6 +433,7 @@ def add_arguments_create_dataset(parser):
         )
     )
 
+
 def add_arguments_model(parser):
 
     parser.add_argument(
@@ -460,6 +452,7 @@ def add_arguments_model(parser):
             f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
         )
     )
+
 
 def add_arguments_checkpoint(parser):
 
@@ -502,6 +495,7 @@ def add_arguments_checkpoint(parser):
             f"Default is the same value as `--epoch` ({EPOCH} if not provided)."
         )
     )
+
 
 def add_arguments_dataset(parser, batch_size):
 

@@ -2,6 +2,7 @@ import argparse
 import time
 import torch
 
+import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
@@ -24,6 +25,7 @@ def main(
         num_workers: int=NUM_WORKERS,
         nongaussian: bool=False, path_to_ps: str=None,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
+        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -63,21 +65,27 @@ def main(
     # Initialize iterator
     calib_dataloader = iter(calib_dataset)
 
-    # Instantiate the PnP model
-    pnpmass, wiener, physics, step_size = _commons.get_pnpmass_wiener(
-        std_noise, mask, denoiser, denoiser_uq,
-        step_size=step_size,
-        path_to_ps=path_to_ps,
-        niter=niter,
-        nongaussian=nongaussian,
-        niter_wiener=niter_wiener,
-        noise_whitening_wiener=noise_whitening_wiener,
-        verbose=verbose,
-    )
-    pnpmass = pnpmass.to(device)
-    if wiener is not None:
-        wiener = wiener.to(device)
+    # Instantiate physics (forward model)
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
     physics = physics.to(device)
+
+    # Instantiate the Wiener model
+    wiener = _commons.get_wiener(
+        path_to_ps=path_to_ps,
+        white_noise=False, noise_whitening=noise_whitening_wiener,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size, niter=niter_wiener,
+        device=device, verbose=verbose
+    )
+
+    # Instantiate the PnP model
+    pnpmass, step_size = _commons.get_pnpmass(
+        denoiser, denoiser_uq,
+        std_noise=std_noise, mask=mask, physics=physics,
+        step_size=step_size, niter=niter,
+        nongaussian=nongaussian, wiener=wiener,
+        device=device
+    )
 
     # Run PnPMass for each batch
     kappa_true, _, kappa_pnpmass, _, res_pnpmass, _ = _commons.run_wiener_pnpmass_batch(
@@ -129,9 +137,9 @@ if __name__ == "__main__":
         "-tau", "--step-size", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Step size for the PnPMass algorithm. Several values can be provided. "
+            "Step size for the PnPMass algorithm. "
             f"Default = {_commons.MULTFACT_STEP_SIZE:.2f} * upper_bound, "
-            "where upper_bound is computed from the noise standard deviation "
+            "where upper_bound is estimated from the noise standard deviation "
             "and the mask, using the power iteration method"
         )
     )

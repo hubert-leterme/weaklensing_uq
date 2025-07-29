@@ -975,7 +975,8 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
 
 def get_sup_step_size(
-        param_mahalanobis: float | torch.Tensor, its=20, physics=None
+        param_mahalanobis: float | torch.Tensor, its=20, physics=None,
+        device: str | torch.device = "cpu"
 ):
     """
     Get the upper bound for the step size in PGD algorithms where the data
@@ -987,26 +988,28 @@ def get_sup_step_size(
     param_mahalanobis: float or torch.Tensor
         SPD matrix for the Mahalanobis norm (std_noise**2 for the negative log-likelihood,
         std_noise for the noise-whitening data fidelity)
-    its: int, optional
-        Number of iterations. Default is 20
-    physics: dinv.physics, optional
-        Physical model (forward and operator and the corresponding adjoint).
-        The noise model is not used for this function. If none is given,
+      if torch.is_tensor(param_mahalanobis):      The noise model is not used for this function. If none is given,
         then the identity is used.
+    device: str, optional
+        Device to which `physics` is stored. Default is "cpu"
     """
+    # TODO: retrieve `param_mahalanobis` from `physics`
     if torch.is_tensor(param_mahalanobis):
-        param_mahalanobis = param_mahalanobis.cpu().numpy()
+        param_mahalanobis = param_mahalanobis.to(device)
     nx, ny = param_mahalanobis.shape
 
     if physics is None:
-        physics = dinv.physics.LinearPhysics() # Identity
+        physics = dinv.physics.LinearPhysics().to(device) # Identity
 
     def matvec(kappa_flattened):
         kappa = kappa_flattened.reshape(nx, ny)
+        kappa = torch.tensor(
+            kappa, dtype=torch.float32, device=device
+        )
         gamma = physics.A(kappa)
         gamma /= param_mahalanobis
         out = physics.A_adjoint(gamma)
-        return out.flatten()
+        return out.cpu().numpy().astype(np.float64).flatten()
 
     linearop = sparse.linalg.LinearOperator(
         shape=(nx*ny, nx*ny), matvec=matvec, rmatvec=matvec
@@ -1014,6 +1017,16 @@ def get_sup_step_size(
     spectrnorm = linalg.interpolative.estimate_spectral_norm(linearop, its=its)
 
     return 2 / spectrnorm
+
+
+def get_g_param(std_noise, noise_whitening):
+
+    if not noise_whitening:
+        g_param = std_noise**2 # Negative log-likelihood as data fidelity
+    else:
+        g_param = std_noise # Noise-whitening data fidelity
+
+    return g_param
 
 
 def infer_model(
