@@ -100,7 +100,7 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass, step_size = _commons.get_pnpmass(
+        pnpmass, tau = _commons.get_pnpmass(
             denoiser, denoiser_uq,
             std_noise=std_noise, mask=mask, physics=physics,
             step_size=tau, niter=niter,
