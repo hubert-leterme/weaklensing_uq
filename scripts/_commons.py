@@ -224,17 +224,18 @@ def load_trained_models(
             )
         if arch_uq is None:
             arch_uq = arch
+            kwargs_model_uq = kwargs_model.copy()
             verbose_uq = False
         else:
+            kwargs_model_uq = {}
+            for k in KEYS_MODEL:
+                kuq = f"{k}_uq"
+                if kuq in kwargs:
+                    kwargs_model_uq.update({k: kwargs.pop(kuq)})
             verbose_uq = verbose
         if epoch_uq is None:
             epoch_uq = epoch
 
-        kwargs_model_uq = {}
-        for k in KEYS_MODEL:
-            kuq = f"{k}_uq"
-            if kuq in kwargs:
-                kwargs_model_uq.update({k: kwargs.pop(kuq)})
         model_uq = _load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
