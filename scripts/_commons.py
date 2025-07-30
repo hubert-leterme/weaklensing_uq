@@ -177,10 +177,10 @@ def _load_trained_model(
 ):
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
     if timestamp is None:
-        path_to_checkpoint_pe = checkpoint_dir
+        path_to_checkpoint = checkpoint_dir
     else:
         output_type = get_output_type(order2)
-        path_to_checkpoint_pe = os.path.join(
+        path_to_checkpoint = os.path.join(
             checkpoint_dir, output_type, timestamp, f"ckp_{epoch}.pth.tar"
         )
     if not order2:
@@ -189,7 +189,7 @@ def _load_trained_model(
         kwargs.update(meancentering=False, onlypositive=True)
 
     model = cnn_class(map_size=imgsize, **kwargs)
-    checkpoint = torch.load(path_to_checkpoint_pe)
+    checkpoint = torch.load(path_to_checkpoint)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     if verbose:
