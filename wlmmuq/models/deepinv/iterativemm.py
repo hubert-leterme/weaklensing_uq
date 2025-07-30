@@ -230,30 +230,11 @@ class MetricDict(dict):
         ) # Shape = (batch_size, niter + 1)
 
 
-class FixedPointUQ(nn.Module):
-    def __init__(self, fixed_point:dinv.optim.FixedPoint):
-        super().__init__()
-        self.fixed_point = fixed_point
-
-    def forward(self, *args, compute_metrics=False, x_gt=None, **kwargs):
-        X, metrics = self.fixed_point.forward(
-            *args, compute_metrics=compute_metrics, x_gt=x_gt, **kwargs
-        )
-        X_uq = self.fixed_point.single_iteration(
-            X,
-            self.fixed_point.max_iter,
-            *args,
-            **kwargs,
-        )
-        return (X, X_uq), metrics
-
-
 class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
             self, *args, metric_dict: MetricDict=None,
-            prior_uq: dinv.optim.Prior=None,
-            init_estimate: dinv.optim.BaseOptim=None, **kwargs
+            wiener_estimate: dinv.optim.BaseOptim=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -272,9 +253,6 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             self.metric_dict = None
         self.batch_size = None
-        if prior_uq is not None:
-            self.fixed_point = FixedPointUQ(self.fixed_point)
-        self.prior_uq = prior_uq
 
         get_output_0 = self.get_output
         def _get_output(X):
@@ -286,7 +264,7 @@ class BaseOptim(dinv.optim.BaseOptim):
             return out
         self.get_output = _get_output
 
-        self.init_estimate = init_estimate
+        self.wiener_estimate = wiener_estimate
 
 
     def _update_metrics(
@@ -340,37 +318,17 @@ class BaseOptim(dinv.optim.BaseOptim):
         return metrics
 
 
-    def update_prior_fn(self, it):
-        r"""
-        For each prior function in `prior`, selects the prior value for iteration ``it``
-        (if this prior depends on the iteration number).
-        If `it == self.max_iter`, then the optimizer is set to UQ mode.
-
-        :param int it: iteration number.
-        :return: the prior at iteration ``it``.
-        """
-        if it < self.max_iter:
-            # Do not use `super().update_prior_fn(it)` to avoid passing a bound method
-            # without class context to the FixedPoint module
-            cur_prior = self.prior[it] if len(self.prior) > 1 else self.prior[0]
-        elif self.prior_uq is not None:
-            cur_prior = self.prior_uq
-        else:
-            raise ValueError
-        return cur_prior
-
-
     def forward(
             self, y, physics, x_gt=None, compute_metrics=False,
-            kwargs_init_estimate=None, **kwargs
+            kwargs_wiener_estimate=None, **kwargs
     ):
-        if self.init_estimate is not None:
-            if kwargs_init_estimate is None:
-                kwargs_init_estimate = {}
+        if self.wiener_estimate is not None:
+            if kwargs_wiener_estimate is None:
+                kwargs_wiener_estimate = {}
             with torch.no_grad():
-                x_init = self.init_estimate(
+                x_init = self.wiener_estimate(
                     y, physics, x_gt=None,
-                    compute_metrics=False, **kwargs_init_estimate
+                    compute_metrics=False, **kwargs_wiener_estimate
                 )
                 # Get residuals (input and ground truth)
                 y = y - physics.A(x_init)
@@ -380,7 +338,7 @@ class BaseOptim(dinv.optim.BaseOptim):
             y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
         )
 
-        if self.init_estimate is not None:
+        if self.wiener_estimate is not None:
             with torch.no_grad():
                 if compute_metrics:
                     x, metrics = out
@@ -403,13 +361,22 @@ def zero_init(y: torch.Tensor, _unused_physics):
     return {"est": (x_init, z_init)}
 
 
+class ManualInit:
+    """
+    Manual initialization with user-provided tensors.
+    """
+    def __init__(self):
+        self.X_init = None
+    def __call__(self, _unused_y, _unused_physics):
+        return {"est": self.X_init}
+
+
 def optim_builder(
     iteration,
     max_iter=100,
     params_algo={"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05},
     data_fidelity=None,
     prior=None,
-    prior_uq=None,
     F_fn=None,
     g_first=False,
     bregman_potential=None,
@@ -454,7 +421,6 @@ def optim_builder(
         has_cost=iterator.has_cost,
         data_fidelity=data_fidelity,
         prior=prior,
-        prior_uq=prior_uq,
         params_algo=params_algo,
         max_iter=max_iter,
         **kwargs,
