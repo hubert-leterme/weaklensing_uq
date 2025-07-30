@@ -18,6 +18,10 @@ mkdir -p ${checkpoint_dir}/cqr_pnpmass
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
+  | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
+  | sed 's/--switch-mode-for-uq//g' \
+  | sed 's/-auq [^ ]\+//g' \
+  | sed 's/-suq [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
@@ -26,6 +30,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-b [^ ]\+//g' \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-tau /--step-size /g' \
+  | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-ng /--nongaussian /g' \
@@ -36,10 +41,9 @@ optional_args_cleaned=$(echo "$optional_args" \
   | xargs \
   | sed 's/ /_/g')
 output_filename=$(echo "cqr_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g')
-path_to_output=$(echo "${checkpoint_dir}/cqr_pnpmass/${output_filename}" | sed 's|//|/|g' | xargs)
 
 # Command to execute
-cmd=$(echo "python scripts/pnpmass_calibration.py ${path_to_calibration_dataset} ${checkpoint_dir} ${path_to_output} ${optional_args} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/pnpmass_calibration.py ${path_to_calibration_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

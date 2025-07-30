@@ -11,9 +11,11 @@ from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
+OUTPUT_DIR = ""
+OUTPUT_FILENAME = "results_deepmass"
+
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str,
-        path_to_output: str,
+        path_to_test_dataset: str, checkpoint_dir: str, checkpoint_dir_uq: str=None,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
@@ -24,9 +26,14 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
+        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
+
+    path_to_output = _commons.get_path_to_output(
+        output_dir, output_filename, checkpoint_dir=checkpoint_dir
+    ) # E.g., "checkpoint/dir/results_deepmass"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -63,8 +70,9 @@ def main(
     test_dataloader = iter(test_dataset)
 
     # Load trained model
-    deepmass, _ = _commons.load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
+    deepmass, _ = _commons.load_trained_models(
+        checkpoint_dir, arch, timestamp,
+        epoch=epoch, imgsize=imgsize,
         verbose=verbose, **kwargs
     )
     deepmass = deepmass.to(device)
@@ -111,6 +119,7 @@ if __name__ == "__main__":
         help="Path to the output file (without extension)"
     )
     _commons.add_arguments_model(parser)
+    # _commons.add_arguments_model_uq(parser) # TODO: uncomment after update
     _commons.add_arguments_checkpoint(parser)
     parser.add_argument(
         "--nimgs-test", type=int,
@@ -122,6 +131,7 @@ if __name__ == "__main__":
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_wiener(parser)
+    _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()

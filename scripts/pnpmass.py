@@ -13,26 +13,35 @@ from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
+OUTPUT_DIR = "results_pnpmass"
+OUTPUT_FILENAME = "results_pnpmass"
+
 def main(
-        path_to_test_dataset: str, checkpoint_dir: str, path_to_output: str,
+        path_to_test_dataset: str, checkpoint_dir: str, checkpoint_dir_uq: str=None,
         path_to_cqr: str=None,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        load_model_uq: bool=False, timestamp_uq: str=None, epoch_uq: int=None,
+        load_model_uq: bool=False,
+        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False,
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        nongaussian: bool=False,
+        nongaussian: bool=False, switch_mode_for_uq: bool=False,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ, save_tensors: bool=False,
+        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
+
+    path_to_output = _commons.get_path_to_output(
+        output_dir, output_filename, checkpoint_dir=checkpoint_dir
+    ) # E.g., "checkpoint/dir/results_pnpmass/results_pnpmass"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -57,11 +66,11 @@ def main(
     )
 
     # Load trained denoiser
-    denoiser, denoiser_uq = _commons.load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
-        load_model_uq=load_model_uq,
-        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        verbose=verbose, **kwargs
+    denoiser, denoiser_uq = _commons.load_trained_models(
+        checkpoint_dir, arch, timestamp, epoch=epoch,
+        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
+        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+        imgsize=imgsize, verbose=verbose, **kwargs
     )
 
     # Get step size
@@ -100,18 +109,19 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass, tau = _commons.get_pnpmass(
+        pnpmass, pnpmass_uq, tau = _commons.get_pnpmass(
             denoiser, denoiser_uq,
             std_noise=std_noise, mask=mask, physics=physics,
             step_size=tau, niter=niter,
-            nongaussian=nongaussian, wiener=wiener,
-            device=device
+            nongaussian=nongaussian, switch_mode_for_uq=switch_mode_for_uq,
+            wiener=wiener, device=device
         )
 
         # Run PnPMass for each batch
         kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
                 _commons.run_wiener_pnpmass_batch(
-            wiener, pnpmass, physics, test_dataloader, tau, niter,
+            wiener, pnpmass, pnpmass_uq,
+            physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
         )
@@ -191,12 +201,11 @@ def main(
                 out_dict.update({
                     "res_pnpmass_cqr": res_pnpmass_cqr.cpu(),
                 })
-        path_to_output_completed = (
-            f"{path_to_output}_step-size_{tau:.3f}_{confidence_uq}-sigma_{now}.pt"
+        _commons.save_output_pnpmass(
+            out_dict, path_to_output, tau, now,
+            load_model_uq=load_model_uq, confidence_uq=confidence_uq,
+            verbose=verbose
         )
-        if verbose:
-            print(f"Save results to {path_to_output_completed}")
-        torch.save(out_dict, path_to_output_completed)
 
 
 if __name__ == "__main__":
@@ -210,10 +219,6 @@ if __name__ == "__main__":
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
     parser.add_argument(
-        "path_to_output", type=str,
-        help="Path to the output file (without extension)"
-    )
-    parser.add_argument(
         "-cqr", "--path-to-cqr", type=str, default=None,
         help=(
             "Path to the CQR checkpoint (optional). "
@@ -221,6 +226,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_model(parser)
+    _commons.add_arguments_model_uq(parser)
     _commons.add_arguments_checkpoint(parser)
     parser.add_argument(
         "-tau", "--step-size", type=float, nargs='+',
@@ -251,15 +257,7 @@ if __name__ == "__main__":
     )
     _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_nongaussian(parser)
-    parser.add_argument(
-        "--save-tensors", action='store_true',
-        help=(
-            "If set, the tensors of the true convergence, "
-            "the PnPMass estimate, the variance, and the residuals "
-            "will be saved in the output file. WARNING: this will increase "
-            "the size of the output file significantly!"
-        )
-    )
+    _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()

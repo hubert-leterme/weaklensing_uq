@@ -1,4 +1,5 @@
 import os
+import warnings
 import random
 import argparse
 import tqdm
@@ -36,6 +37,12 @@ def set_seed(seed):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
+
+
+def get_path_to_output(output_dir, output_filename, checkpoint_dir=None):
+    if checkpoint_dir is not None:
+        output_dir = os.path.join(checkpoint_dir, output_dir)
+    return os.path.join(output_dir, output_filename)
 
 
 def get_device(verbose=False):
@@ -155,48 +162,84 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def load_trained_model(
-        checkpoint_dir, arch, imgsize, timestamp, epoch,
-        load_model_uq=False, timestamp_uq=None, epoch_uq=None,
+def get_output_type(order2=False):
+    if not order2:
+        output_type = "pe" # Point estimate
+    else:
+        output_type = "var" # Variance
+    return output_type
+
+
+def _load_trained_model(
+        checkpoint_dir, arch, timestamp,
+        epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         verbose=False, **kwargs
 ):
-    if arch is None:
-        raise ValueError(
-            "Model architecture must be provided with -a or --arch"
-        )
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
-
     if timestamp is None:
         path_to_checkpoint_pe = checkpoint_dir
     else:
+        output_type = get_output_type(order2)
         path_to_checkpoint_pe = os.path.join(
-            checkpoint_dir, "pe", timestamp, f"ckp_{epoch}.pth.tar"
+            checkpoint_dir, output_type, timestamp, f"ckp_{epoch}.pth.tar"
         )
-    model = cnn_class(
-        map_size=imgsize, meancentering=True, onlypositive=False, **kwargs_model
-    )
+    if not order2:
+        kwargs.update(meancentering=True, onlypositive=False)
+    else:
+        kwargs.update(meancentering=False, onlypositive=True)
+
+    model = cnn_class(map_size=imgsize, **kwargs)
     checkpoint = torch.load(path_to_checkpoint_pe)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     if verbose:
         model.summary()
 
+    return model
+
+
+def load_trained_models(
+        checkpoint_dir, arch, timestamp, epoch=EPOCH,
+        load_model_uq=False, checkpoint_dir_uq=None,
+        arch_uq=None, timestamp_uq=None, epoch_uq=None,
+        imgsize=IMGSIZE, verbose=False, **kwargs
+):
+    if arch is None:
+        raise ValueError(
+            "Model architecture must be provided with -a or --arch"
+        )
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    model = _load_trained_model(
+        checkpoint_dir, arch, timestamp, epoch=epoch,
+        imgsize=imgsize, order2=False,
+        verbose=verbose, **kwargs_model
+    )
     if load_model_uq:
+        if checkpoint_dir_uq is None:
+            checkpoint_dir_uq = checkpoint_dir
+        else:
+            warnings.warn(
+                f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
+                f"the one used for the point estimate ({checkpoint_dir})"
+            )
+        if arch_uq is None:
+            arch_uq = arch
+            verbose_uq = False
+        else:
+            verbose_uq = verbose
         if epoch_uq is None:
             epoch_uq = epoch
-        path_to_checkpoint_uq = os.path.join(
-            checkpoint_dir, "var", timestamp_uq, f"ckp_{epoch_uq}.pth.tar"
-        )
-        model_uq = cnn_class(
-            map_size=imgsize, meancentering=False, onlypositive=True, **kwargs_model
-        )
-        checkpoint_uq = torch.load(path_to_checkpoint_uq)
-        model_uq.load_state_dict(checkpoint_uq['state_dict'])
-        model_uq.eval()
-        if verbose:
-            model_uq.summary()
 
+        kwargs_model_uq = {}
+        for k in KEYS_MODEL:
+            kuq = f"{k}_uq"
+            if kuq in kwargs:
+                kwargs_model_uq.update({k: kwargs.pop(kuq)})
+        model_uq = _load_trained_model(
+            checkpoint_dir_uq, arch_uq, timestamp_uq,
+            epoch=epoch_uq, imgsize=imgsize, order2=True,
+            verbose=verbose_uq, **kwargs_model_uq
+        )
     else:
         model_uq = None
 
@@ -272,7 +315,7 @@ def get_pnpmass(
         std_noise=None, mask=None, physics=None,
         step_size=None, niter=NITER_PNPMASS,
         multfact_step_size=MULTFACT_STEP_SIZE, nongaussian=False,
-        wiener=None, device="cpu"
+        switch_mode_for_uq=False, wiener=None, device="cpu"
 ):
     data_fidelity, prior, prior_uq, rmse = get_pnpmass_modules(
         std_noise, mask, denoiser, denoiser_uq
@@ -283,27 +326,50 @@ def get_pnpmass(
             physics=physics, device=device
         )
         step_size = multfact_step_size * upperbound_step_size
-    if nongaussian:
-        if wiener is None:
-            raise ValueError("Missing model for iterative Wiener filtering.")
-        init_estimate = wiener
-    else:
-        init_estimate = None
+
+    wiener_estimate = _get_wiener_estimate(nongaussian, wiener)
     pnpmass = wlpnp.optim_builder(
-        iteration="PGD", prior=prior, prior_uq=prior_uq,
+        iteration="PGD", prior=prior,
         data_fidelity=data_fidelity,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
         metric_dict={"rmse": rmse}, verbose=True,
         params_algo={"stepsize": step_size, "g_param": step_size},
-        init_estimate=init_estimate,
+        wiener_estimate=wiener_estimate,
     ).to(device)
 
-    return pnpmass, step_size
+    if prior_uq is not None:
+        if not switch_mode_for_uq:
+            nongaussian_uq = nongaussian
+        else:
+            nongaussian_uq = not nongaussian
+        wiener_estimate_uq = _get_wiener_estimate(nongaussian_uq, wiener)
+        pnpmass_uq = wlpnp.optim_builder(
+            iteration="PGD", prior=prior_uq,
+            data_fidelity=data_fidelity,
+            early_stop=False, max_iter=1, custom_init=wlpnp.ManualInit(),
+            verbose=True,
+            params_algo={"stepsize": step_size, "g_param": step_size},
+            wiener_estimate=wiener_estimate_uq,
+        ).to(device)
+    else:
+        pnpmass_uq = None
+
+    return pnpmass, pnpmass_uq, step_size
+
+
+def _get_wiener_estimate(nongaussian, wiener):
+    if nongaussian:
+        if wiener is None:
+            raise ValueError("Missing model for iterative Wiener filtering.")
+        wiener_estimate = wiener
+    else:
+        wiener_estimate = None
+    return wiener_estimate
 
 
 def run_wiener_pnpmass_batch(
         wiener: wlpnp.BaseOptim, pnpmass: wlpnp.BaseOptim,
-        physics: wlpnp.MassMapping,
+        pnpmass_uq: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         device="cpu", verbose=False
 ):
@@ -323,14 +389,19 @@ def run_wiener_pnpmass_batch(
                 kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
             else:
                 kappa_wiener = None
-            out, metrics = pnpmass(
+
+            kappa_pnpmass, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
-            if not isinstance(out, tuple):
-                kappa_pnpmass = out
-                var_pnpmass = torch.zeros(kappa_true.shape, device=device)
+            if pnpmass_uq is not None:
+                # Initialize the UQ iteration with the predicted kappa
+                pnpmass_uq.custom_init.X_init = (kappa_pnpmass,)
+                var_pnpmass = pnpmass_uq(
+                    gamma_noisy, physics, compute_metrics=False
+                )
             else:
-                kappa_pnpmass, var_pnpmass = out
+                var_pnpmass = torch.zeros(kappa_true.shape, device=device)
+
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
             if wiener is not None:
                 listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
@@ -401,6 +472,25 @@ def get_powerspectrum_step_size_wienerinit(
     return powerspectrum, step_size, param_mahalanobis
 
 
+def save_output_pnpmass(
+        out_dict, path_to_output, step_size, now,
+        load_model_uq=False, confidence_uq=None,
+        verbose=False
+):
+    path_to_output_completed = (
+        f"{path_to_output}_step-size_{step_size:.3f}"
+    )
+    if load_model_uq:
+        path_to_output_completed = (
+            f"{path_to_output_completed}_{confidence_uq}-sigma"
+        )
+    path_to_output_completed = f"{path_to_output_completed}_{now}.pt"
+    if verbose:
+        print(f"Save results to {path_to_output_completed}")
+
+    torch.save(out_dict, path_to_output_completed)
+
+
 def add_arguments_create_dataset(parser):
 
     parser.add_argument(
@@ -454,6 +544,27 @@ def add_arguments_model(parser):
     )
 
 
+def add_arguments_model_uq(parser):
+
+    parser.add_argument(
+        "-auq", "--arch-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Architecture of the order-2 model, if different from `--arch`. "
+            "Possible values are: "
+            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "-suq", "--model-size-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Size of the order-2 model (DRUNet only). Possible values are: "
+            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+        )
+    )
+
+
 def add_arguments_checkpoint(parser):
 
     parser.add_argument(
@@ -478,7 +589,15 @@ def add_arguments_checkpoint(parser):
         help=(
             "Load the order-2 moment network, for UQ."
         )
-    ) 
+    )
+    parser.add_argument(
+        "--checkpoint-dir-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Checkpoint directory for the order-2 moment network, "
+            "if different from `checkpoint_dir`."
+        )
+    )
     parser.add_argument(
         "-t0", "--timestamp_uq", type=str,
         default=argparse.SUPPRESS,
@@ -488,7 +607,7 @@ def add_arguments_checkpoint(parser):
         )
     )
     parser.add_argument(
-        "--epoch_uq", type=int,
+        "-e0", "--epoch_uq", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Epoch of the model to load. "
@@ -569,7 +688,38 @@ def add_arguments_nongaussian(parser):
             "Split the Gaussian and non-Gaussian parts of the convergence maps."
         )
     )
+    parser.add_argument(
+        "--switch-mode-for-uq", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "If both this argument and `--nongaussian` are set, then "
+            "UQ will not be computed on the residuals. This is useful when "
+            "the model used for UQ is different from the one used for the "
+            "point estimate, and is not trained on the residuals."
+        )
+    )
     add_arguments_wiener(parser)
+
+
+def add_arguments_output(parser, output_filename):
+
+    parser.add_argument(
+        "-o", "--output-filename", type=str,
+        help=(
+            "Output filename (without extension). "
+            f"Default = {output_filename}"
+        )
+    )
+    parser.add_argument(
+        "--save-tensors", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "If set, the tensors of the true convergence, "
+            "the kappa map estimate, the variance, and the residuals "
+            "will be saved in the output file. WARNING: this will increase "
+            "the size of the output file significantly!"
+        )
+    )
 
 
 def add_arguments_seed_verbose(parser):

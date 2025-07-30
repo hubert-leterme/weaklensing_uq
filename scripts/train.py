@@ -149,10 +149,7 @@ def main(
         model.summary()
 
     # Set directories
-    if not order2:
-        output_type = "pe" # Point estimate
-    else:
-        output_type = "var" # Variance
+    output_type = _commons.get_output_type(order2)
 
     checkpoint_dir = os.path.expanduser(checkpoint_dir)
     checkpoint_dir = os.path.join(checkpoint_dir, output_type)
