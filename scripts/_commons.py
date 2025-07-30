@@ -22,7 +22,7 @@ from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
-NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files(augmented dataset)
+NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augmented dataset)
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
