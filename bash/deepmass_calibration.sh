@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Set paths
-path_to_test_dataset=/ceph/checheurs/leterme231/Data/kappaTNG_cropped/LP001_cropped_384.hdf5
+path_to_calibration_dataset=/ceph/checheurs/leterme231/Data/kappaTNG_augmented/LP001_augmented_384.hdf5
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <GPU_ID> <CHECKPOINT_DIR> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 checkpoint/dir/ -cqr path/to/cqr.pt -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss [-w 8]"
+  echo "Example: $0 0 checkpoint/dir/ -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss -f 58 [-w 8]"
   exit 1
 fi
 
@@ -18,7 +18,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
-  | sed 's/-cqr [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
@@ -30,14 +29,13 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-e /--epoch /g' \
   | sed 's/-uq //g' \
   | sed 's/-ps [^ ]\+//g' \
-  | sed 's/--save-tensors //g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
-output_filename=$(echo "results_deepmass_${optional_args_cleaned}" | sed 's/__/_/g')
+output_filename=$(echo "cqr_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g')
 
 # Command to execute
-cmd=$(echo "python scripts/deepmass.py ${path_to_test_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/deepmass_calibration.py ${path_to_calibration_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

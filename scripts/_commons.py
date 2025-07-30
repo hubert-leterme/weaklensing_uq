@@ -1,5 +1,6 @@
 import os
 import warnings
+import time
 import random
 import argparse
 import tqdm
@@ -14,6 +15,7 @@ from wlmmuq import utils as wlutils
 from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
+from wlmmuq.models import cqr as wlcqr
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.kappatng import OPENINGANGLE
@@ -31,6 +33,9 @@ KEYS_MODEL = ['model_size', 'args_wienerinit']
 
 NITER_PNPMASS = 8
 CONFIDENCE_UQ = 2 # 2-sigma confidence
+
+INPAINTING_PNPMASS = False
+INPAINTING_DEEPMASS = True
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -425,6 +430,50 @@ def run_wiener_pnpmass_batch(
     return kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
 
 
+def run_deepmass_batch(
+        deepmass: wlpnp.BaseOptim, deepmass_uq: wlpnp.BaseOptim,
+        dataloader, confidence_uq=CONFIDENCE_UQ,
+        mask=None, device="cpu", verbose=False
+):
+    listof_kappa_true = []
+    listof_kappa_deepmass = []
+    listof_var_deepmass = []
+    listof_rmse = []
+
+    pbar = tqdm.tqdm(dataloader, disable=not verbose)
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            kappa_deepmass = deepmass(gamma_noisy)
+            if deepmass_uq is not None:
+                var_deepmass = deepmass_uq(gamma_noisy)
+            else:
+                var_deepmass = torch.zeros(kappa_true.shape, device=device)
+            rmse = wlutils.rmse(kappa_deepmass, kappa_true, mask=mask)
+
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_deepmass.append(kappa_deepmass) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var_deepmass.append(var_deepmass) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_rmse.append(rmse) # Shape = (batch_size,)
+
+    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_deepmass = torch.cat(listof_kappa_deepmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var_deepmass = torch.cat(listof_var_deepmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
+
+    res_deepmass = confidence_uq * var_deepmass**0.5
+
+    return kappa_true, kappa_deepmass, var_deepmass, res_deepmass, rmse
+
+
+def get_inference_time(beg_time, verbose=False):
+    inference_time = time.time() - beg_time
+    if verbose:
+        print(f"Total inference time: {inference_time:.2f} seconds")
+    return inference_time
+
+
 def get_args_wienerinit(
         std_noise, mask, path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
@@ -474,23 +523,95 @@ def get_powerspectrum_step_size_wienerinit(
     return powerspectrum, step_size, param_mahalanobis
 
 
-def save_output_pnpmass(
-        out_dict, path_to_output, step_size, now,
-        load_model_uq=False, confidence_uq=None,
-        verbose=False
+def load_cqr(
+        path_to_cqr, confidence_uq, imgsize,
+        device="cpu", verbose=False
 ):
-    path_to_output_completed = (
-        f"{path_to_output}_step-size_{step_size:.3f}"
-    )
-    if load_model_uq:
-        path_to_output_completed = (
-            f"{path_to_output_completed}_{confidence_uq}-sigma"
-        )
-    path_to_output_completed = f"{path_to_output_completed}_{now}.pt"
-    if verbose:
-        print(f"Save results to {path_to_output_completed}")
+    if path_to_cqr is not None:
+        if verbose:
+            print("Load calibration function")
+        alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+        cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
+        checkpoint_cqr = torch.load(path_to_cqr)
+        assert confidence_uq == checkpoint_cqr["confidence_uq"]
+        nimgs_calib = checkpoint_cqr["nimgs_calib"]
+        cqr.load_state_dict(checkpoint_cqr["state_dict"])
+        cqr.eval().to(device)
+    else:
+        nimgs_calib = None
+        cqr = None
 
-    torch.save(out_dict, path_to_output_completed)
+    return nimgs_calib, cqr
+
+
+def get_cqr(
+        kappa_pred, res, kappa_true,
+        imgsize, confidence_uq, device="cpu", verbose=False
+):
+    if verbose:
+        print("Instantiate CQR model and compute the calibration parameters")
+    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+    cqr = wlcqr.AddCQR(alpha, map_size=imgsize).to(device)
+    cqr.calibrate(kappa_pred, res, kappa_true)
+
+    return cqr
+
+
+def get_calibrated_residuals(cqr, res, verbose=False):
+
+    if cqr is not None:
+        beg_time = time.time()
+        if verbose:
+            print("Calibrate residuals with CQR")
+        res_cqr = cqr(res)
+        cqr_time = time.time() - beg_time
+        if verbose:
+            print(f"Calibration time: {cqr_time:.2f} seconds")
+    else:
+        res_cqr = None
+        cqr_time = None
+
+    return res_cqr, cqr_time
+
+
+def get_metrics(
+        kappa_pred, res, kappa_true, res_cqr=None,
+        mask=None, verbose=False
+):
+    beg_time = time.time()
+    err, predinterv, _, _ = wlutils.get_metrics(
+        kappa_pred, res, kappa_true, mask=mask
+    )
+    if res_cqr is not None:
+        err_cqr, predinterv_cqr, _, _ = wlutils.get_metrics(
+            kappa_pred, res_cqr, kappa_true, mask=mask
+        )
+    else:
+        err_cqr = None
+        predinterv_cqr = None
+    metrics_time = time.time() - beg_time
+    if verbose:
+        print(f"Metrics computation time: {metrics_time:.2f} seconds")
+
+    return err, predinterv, err_cqr, predinterv_cqr, metrics_time
+
+
+def save_results(
+        out_dict, path_to_output, now,
+        step_size=None, load_model_uq=False,
+        confidence_uq=None, verbose=False
+):
+    if step_size is not None:
+        path_to_output = f"{path_to_output}_step-size_{step_size:.3f}"
+    if load_model_uq:
+        path_to_output = (
+            f"{path_to_output}_{confidence_uq}-sigma"
+        )
+    path_to_output = f"{path_to_output}_{now}.pt"
+    if verbose:
+        print(f"Save results to {path_to_output}")
+
+    torch.save(out_dict, path_to_output)
 
 
 def add_arguments_create_dataset(parser):
@@ -522,6 +643,17 @@ def add_arguments_create_dataset(parser):
         help=(
             "Batch size, to avoid memory overload. "
             "Default = 50"
+        )
+    )
+
+
+def add_arguments_cqr(parser):
+
+    parser.add_argument(
+        "-cqr", "--path-to-cqr", type=str, default=None,
+        help=(
+            "Path to the CQR checkpoint (optional). "
+            "If provided, the residuals will be calibrated with CQR"
         )
     )
 
@@ -652,6 +784,32 @@ def add_arguments_dataset(parser, batch_size):
             f"Default = {NUM_WORKERS}"
         )
     )
+
+
+def add_arguments_test_dataset(parser, batch_size):
+
+    parser.add_argument(
+        "--nimgs-test", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of test images. "
+            f"Default = {NIMGS_TEST}"
+        )
+    )
+    add_arguments_dataset(parser, batch_size)
+
+
+def add_arguments_calib_dataset(parser, batch_size):
+
+    parser.add_argument(
+        "--nimgs-calib", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of calibration images. "
+            f"Default = {NIMGS_CALIB}"
+        )
+    )
+    add_arguments_dataset(parser, batch_size)
 
 
 def add_arguments_wiener(parser):

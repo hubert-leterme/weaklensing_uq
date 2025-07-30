@@ -1,7 +1,5 @@
 import argparse
 import time
-import tqdm
-import torch
 
 import wlmmuq.utils as wlutils
 
@@ -16,16 +14,21 @@ OUTPUT_FILENAME = "results_deepmass"
 
 def main(
         path_to_test_dataset: str, checkpoint_dir: str, checkpoint_dir_uq: str=None,
+        path_to_cqr: str=None,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=None,
-        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
-        cosmos_include_faint: bool=False,
+        load_model_uq: bool=False,
+        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
+        cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_DEEPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
+        niter_wiener: int=NITER_WIENER,
+        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
+        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -47,61 +50,95 @@ def main(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, inpainting=True,
+        convert_to_torch_tensor=True, inpainting=inpainting,
         verbose=verbose
-    ) # inpainting = True, as in training
+    )
 
     # Load test set
     test_dataset = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask
+        num_workers, std_noise, mask, shuffle=False
     )
 
     # Load arguments for Wiener initialization
     args_wienerinit = _commons.get_args_wienerinit(
         std_noise, mask, path_to_ps=path_to_ps,
-        noise_whitening=noise_whitening_wiener,
         multfact_step_size=multfact_step_size, niter=niter_wiener,
         device=device, verbose=verbose
     )
     kwargs.update(args_wienerinit=args_wienerinit)
 
-    # Initialize iterator
-    test_dataloader = iter(test_dataset)
-
-    # Load trained model
-    deepmass, _ = _commons.load_trained_models(
-        checkpoint_dir, arch, timestamp,
-        epoch=epoch, imgsize=imgsize,
-        verbose=verbose, **kwargs
+    # Load trained models
+    deepmass, deepmass_uq = _commons.load_trained_models(
+        checkpoint_dir, arch, timestamp, epoch=epoch,
+        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
+        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+        imgsize=imgsize, verbose=verbose, **kwargs
     )
-    deepmass = deepmass.to(device)
+
+    # Load CQR, if available
+    nimgs_calib, cqr = _commons.load_cqr(
+        path_to_cqr, confidence_uq, imgsize,
+        device=device, verbose=verbose
+    )
 
     # Run DeepMass for each batch
-    listof_rmse = []
+    test_dataloader = iter(test_dataset)
     mask = mask.to(device)
-    pbar = tqdm.tqdm(test_dataloader, disable=not verbose)
-    for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            kappa_deepmass = deepmass(gamma_noisy)
-            rmse = wlutils.rmse(kappa_deepmass, kappa_true, mask=mask)
-            listof_rmse.append(rmse) # Shape = (batch_size,)
-    rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
+    kappa_true, kappa_deepmass, var_deepmass, res_deepmass, rmse = \
+            _commons.run_deepmass_batch(
+        deepmass, deepmass_uq,
+        test_dataloader, confidence_uq=confidence_uq,
+        mask=mask, device=device, verbose=verbose,
+    )
+    inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
-    inference_time = time.time() - beg_time
+    # Calibrate with CQR, if available
+    res_deepmass_cqr, cqr_time = _commons.get_calibrated_residuals(
+        cqr, res_deepmass, verbose=verbose
+    )
+
+    # Compute miscoverage rate and size of prediction intervals
+    err_deepmass, predinterv_deepmass, err_deepmass_cqr, \
+            predinterv_deepmass_cqr, metrics_time = _commons.get_metrics(
+        kappa_deepmass, res_deepmass, kappa_true, res_cqr=res_deepmass_cqr,
+        mask=mask, verbose=verbose
+    )
 
     out_dict = {
-        "rmse": rmse.cpu(),
         "inference_time": inference_time,
+        "metrics_time": metrics_time,
         "arch": arch,
         "nimgs_test": nimgs_test,
         "imgsize": imgsize,
-        "args_wienerinit": args_wienerinit,
+        "confidence_uq": confidence_uq,
+        "rmse": rmse.cpu(),
+        "err_deepmass": err_deepmass.cpu(),
+        "predinterv_deepmass": predinterv_deepmass.cpu(),
     }
-    path_to_output_completed = f"{path_to_output}_{now}.pt"
-    torch.save(out_dict, path_to_output_completed)
+    if save_tensors:
+        out_dict.update({
+            "kappa_true": kappa_true[:nimgs_save].cpu(),
+            "kappa_deepmass": kappa_deepmass[:nimgs_save].cpu(),
+            "var_deepmass": var_deepmass[:nimgs_save].cpu(),
+            "res_deepmass": res_deepmass[:nimgs_save].cpu(),
+        })
+    if cqr is not None:
+        out_dict.update({
+            "cqr_time": cqr_time,
+            "nimgs_calib": nimgs_calib,
+            "err_deepmass_cqr": err_deepmass_cqr.cpu(),
+            "predinterv_deepmass_cqr": predinterv_deepmass_cqr.cpu(),
+        })
+        if save_tensors:
+            out_dict.update({
+                "res_deepmass_cqr": res_deepmass_cqr[:nimgs_save].cpu(),
+            })
+    _commons.save_results(
+        out_dict, path_to_output, now,
+        load_model_uq=load_model_uq, confidence_uq=confidence_uq,
+        verbose=verbose
+    )
 
 
 if __name__ == "__main__":
@@ -114,22 +151,11 @@ if __name__ == "__main__":
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
-    parser.add_argument(
-        "path_to_output", type=str,
-        help="Path to the output file (without extension)"
-    )
+    _commons.add_arguments_cqr(parser)
     _commons.add_arguments_model(parser)
-    # _commons.add_arguments_model_uq(parser) # TODO: uncomment after update
+    _commons.add_arguments_model_uq(parser)
     _commons.add_arguments_checkpoint(parser)
-    parser.add_argument(
-        "--nimgs-test", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of test images. "
-            f"Default = {_commons.NIMGS_TEST}"
-        )
-    )
-    _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_test_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_wiener(parser)
     _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)

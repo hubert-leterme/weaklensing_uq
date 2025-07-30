@@ -31,6 +31,7 @@ def main(
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps=PATH_TO_PS,
         cosmos_include_faint=False,
+        inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         backend=None, arch=None, denoiser=False,
         wiener_init=False, nongaussian=False,
         niter_wiener=NITER_WIENER,
@@ -73,7 +74,7 @@ def main(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
-            convert_to_torch_tensor=True, inpainting=True,
+            convert_to_torch_tensor=True, inpainting=inpainting_deepmass,
             verbose=verbose
         )
         # Update arguments for data loading

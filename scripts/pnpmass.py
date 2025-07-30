@@ -1,10 +1,7 @@
 import argparse
 import time
-import warnings
-import torch
 
 import wlmmuq.models.deepinv.iterativemm as wlpnp
-import wlmmuq.models.cqr as wlcqr
 import wlmmuq.utils as wlutils
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
@@ -26,7 +23,7 @@ def main(
         load_model_uq: bool=False,
         arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
-        cosmos_include_faint: bool=False,
+        cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_PNPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
@@ -56,7 +53,7 @@ def main(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, inpainting=False,
+        convert_to_torch_tensor=True, inpainting=inpainting,
         verbose=verbose
     )
 
@@ -66,7 +63,7 @@ def main(
         num_workers, std_noise, mask, shuffle=False
     )
 
-    # Load trained denoiser
+    # Load trained denoisers
     denoiser, denoiser_uq = _commons.load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
@@ -79,19 +76,10 @@ def main(
         step_size = [step_size]
 
     # Load CQR, if available
-    if path_to_cqr is not None:
-        if verbose:
-            print("Load calibration function")
-        alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-        cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
-        checkpoint_cqr = torch.load(path_to_cqr)
-        assert confidence_uq == checkpoint_cqr["confidence_uq"]
-        nimgs_calib = checkpoint_cqr["nimgs_calib"]
-        cqr.load_state_dict(checkpoint_cqr["state_dict"])
-        cqr.eval().to(device)
-    else:
-        nimgs_calib = None
-        cqr = None
+    nimgs_calib, cqr = _commons.load_cqr(
+        path_to_cqr, confidence_uq, imgsize,
+        device=device, verbose=verbose
+    )
 
     # Instantiate physics (forward model)
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
@@ -126,46 +114,20 @@ def main(
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
         )
-
-        inference_time = time.time() - beg_time
-        if verbose:
-            print(f"Total inference time: {inference_time:.2f} seconds")
+        inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
         # Calibrate with CQR, if available
-        if cqr is not None:
-            beg_time = time.time()
-            if verbose:
-                print("Calibrate residuals with CQR")
-            if tau != checkpoint_cqr["step_size"]:
-                warnings.warn(
-                    f"Step size {tau:.2e} does not match the step size "
-                    f"{checkpoint_cqr['step_size']:.2e} used for CQR. "
-                    "Calibration may be inaccurate."
-                )
-            res_pnpmass_cqr = cqr(res_pnpmass)
-            cqr_time = time.time() - beg_time
-            if verbose:
-                print(f"Calibration time: {cqr_time:.2f} seconds")
-        else:
-            res_pnpmass_cqr = None
-            cqr_time = None
+        res_pnpmass_cqr, cqr_time = _commons.get_calibrated_residuals(
+            cqr, res_pnpmass, verbose=verbose
+        )
 
         # Compute miscoverage rate and size of prediction intervals
-        beg_time = time.time()
         mask = mask.to(device)
-        err_pnpmass, predinterv_pnpmass, _, _ = wlutils.get_metrics(
-            kappa_pnpmass, res_pnpmass, kappa_true, mask=mask
+        err_pnpmass, predinterv_pnpmass, err_pnpmass_cqr, \
+                predinterv_pnpmass_cqr, metrics_time = _commons.get_metrics(
+            kappa_pnpmass, res_pnpmass, kappa_true, res_cqr=res_pnpmass_cqr,
+            mask=mask, verbose=verbose
         )
-        if res_pnpmass_cqr is not None:
-            err_pnpmass_cqr, predinterv_pnpmass_cqr, _, _ = wlutils.get_metrics(
-                kappa_pnpmass, res_pnpmass_cqr, kappa_true, mask=mask
-            )
-        else:
-            err_pnpmass_cqr = None
-            predinterv_pnpmass_cqr = None
-        metrics_time = time.time() - beg_time
-        if verbose:
-            print(f"Metrics computation time: {metrics_time:.2f} seconds")
 
         out_dict = {
             "inference_time": inference_time,
@@ -202,8 +164,8 @@ def main(
                 out_dict.update({
                     "res_pnpmass_cqr": res_pnpmass_cqr[:nimgs_save].cpu(),
                 })
-        _commons.save_output_pnpmass(
-            out_dict, path_to_output, tau, now,
+        _commons.save_results(
+            out_dict, path_to_output, now, step_size=tau,
             load_model_uq=load_model_uq, confidence_uq=confidence_uq,
             verbose=verbose
         )
@@ -219,13 +181,7 @@ if __name__ == "__main__":
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
-    parser.add_argument(
-        "-cqr", "--path-to-cqr", type=str, default=None,
-        help=(
-            "Path to the CQR checkpoint (optional). "
-            "If provided, the residuals will be calibrated with CQR"
-        )
-    )
+    _commons.add_arguments_cqr(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_model_uq(parser)
     _commons.add_arguments_checkpoint(parser)
@@ -248,15 +204,7 @@ if __name__ == "__main__":
             f"Default = {_commons.NITER_PNPMASS}"
         )
     )
-    parser.add_argument(
-        "--nimgs-test", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of test images. "
-            f"Default = {_commons.NIMGS_TEST}"
-        )
-    )
-    _commons.add_arguments_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_test_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_nongaussian(parser)
     _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)
