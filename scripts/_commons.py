@@ -34,6 +34,7 @@ KEYS_MODEL = ['model_size', 'args_wienerinit']
 NITER_PNPMASS = 8
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
+INPAINTING_WIENER = False
 INPAINTING_PNPMASS = False
 INPAINTING_DEEPMASS = True
 
@@ -381,6 +382,41 @@ def _get_wiener_estimate(nongaussian, wiener):
     else:
         wiener_estimate = None
     return wiener_estimate
+
+
+# TODO: Merge the 3 functions below into one single function
+def run_wiener_batch(
+        wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
+        dataloader, confidence_uq=CONFIDENCE_UQ,
+        mask=None, device="cpu", verbose=False
+):
+    listof_kappa_true = []
+    listof_kappa_wiener = []
+    listof_var_wiener = [] # Zero-valued tensors
+    listof_rmse = []
+
+    pbar = tqdm.tqdm(dataloader, disable=not verbose)
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            kappa_wiener = wiener(gamma_noisy, physics)
+            var_wiener = torch.zeros(kappa_true.shape, device=device)
+            rmse = wlutils.rmse(kappa_wiener, kappa_true, mask=mask)
+
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var_wiener.append(var_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_rmse.append(rmse) # Shape = (batch_size,)
+
+    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var_wiener = torch.cat(listof_var_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
+
+    res_wiener = confidence_uq * var_wiener**0.5
+
+    return kappa_true, kappa_wiener, var_wiener, res_wiener, rmse
 
 
 def run_wiener_pnpmass_batch(
