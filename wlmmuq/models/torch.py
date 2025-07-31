@@ -93,7 +93,10 @@ class ModelMixin:
 
 
     def _get_fake_input_data(self):
-        raise NotImplementedError
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
 
 
     def summary(self, **kwargs):
@@ -115,7 +118,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
             map_size=map_size, in_channels=in_channels, out_channels=out_channels, **kwargs
         )
 
-    def forward(self, inp, sigma, *args, **kwargs):
+    def forward(self, inp, sigma=None, **kwargs):
         r"""
         The noise level is not used in this model.
 
@@ -124,10 +127,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
         """
         # The signature of this forward method follows the specifications of DeepInverse,
         # to be able to use the `Trainer` class from DeepInverse for training.
-        return super().forward(inp, *args, **kwargs)
-
-    def _get_fake_input_data(self):
-        return (torch.randn(1, self.in_channels, self.map_size, self.map_size),)
+        return super().forward(inp, **kwargs)
 
 
 class NoiseAwareModelMixin(ModelMixin):
@@ -144,7 +144,7 @@ class NoiseAwareModelMixin(ModelMixin):
             out_channels=out_channels, **kwargs
         )
 
-    def forward(self, inp, sigma, *args, **kwargs):
+    def forward(self, inp, sigma, **kwargs):
         # This code block is inspired from the DRUNet implementation
         if isinstance(sigma, torch.Tensor):
             if sigma.ndim > 0:
@@ -162,13 +162,7 @@ class NoiseAwareModelMixin(ModelMixin):
         inp = torch.cat((inp, noise_level_map), 1)
         # End of copy-pasted code block
 
-        return super().forward(inp, *args, **kwargs)
-
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
+        return super().forward(inp, **kwargs)
 
 
 # class ScoreMatchingMixin:
@@ -222,12 +216,6 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         )
         return kwargs
 
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
-
 
 #=================================================================================
 # Learnlet
@@ -256,12 +244,6 @@ class Learnlet(ModelMixin, learnlet.Learnlet):
     ):
         # map_size, in_channels and out_channels discarded
         return kwargs
-
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
 
 
 #=================================================================================
@@ -599,12 +581,6 @@ class WienerInitMixin:
         inp = self.wiener_init(inp)
         out = super().forward(inp, *args, **kwargs)
         return out
-
-    def _get_fake_input_data(self):
-        return (torch.randn(
-            1, self.in_channels, self.map_size, self.map_size,
-            dtype=torch.complex64
-    ),)
 
 
 class UNetWienerInit(WienerInitMixin, UNet):
