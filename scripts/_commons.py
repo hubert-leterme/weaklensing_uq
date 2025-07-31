@@ -819,7 +819,7 @@ def add_arguments_wiener(parser):
         default=argparse.SUPPRESS,
         help=(
             "Path to the power spectrum file used for Wiener initialization. "
-            f"Default = {PATH_TO_PS}"
+            f"Default = '{PATH_TO_PS}'"
         )
     )
     parser.add_argument(
@@ -867,7 +867,7 @@ def add_arguments_output(parser, output_filename):
         "-o", "--output-filename", type=str,
         help=(
             "Output filename (without extension). "
-            f"Default = {output_filename}"
+            f"Default = '{output_filename}'"
         )
     )
     parser.add_argument(

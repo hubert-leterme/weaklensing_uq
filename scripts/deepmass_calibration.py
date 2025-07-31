@@ -113,7 +113,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "path_to_calib_dataset", type=str,
-        help="Path to the test set (HDF5 file)"
+        help="Path to the calibration set (HDF5 file)"
     )
     parser.add_argument(
         "checkpoint_dir", type=str,
