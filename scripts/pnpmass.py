@@ -21,7 +21,7 @@ def main(
         path_to_ps: str=PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         load_model_uq: bool=False,
-        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=_commons.EPOCH,
+        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
         step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_PNPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
@@ -68,7 +68,7 @@ def main(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
         arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        imgsize=imgsize, verbose=verbose, **kwargs
+        imgsize=imgsize, device=device, verbose=verbose, **kwargs
     )
 
     # Get step size

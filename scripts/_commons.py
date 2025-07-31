@@ -180,7 +180,7 @@ def _load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
-        verbose=False, **kwargs
+        device="cpu", verbose=False, **kwargs
 ):
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
     if timestamp is None:
@@ -205,7 +205,7 @@ def _load_trained_model(
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
     model.load_state_dict(checkpoint['state_dict'])
-    model.eval()
+    model.eval().to(device)
     if verbose:
         model.summary()
 
@@ -216,7 +216,7 @@ def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=EPOCH,
         load_model_uq=False, checkpoint_dir_uq=None,
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
-        imgsize=IMGSIZE, verbose=False, **kwargs
+        imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
 ):
     if arch is None:
         raise ValueError(
@@ -225,7 +225,7 @@ def load_trained_models(
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     model = _load_trained_model(
         checkpoint_dir, arch, timestamp, epoch=epoch,
-        imgsize=imgsize, order2=False,
+        imgsize=imgsize, order2=False, device=device,
         verbose=verbose, **kwargs_model
     )
     if load_model_uq:
@@ -253,7 +253,8 @@ def load_trained_models(
         model_uq = _load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
-            verbose=verbose_uq, **kwargs_model_uq
+            device=device, verbose=verbose_uq,
+            **kwargs_model_uq
         )
     else:
         model_uq = None
