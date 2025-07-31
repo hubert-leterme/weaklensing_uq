@@ -15,3 +15,7 @@ path_to_mask: path/to/mask.pt
 path_to_ps: path/to/powerspectrum.pt
 
 learnlets_pretrained_weights_dir: path/to/weights
+
+key_replacement_dict:
+  old.key: new.key
+  another.old.key: another.new.key

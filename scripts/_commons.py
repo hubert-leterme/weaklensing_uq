@@ -17,7 +17,7 @@ from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models import cqr as wlcqr
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
@@ -179,6 +179,7 @@ def get_output_type(order2=False):
 def _load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
+        key_replacement_dict=KEY_REPLACEMENT_DICT,
         verbose=False, **kwargs
 ):
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
@@ -196,6 +197,13 @@ def _load_trained_model(
 
     model = cnn_class(map_size=imgsize, **kwargs)
     checkpoint = torch.load(path_to_checkpoint)
+    state_dict = checkpoint['state_dict']
+    if key_replacement_dict is not None:
+        for old_key, new_key in key_replacement_dict.items():
+            if old_key in state_dict:
+                if verbose:
+                    print(f"Replacing key '{old_key}' with '{new_key}'")
+                state_dict[new_key] = state_dict.pop(old_key)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     if verbose:

@@ -45,3 +45,5 @@ PATH_TO_PS = os.path.expanduser(CONFIG_DATA.get('path_to_ps', None))
 LEARNLETS_PRETRAINED_WEIGHTS_DIR = os.path.expanduser(
     CONFIG_DATA.get('learnlets_pretrained_weights_dir', None)
 )
+
+KEY_REPLACEMENT_DICT = CONFIG_DATA.get("key_replacement_dict", None)
