@@ -910,6 +910,7 @@ def add_arguments_output(parser, output_filename):
 
     parser.add_argument(
         "-o", "--output-filename", type=str,
+        default=argparse.SUPPRESS,
         help=(
             "Output filename (without extension). "
             f"Default = '{output_filename}'"
