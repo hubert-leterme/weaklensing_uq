@@ -107,13 +107,19 @@ def main(
         )
 
         # Run PnPMass for each batch
-        kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter = \
-                _commons.run_wiener_pnpmass_batch(
+        out_wiener_pnpmass = _commons.run_wiener_pnpmass_batch(
             wiener, pnpmass, pnpmass_uq,
             physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
         )
+        kappa_true = out_wiener_pnpmass["kappa_true"]
+        kappa_wiener = out_wiener_pnpmass["kappa_wiener"]
+        kappa_pnpmass = out_wiener_pnpmass["kappa_pnpmass"]
+        var_pnpmass = out_wiener_pnpmass["var_pnpmass"]
+        res_pnpmass = out_wiener_pnpmass["res_pnpmass"]
+        rmse_iter = out_wiener_pnpmass["rmse_iter"]
+
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
         # Calibrate with CQR, if available

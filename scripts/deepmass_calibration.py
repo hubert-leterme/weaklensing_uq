@@ -78,12 +78,15 @@ def main(
     # Run DeepMass for each batch
     calib_dataloader = iter(calib_dataset)
     mask = mask.to(device)
-    kappa_true, kappa_deepmass, _, res_deepmass, _ = \
-            _commons.run_deepmass_batch(
+    out_deepmass = _commons.run_deepmass_batch(
         deepmass, deepmass_uq,
         calib_dataloader, confidence_uq=confidence_uq,
         mask=mask, device=device, verbose=verbose,
     )
+    kappa_true = out_deepmass["kappa_true"]
+    kappa_deepmass = out_deepmass["kappa_deepmass"]
+    res_deepmass = out_deepmass["res_deepmass"]
+
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Instantiate CQR model and compute the calibration parameters

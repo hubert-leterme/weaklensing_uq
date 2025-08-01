@@ -93,13 +93,15 @@ def main(
 
     # Run PnPMass for each batch
     calib_dataloader = iter(calib_dataset)
-    kappa_true, _, kappa_pnpmass, _, res_pnpmass, _ = \
-            _commons.run_wiener_pnpmass_batch(
+    out_pnpmass = _commons.run_wiener_pnpmass_batch(
         wiener, pnpmass, pnpmass_uq,
         physics, calib_dataloader, step_size, niter,
         confidence_uq=confidence_uq,
         device=device, verbose=verbose,
     )
+    kappa_true = out_pnpmass["kappa_true"]
+    kappa_pnpmass = out_pnpmass["kappa_pnpmass"]
+    res_pnpmass = out_pnpmass["res_pnpmass"]
 
     # Instantiate CQR model and compute the calibration parameters
     cqr = _commons.get_cqr(

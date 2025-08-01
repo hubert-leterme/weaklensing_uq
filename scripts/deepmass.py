@@ -85,12 +85,17 @@ def main(
     # Run DeepMass for each batch
     test_dataloader = iter(test_dataset)
     mask = mask.to(device)
-    kappa_true, kappa_deepmass, var_deepmass, res_deepmass, rmse = \
-            _commons.run_deepmass_batch(
+    out_deepmass = _commons.run_deepmass_batch(
         deepmass, deepmass_uq,
         test_dataloader, confidence_uq=confidence_uq,
         mask=mask, device=device, verbose=verbose,
     )
+    kappa_true = out_deepmass["kappa_true"]
+    kappa_deepmass = out_deepmass["kappa_deepmass"]
+    var_deepmass = out_deepmass["var_deepmass"]
+    res_deepmass = out_deepmass["res_deepmass"]
+    rmse = out_deepmass["rmse"]
+
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available

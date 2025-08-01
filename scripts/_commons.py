@@ -416,7 +416,14 @@ def run_wiener_batch(
 
     res_wiener = confidence_uq * var_wiener**0.5
 
-    return kappa_true, kappa_wiener, var_wiener, res_wiener, rmse
+    out = {
+        "kappa_true": kappa_true,
+        "kappa_wiener": kappa_wiener,
+        "var_wiener": var_wiener,
+        "res_wiener": res_wiener,
+        "rmse": rmse
+    }
+    return out
 
 
 def run_wiener_pnpmass_batch(
@@ -472,7 +479,15 @@ def run_wiener_pnpmass_batch(
 
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
-    return kappa_true, kappa_wiener, kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_iter
+    out = {
+        "kappa_true": kappa_true,
+        "kappa_wiener": kappa_wiener,
+        "kappa_pnpmass": kappa_pnpmass,
+        "var_pnpmass": var_pnpmass,
+        "res_pnpmass": res_pnpmass,
+        "rmse_iter": rmse_iter
+    }
+    return out
 
 
 def run_deepmass_batch(
@@ -509,7 +524,14 @@ def run_deepmass_batch(
 
     res_deepmass = confidence_uq * var_deepmass**0.5
 
-    return kappa_true, kappa_deepmass, var_deepmass, res_deepmass, rmse
+    out = {
+        "kappa_true": kappa_true,
+        "kappa_deepmass": kappa_deepmass,
+        "var_deepmass": var_deepmass,
+        "res_deepmass": res_deepmass,
+        "rmse": rmse
+    }
+    return out
 
 
 def get_inference_time(beg_time, verbose=False):

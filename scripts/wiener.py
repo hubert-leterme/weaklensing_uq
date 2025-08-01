@@ -78,11 +78,16 @@ def main(
     # Run iterative Wiener for each batch
     test_dataloader = iter(test_dataset)
     mask = mask.to(device)
-    kappa_true, kappa_wiener, var_wiener, res_wiener, rmse = \
-            _commons.run_wiener_batch(
+    out_wiener = _commons.run_wiener_batch(
         wiener, physics, test_dataloader, confidence_uq=confidence_uq,
         mask=mask, device=device, verbose=verbose,
     )
+    kappa_true = out_wiener["kappa_true"]
+    kappa_wiener = out_wiener["kappa_wiener"]
+    var_wiener = out_wiener["var_wiener"]
+    res_wiener = out_wiener["res_wiener"]
+    rmse = out_wiener["rmse"]
+
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
