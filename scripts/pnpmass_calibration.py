@@ -74,7 +74,8 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
     # Instantiate the PnP model
-    wiener, pnpmass, pnpmass_uq, step_size = _commons.get_wiener_pnpmass(
+    wiener, pnpmass, pnpmass_uq, step_size, step_size_filename = \
+            _commons.get_wiener_pnpmass(
         denoiser, denoiser_uq,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, niter=niter,
@@ -117,7 +118,7 @@ def main(
         "confidence_uq": confidence_uq,
     }
     _commons.save_results(
-        out_dict, path_to_output, now, step_size=step_size,
+        out_dict, path_to_output, now, step_size=step_size_filename,
         load_model_uq=load_model_uq, confidence_uq=confidence_uq,
         verbose=verbose
     )

@@ -345,6 +345,9 @@ def get_wiener_pnpmass(
             physics=physics, device=device
         )
         step_size = multfact_step_size * upperbound_step_size
+        step_size_filename = "auto"
+    else:
+        step_size_filename = f"{step_size:.3f}"
     params_algo={"stepsize": step_size, "g_param": step_size}
 
     wiener, params_algo_g, data_fidelity_g, prior_g = get_wiener(
@@ -401,7 +404,7 @@ def get_wiener_pnpmass(
     else:
         pnpmass_uq = None
 
-    return wiener, pnpmass, pnpmass_uq, step_size
+    return wiener, pnpmass, pnpmass_uq, step_size, step_size_filename
 
 
 def _get_wiener_estimate(mode, wiener, verbose=False):

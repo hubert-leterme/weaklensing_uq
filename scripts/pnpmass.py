@@ -89,7 +89,8 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        wiener, pnpmass, pnpmass_uq, tau = _commons.get_wiener_pnpmass(
+        wiener, pnpmass, pnpmass_uq, tau, tau_filename = \
+                _commons.get_wiener_pnpmass(
             denoiser, denoiser_uq,
             std_noise=std_noise, mask=mask, physics=physics,
             step_size=tau, niter=niter,
@@ -173,7 +174,7 @@ def main(
                     "res_pnpmass_cqr": res_pnpmass_cqr[:nimgs_save].cpu(),
                 })
         _commons.save_results(
-            out_dict, path_to_output, now, step_size=tau,
+            out_dict, path_to_output, now, step_size=tau_filename,
             load_model_uq=load_model_uq, confidence_uq=confidence_uq,
             verbose=verbose
         )
