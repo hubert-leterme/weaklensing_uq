@@ -22,6 +22,7 @@ from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
+from wlmmuq.models.deepinv.pnpmcalens import NITER_PER_STEP_G, NITER_PER_STEP_NG
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
@@ -326,6 +327,8 @@ def get_wiener_pnpmass(
         path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
         niter_wiener=NITER_WIENER,
+        niter_per_step_g=NITER_PER_STEP_G,
+        niter_per_step_ng=NITER_PER_STEP_NG,
         device="cpu", verbose=False
 ):
     # Instantiate data fidelity, prior and metrics
@@ -374,6 +377,7 @@ def get_wiener_pnpmass(
             print("Instantiate PnPMCALens")
         pnpmass = wlpnpmcalens.optim_builder_mcalens(
             iteration_g="PGD", iteration_ng="PGD",
+            niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
@@ -975,6 +979,22 @@ def add_arguments_pnpmode(parser):
             "then UQ will not be computed on the residuals. This is useful when "
             "the model used for UQ is different from the one used for the "
             "point estimate, and is not trained on the residuals."
+        )
+    )
+    parser.add_argument(
+        "-ig", "--niter-per-step-g", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for one Gaussian step in PnPMCALens. "
+            f"Default = {NITER_PER_STEP_G}"
+        )
+    )
+    parser.add_argument(
+        "-ing", "--niter-per-step-ng", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for one non-Gaussian step in PnPMCALens. "
+            f"Default = {NITER_PER_STEP_NG}"
         )
     )
     add_arguments_wiener(parser)

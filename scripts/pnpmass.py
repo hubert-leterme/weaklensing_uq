@@ -6,7 +6,6 @@ import wlmmuq.utils as wlutils
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
@@ -28,8 +27,10 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         mode: str=_commons.MODE_PNPMASS, switch_mode_for_uq: bool=False,
-        niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
+        niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
+        niter_per_step_g: int=_commons.NITER_PER_STEP_G,
+        niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
@@ -99,6 +100,7 @@ def main(
             path_to_ps=path_to_ps,
             noise_whitening_wiener=noise_whitening_wiener,
             niter_wiener=niter_wiener,
+            niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose
         )
 

@@ -32,6 +32,8 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-tau /--step-size /g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
+  | sed 's/-ig /--niter_g /g' \
+  | sed 's/-ing /--niter_ng /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-nw /--noise-whitening-wiener /g' \
   | sed 's/-uq //g' \
