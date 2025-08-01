@@ -556,10 +556,10 @@ class IterativeWiener(nn.Module):
         prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
 
         self.optim = iterativemm.optim_builder(
-            iteration="PGD", prior=prior,
-            data_fidelity=data_fidelity,
-            early_stop=False, max_iter=niter, custom_init=iterativemm.zero_init,
+            iteration="PGD",
             params_algo={"stepsize": step_size, "g_param": step_size},
+            data_fidelity=data_fidelity, prior=prior,
+            early_stop=False, max_iter=niter, custom_init=iterativemm.zero_init,
         )
         self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
 

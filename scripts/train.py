@@ -275,11 +275,17 @@ if __name__ == "__main__":
         "--wiener-init", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Use Wiener initialization. "
-            "Default = False"
+            "Use Wiener initialization."
         )
     )
-    _commons.add_arguments_nongaussian(parser)
+    parser.add_argument(
+        "--nongaussian", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Split the Gaussian and non-Gaussian parts of the convergence maps."
+        )
+    )
+    _commons.add_arguments_wiener(parser)
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,

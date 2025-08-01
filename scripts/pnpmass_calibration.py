@@ -26,7 +26,7 @@ def main(
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        nongaussian: bool=False, switch_mode_for_uq: bool=False,
+        mode: str=_commons.MODE_PNPMASS, switch_mode_for_uq: bool=False,
         niter_wiener: int=NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
@@ -73,22 +73,17 @@ def main(
     # Instantiate physics (forward model)
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
-    # Instantiate the Wiener model
-    wiener = _commons.get_wiener(
-        path_to_ps=path_to_ps,
-        white_noise=False, noise_whitening=noise_whitening_wiener,
-        std_noise=std_noise, physics=physics,
-        multfact_step_size=multfact_step_size, niter=niter_wiener,
-        device=device, verbose=verbose
-    )
-
     # Instantiate the PnP model
-    pnpmass, pnpmass_uq, step_size = _commons.get_pnpmass(
+    wiener, pnpmass, pnpmass_uq, step_size = _commons.get_wiener_pnpmass(
         denoiser, denoiser_uq,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, niter=niter,
-        nongaussian=nongaussian, switch_mode_for_uq=switch_mode_for_uq,
-        wiener=wiener, device=device
+        multfact_step_size=multfact_step_size, mode=mode,
+        switch_mode_for_uq=switch_mode_for_uq,
+        path_to_ps=path_to_ps,
+        noise_whitening_wiener=noise_whitening_wiener,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose
     )
 
     # Run PnPMass for each batch
@@ -160,7 +155,7 @@ if __name__ == "__main__":
         )
     )
     _commons.add_arguments_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _commons.add_arguments_nongaussian(parser)
+    _commons.add_arguments_pnpmode(parser)
     _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)
     args = parser.parse_args()

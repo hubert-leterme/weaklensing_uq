@@ -33,7 +33,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
   | sed 's/-i /--niter /g' \
-  | sed 's/-ng /--nongaussian /g' \
   | sed 's/-nw /--noise-whitening-wiener /g' \
   | sed 's/-uq //g' \
   | sed 's/-ps [^ ]\+//g' \

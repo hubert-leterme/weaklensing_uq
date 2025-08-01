@@ -15,6 +15,7 @@ from wlmmuq import utils as wlutils
 from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
+from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
@@ -31,6 +32,7 @@ BATCH_SIZE = 32
 NIMGS_SAVE = 16
 KEYS_MODEL = ['model_size', 'args_wienerinit']
 
+MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
@@ -276,28 +278,12 @@ def get_dataloader_massmapping(
     return test_dataloader
 
 
-def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
-
-    # Instantiate data fidelity, prior and metrics
-    data_fidelity = wlpnp.Mahalanobis(
-        param_vector=std_noise
-    ) # Noise-whitening data fidelity
-    prior = dinv.optim.prior.PnP(denoiser)
-    if denoiser_uq is not None:
-        prior_uq = dinv.optim.prior.PnP(denoiser_uq)
-    else:
-        prior_uq = None
-    rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
-
-    return data_fidelity, prior, prior_uq, rmse
-
-
 def get_wiener(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
         multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
-        device="cpu", verbose=False
+        return_modules=False, device="cpu", verbose=False
 ):
     if verbose:
         print("Get optimizer for iterative Wiener filtering")
@@ -317,70 +303,123 @@ def get_wiener(
         data_fidelity = dinv.optim.data_fidelity.L2()
         g_param = None # To be updated for each new noise realization
     prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
-    out = wlpnp.optim_builder(
-        iteration="PGD", prior=prior,
-        data_fidelity=data_fidelity,
+    params_algo = {"stepsize": step_size, "g_param": g_param}
+    wiener = wlpnp.optim_builder(
+        iteration="PGD",
+        params_algo=params_algo.copy(),
+        data_fidelity=data_fidelity, prior=prior,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-        params_algo={"stepsize": step_size, "g_param": g_param},
     ).to(device)
 
-    return out
+    if return_modules:
+        return wiener, params_algo, data_fidelity, prior
+
+    return wiener
 
 
-def get_pnpmass(
+def get_wiener_pnpmass(
         denoiser, denoiser_uq,
         std_noise=None, mask=None, physics=None,
         step_size=None, niter=NITER_PNPMASS,
-        multfact_step_size=MULTFACT_STEP_SIZE, nongaussian=False,
-        switch_mode_for_uq=False, wiener=None, device="cpu"
+        multfact_step_size=MULTFACT_STEP_SIZE, mode="regular",
+        switch_mode_for_uq=False,
+        path_to_ps=PATH_TO_PS,
+        noise_whitening_wiener=False,
+        niter_wiener=NITER_WIENER,
+        device="cpu", verbose=False
 ):
-    data_fidelity, prior, prior_uq, rmse = get_pnpmass_modules(
-        std_noise, mask, denoiser, denoiser_uq
-    )
+    # Instantiate data fidelity, prior and metrics
+    data_fidelity = wlpnp.Mahalanobis(
+        param_vector=std_noise
+    ) # Noise-whitening data fidelity
+    prior = dinv.optim.prior.PnP(denoiser)
+    if denoiser_uq is not None:
+        prior_uq = dinv.optim.prior.PnP(denoiser_uq)
+    else:
+        prior_uq = None
+    metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
+
     if step_size is None or step_size <= 0:
         upperbound_step_size = wlutils.get_sup_step_size(
             param_mahalanobis=std_noise, # Noise-whitening data fidelity term
             physics=physics, device=device
         )
         step_size = multfact_step_size * upperbound_step_size
+    params_algo={"stepsize": step_size, "g_param": step_size}
 
-    wiener_estimate = _get_wiener_estimate(nongaussian, wiener)
-    pnpmass = wlpnp.optim_builder(
-        iteration="PGD", prior=prior,
-        data_fidelity=data_fidelity,
-        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-        metric_dict={"rmse": rmse}, verbose=True,
-        params_algo={"stepsize": step_size, "g_param": step_size},
-        wiener_estimate=wiener_estimate,
-    ).to(device)
+    wiener, params_algo_g, data_fidelity_g, prior_g = get_wiener(
+        path_to_ps=path_to_ps,
+        white_noise=False, noise_whitening=noise_whitening_wiener,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size, niter=niter_wiener,
+        return_modules=True,
+        device=device, verbose=verbose
+    )
+
+    if mode in ["regular", "residual"]:
+        wiener_estimate = _get_wiener_estimate(mode, wiener, verbose=verbose)
+        pnpmass = wlpnp.optim_builder(
+            iteration="PGD", params_algo=params_algo.copy(),
+            data_fidelity=data_fidelity, prior=prior,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            metric_dict=metric_dict, verbose=verbose,
+            wiener_estimate=wiener_estimate
+        ).to(device)
+
+    elif mode == "pnpmcalens":
+        if verbose:
+            print("Instantiate PnPMCALens")
+        pnpmass = wlpnpmcalens.optim_builder_mcalens(
+            iteration_g="PGD", iteration_ng="PGD",
+            params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
+            data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
+            prior_g=prior_g, prior_ng=prior,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            metric_dict=metric_dict, verbose=True
+        ).to(device)
+
+    else:
+        raise ValueError(
+            f"Invalid mode '{mode}'. "
+            "Supported modes are 'regular', 'residual', and 'pnpmcalens'."
+        )
 
     if prior_uq is not None:
         if not switch_mode_for_uq:
-            nongaussian_uq = nongaussian
+            # Use residual mode for PnPMCALens
+            mode_uq = mode if mode != "pnpmcalens" else "residual"
         else:
-            nongaussian_uq = not nongaussian
-        wiener_estimate_uq = _get_wiener_estimate(nongaussian_uq, wiener)
+            mode_uq = "residual" if mode == "regular" else "regular"
+        wiener_estimate_uq = _get_wiener_estimate(mode_uq, wiener)
         pnpmass_uq = wlpnp.optim_builder(
-            iteration="PGD", prior=prior_uq,
-            data_fidelity=data_fidelity,
+            iteration="PGD", params_algo=params_algo.copy(),
+            data_fidelity=data_fidelity, prior=prior_uq,
             early_stop=False, max_iter=1, custom_init=wlpnp.ManualInit(),
-            verbose=True,
-            params_algo={"stepsize": step_size, "g_param": step_size},
-            wiener_estimate=wiener_estimate_uq,
+            metric_dict=metric_dict, verbose=verbose,
+            wiener_estimate=wiener_estimate_uq
         ).to(device)
     else:
         pnpmass_uq = None
 
-    return pnpmass, pnpmass_uq, step_size
+    return wiener, pnpmass, pnpmass_uq, step_size
 
 
-def _get_wiener_estimate(nongaussian, wiener):
-    if nongaussian:
+def _get_wiener_estimate(mode, wiener, verbose=False):
+    if mode == "residual":
         if wiener is None:
             raise ValueError("Missing model for iterative Wiener filtering.")
         wiener_estimate = wiener
-    else:
+        if verbose:
+            print("Instantiate PnPMass on residuals (ResPnPMass)")
+    elif mode == "regular":
         wiener_estimate = None
+        if verbose:
+            print("Instantiate PnPMass")
+    else:
+        raise ValueError(
+            f"Invalid mode '{mode}'. "
+            "Supported modes are 'regular' and 'residual'."
+        )
     return wiener_estimate
 
 
@@ -452,6 +491,12 @@ def run_wiener_pnpmass_batch(
             kappa_pnpmass, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
+            if isinstance(pnpmass, wlpnpmcalens.BaseMCALens):
+                kappa_pnpmass_g, kappa_pnpmass_ng = \
+                    wlpnpmcalens.get_tensor_components(kappa_pnpmass)
+                kappa_pnpmass = wlpnpmcalens.add_tensor_components(kappa_pnpmass)
+            else:
+                kappa_pnpmass_g = kappa_pnpmass_ng = None
             if pnpmass_uq is not None:
                 # Initialize the UQ iteration with the predicted kappa
                 pnpmass_uq.custom_init.X_init = (kappa_pnpmass,)
@@ -483,6 +528,8 @@ def run_wiener_pnpmass_batch(
         "kappa_true": kappa_true,
         "kappa_wiener": kappa_wiener,
         "kappa_pnpmass": kappa_pnpmass,
+        "kappa_pnpmass_g": kappa_pnpmass_g,
+        "kappa_pnpmass_ng": kappa_pnpmass_ng,
         "var_pnpmass": var_pnpmass,
         "res_pnpmass": res_pnpmass,
         "rmse_iter": rmse_iter
@@ -906,21 +953,23 @@ def add_arguments_wiener(parser):
     )
 
 
-def add_arguments_nongaussian(parser):
+def add_arguments_pnpmode(parser):
 
     parser.add_argument(
-        "-ng", "--nongaussian", action='store_true',
+        "--mode", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Split the Gaussian and non-Gaussian parts of the convergence maps."
+            "Mode for PnPMass. Possible values are: "
+            "'regular', 'residual', 'pnpmcalens'. "
+            "Default = 'regular'"
         )
     )
     parser.add_argument(
         "--switch-mode-for-uq", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "If both this argument and `--nongaussian` are set, then "
-            "UQ will not be computed on the residuals. This is useful when "
+            "If this argument is set and `--mode` is set to 'residual', "
+            "then UQ will not be computed on the residuals. This is useful when "
             "the model used for UQ is different from the one used for the "
             "point estimate, and is not trained on the residuals."
         )
