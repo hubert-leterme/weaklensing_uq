@@ -723,7 +723,7 @@ def save_results(
         confidence_uq=None, verbose=False
 ):
     if step_size is not None:
-        path_to_output = f"{path_to_output}_step-size_{step_size:.3f}"
+        path_to_output = f"{path_to_output}_step-size_{step_size}"
     if load_model_uq:
         path_to_output = (
             f"{path_to_output}_{confidence_uq}-sigma"
