@@ -87,6 +87,7 @@ def main(
 
         if wiener_init:
             # Load arguments for Wiener initialization
+            # Only for DeepMass (denoiser = False)
             args_wienerinit = _commons.get_args_wienerinit(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
