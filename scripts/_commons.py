@@ -1000,7 +1000,7 @@ def add_arguments_pnpmode(parser):
         )
     )
     parser.add_argument(
-        "--starlet-detection-threshold", type=float,
+        "-thresh", "--starlet-detection-threshold", type=float,
         default=argparse.SUPPRESS,
         help=(
             "Detection threshold for computing the support of active "
