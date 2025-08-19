@@ -67,6 +67,7 @@ def main(
     sheardata = csmm.shear_data()
     sheardata.mask = mask.numpy().astype(int)
     sheardata.Ncov = 2 * std_noise.numpy()**2 # factor 2 required
+                                              # (variance of the complex-valued noise)
 
     # Initialize `csmm.massmap2d` object
     massmap = csmm.massmap2d()
