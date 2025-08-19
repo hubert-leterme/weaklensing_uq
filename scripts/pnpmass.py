@@ -168,7 +168,7 @@ def main(
                 })
             if wiener is not None:
                 out_dict.update({
-                    "kappa_wiener": kappa_wiener.cpu(),
+                    "kappa_wiener": kappa_wiener[:nimgs_save].cpu(),
                 })
         if cqr is not None:
             out_dict.update({

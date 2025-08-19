@@ -396,7 +396,7 @@ def _unmerge_dict(d):
 
 def get_tensor_components(x):
     # Shape of x: (batch_size, 2, nchannels, nx, ny)
-    return x[:, 0], x[:, 1]
+    return x[:, 0].clone(), x[:, 1].clone()
 
 
 def stack_tensor_components(x_g, x_ng):
