@@ -18,6 +18,7 @@ def main(
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
+        starlet: bool=False,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         load_model_uq: bool=False,
         arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
@@ -64,13 +65,18 @@ def main(
         num_workers, std_noise, mask, shuffle=False
     )
 
-    # Load trained denoisers
-    denoiser, denoiser_uq = _commons.load_trained_models(
-        checkpoint_dir, arch, timestamp, epoch=epoch,
-        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
-        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        imgsize=imgsize, device=device, verbose=verbose, **kwargs
-    )
+    # Load denoisers (trained models or starlet denoiser for standard MCALens)
+    if not starlet:
+        denoiser, denoiser_uq = _commons.load_trained_models(
+            checkpoint_dir, arch, timestamp, epoch=epoch,
+            load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
+            arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+            imgsize=imgsize, device=device, verbose=verbose, **kwargs
+        )
+    else:
+        denoiser, denoiser_uq = _commons.instantiate_starlet_denoiser(
+            imgsize=imgsize, device=device, verbose=verbose, **kwargs
+        )
 
     # Get step size
     if not isinstance(step_size, list):

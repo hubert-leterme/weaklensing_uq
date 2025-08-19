@@ -22,7 +22,8 @@ from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
-from wlmmuq.models.deepinv.pnpmcalens import NITER_PER_STEP_G, NITER_PER_STEP_NG
+from wlmmuq.models.deepinv.pnpmcalens import \
+    NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
 
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
@@ -264,6 +265,25 @@ def load_trained_models(
         model_uq = None
 
     return model, model_uq
+
+
+def instantiate_starlet_denoiser(
+        imgsize=IMGSIZE,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        device="cpu", verbose=False
+):
+    denoiser = wlpnpmcalens.Starlet2d(
+        in_channels=1, nx=imgsize, ny=imgsize,
+        detection_threshold=starlet_detection_threshold
+    ).to(device)
+    if verbose:
+        print(
+            f"Starlet denoiser instantiated with {denoiser.ns} scales and "
+            f"a {int(starlet_detection_threshold)}-sigma detection threshold."
+        )
+    denoiser_uq = None # Conformal prediction computed from zero-valued error bars
+
+    return denoiser, denoiser_uq
 
 
 def get_dataloader_massmapping(
@@ -969,6 +989,22 @@ def add_arguments_pnpmode(parser):
             "Mode for PnPMass. Possible values are: "
             "'regular', 'residual', 'pnpmcalens'. "
             "Default = 'regular'"
+        )
+    )
+    parser.add_argument(
+        "--starlet", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Use a starlet denoiser instead of a trained model. "
+            "This option should be activated for standard MCALens."
+        )
+    )
+    parser.add_argument(
+        "--starlet-detection-threshold", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Detection threshold for computing the support of active "
+            f"starlet coefficients. Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
     parser.add_argument(
