@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import deepinv as dinv
 
+from ... import utils
 from . import iterativemm
 
 PARAMS_ALGO = {"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05}
@@ -194,7 +195,8 @@ class Starlet2d(nn.Module):
             only_positive: bool=STARLET_ONLY_POSITIVE,
             gen2: bool=STARLET_GEN2,
             enforce_gen1_tabnorm: bool=STARLET_ENFORCE_GEN1_TABNORM,
-            retain_previous_rec: bool=STARLET_RETAIN_PREVIOUS_REC
+            retain_previous_rec: bool=STARLET_RETAIN_PREVIOUS_REC,
+            meancentering: bool=True
     ):
         super().__init__()
 
@@ -215,6 +217,7 @@ class Starlet2d(nn.Module):
         self.gen2 = gen2
         self.enforce_gen1_tabnorm = enforce_gen1_tabnorm
         self.retain_previous_rec = retain_previous_rec
+        self.meancentering = meancentering
 
         # Normalisation coefficients at each scale, to be set at first need
         self.register_buffer("tabnorm", None) # Shape = (ns,)
@@ -273,6 +276,10 @@ class Starlet2d(nn.Module):
         x_denoised = self.rec(wt) # Wavelet reconstruction
         if self.x_prev is not None:
             x_denoised += self.x_prev
+        if self.only_positive:
+            x_denoised = torch.relu(x_denoised)
+        if self.meancentering:
+            x_denoised = utils.meancenter(x_denoised)
         if self.retain_previous_rec:
             self.x_prev = x_denoised.clone()
 
