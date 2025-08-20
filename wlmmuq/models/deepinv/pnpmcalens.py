@@ -20,6 +20,7 @@ STARLET_L2NORM = True
 STARLET_ONLY_POSITIVE = True
 STARLET_GEN2 = True
 STARLET_ENFORCE_GEN1_TABNORM = True
+STARLET_RETAIN_PREVIOUS_REC = True
 
 class MCAIteration(nn.Module):
 
@@ -192,7 +193,8 @@ class Starlet2d(nn.Module):
             l2norm: bool=STARLET_L2NORM,
             only_positive: bool=STARLET_ONLY_POSITIVE,
             gen2: bool=STARLET_GEN2,
-            enforce_gen1_tabnorm: bool=STARLET_ENFORCE_GEN1_TABNORM
+            enforce_gen1_tabnorm: bool=STARLET_ENFORCE_GEN1_TABNORM,
+            retain_previous_rec: bool=STARLET_RETAIN_PREVIOUS_REC
     ):
         super().__init__()
 
@@ -212,12 +214,16 @@ class Starlet2d(nn.Module):
         self.only_positive = only_positive
         self.gen2 = gen2
         self.enforce_gen1_tabnorm = enforce_gen1_tabnorm
+        self.retain_previous_rec = retain_previous_rec
 
         # Normalisation coefficients at each scale, to be set at first need
         self.register_buffer("tabnorm", None) # Shape = (ns,)
 
         # Mask of active wavelet coefficients, to be set during the first forward pass
         self.register_buffer("active_coefs", None) # Shape = (nimgs, in_channels, ns, nx, ny)
+
+        # Previous reconstruction, to be set after each forward pass, if required
+        self.register_buffer("x_prev", None) # Shape = (nimgs, in_channels, nx, ny)
 
         # Starlet convolution kernel
         kernel_size = kernel1d.numel()
@@ -252,16 +258,23 @@ class Starlet2d(nn.Module):
     def reset_buffers(self):
         self.tabnorm = None
         self.active_coefs = None
+        self.x_prev = None
 
 
     def forward(
             self, x: torch.Tensor, sigma: float | torch.Tensor
     ):
+        if self.x_prev is not None:
+            x -= self.x_prev
         wt = self.dec(x) # Wavelet decomposition
         if self.active_coefs is None:
             self._set_active_coefs(wt, sigma) # Set for all subsequent forward passes
         wt *= self.active_coefs # Projection onto the support of active coefficients
         x_denoised = self.rec(wt) # Wavelet reconstruction
+        if self.x_prev is not None:
+            x_denoised += self.x_prev
+        if self.retain_previous_rec:
+            self.x_prev = x_denoised.clone()
 
         return x_denoised
 
