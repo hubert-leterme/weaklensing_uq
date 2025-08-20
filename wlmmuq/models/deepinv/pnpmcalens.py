@@ -4,6 +4,7 @@ import deepinv as dinv
 
 from ... import utils
 from . import iterativemm
+from . import callbacks
 
 PARAMS_ALGO = {"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05}
 
@@ -135,7 +136,7 @@ class BaseMCALens(iterativemm.BaseOptim):
             prior_g=None, prior_ng=None,
             custom_init=iterativemm.zero_init,
             set_output=lambda x: {"est": (x,)},
-            update_ng_first=False, **kwargs
+            update_ng_first=False, discard_ng=False, **kwargs
     ):
         iterator = MCAIteration(
             iterator_g, iterator_ng,
@@ -154,10 +155,11 @@ class BaseMCALens(iterativemm.BaseOptim):
             data_fidelity=data_fidelity,
             prior=prior,
             custom_init=custom_init,
-            wiener_estimate=None,
+            gaussian_extractor=None,
             **kwargs
         )
         self.set_output = set_output
+        self.discard_ng = discard_ng
 
 
     def init_metrics_fn(self, X_init, x_gt=None):
@@ -171,6 +173,17 @@ class BaseMCALens(iterativemm.BaseOptim):
         X_prev_sum = self._add_components_for_metrics(X_prev)
         X_sum = self._add_components_for_metrics(X)
         return super().update_metrics_fn(metrics, X_prev_sum, X_sum, x_gt)
+
+
+    def forward(
+            self, y, physics, x_gt=None, compute_metrics=False, **kwargs
+    ):
+        x = super().forward(
+            y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
+        ) # Shape = (nimgs, 2, nchannels, nx, ny)
+        if self.discard_ng:
+            x, _ = get_tensor_components(x) # Shape = (nimgs, nchannels, nx, ny)
+        return x
 
 
     def _add_components_for_metrics(self, X):
@@ -380,6 +393,34 @@ class Starlet2d(nn.Module):
         return x
 
 
+class ParamsAlgoUpdater(callbacks.BaseCallback):
+
+    def __init__(
+            self,
+            optim: BaseMCALens | iterativemm.BaseOptim,
+            noise_whitening_wiener: bool=False
+    ):
+        self.optim = optim
+        self.noise_whitening_wiener = noise_whitening_wiener
+
+    def on_get_samples_end(self, physics):
+        # Get white noise standard deviation
+        # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
+        sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
+        g_param_g = utils.get_g_param(sigma, self.noise_whitening_wiener)
+        if isinstance(self.optim, BaseMCALens):
+            g_param_ng = utils.get_g_param(sigma, noise_whitening=True)
+
+        for i, step_size in enumerate(
+            self.optim.init_params_algo["stepsize"]
+        ): # Possibly, one step size per iteration
+            if isinstance(self.optim, BaseMCALens):
+                self.optim.init_params_algo["g_param"][i].g = step_size * g_param_g
+                self.optim.init_params_algo["g_param"][i].ng = step_size * g_param_ng
+            else:
+                self.optim.init_params_algo["g_param"][i] = step_size * g_param_g
+
+
 class _ComponentWrapper:
     """
     Wrapper class to hold Gaussian and non-Gaussian components.
@@ -479,7 +520,7 @@ def optim_builder_mcalens(
     F_fn_g=None, F_fn_ng=None,
     g_first_g=False, g_first_ng=False,
     bregman_potential_g=None, bregman_potential_ng=None,
-    update_ng_first=False, **kwargs,
+    **kwargs,
 ):
     r"""
     Helper function for building an instance of the :class:`deepinv.optim.BaseOptim` class.
@@ -530,6 +571,5 @@ def optim_builder_mcalens(
         data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
         prior_g=prior_g, prior_ng=prior_ng,
         params_algo_g=params_algo_g, params_algo_ng=params_algo_ng,
-        max_iter=max_iter, update_ng_first=update_ng_first,
-        **kwargs,
+        max_iter=max_iter, **kwargs
     ).eval()

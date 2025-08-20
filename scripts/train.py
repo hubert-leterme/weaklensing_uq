@@ -34,6 +34,7 @@ def main(
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         backend=None, arch=None, denoiser=False,
         wiener_init=False, nongaussian=False,
+        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
         multfact_step_size_wiener=MULTFACT_STEP_SIZE,
@@ -92,7 +93,7 @@ def main(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
                 multfact_step_size=multfact_step_size_wiener,
-                niter=niter_wiener, device=device, verbose=verbose
+                niter=niter_wiener, device=device
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
@@ -191,20 +192,20 @@ def main(
 
     if nongaussian:
         assert denoiser # Only for training a denoiser
-        # The Wiener algorithm converges in one single iteration in this case
-        # (equivalent to applying the proximal mapping).
-        # Argument `noise_whitening` does not need to be provided since
-        # `white_noise` is set to True.
-        wiener = _commons.get_wiener(
+        gaussian_extractor = _commons.get_gaussian_extractor(
+            which=which_gaussian_extractor,
             path_to_ps=path_to_ps,
-            white_noise=True, physics=physics,
-            multfact_step_size=multfact_step_size_wiener, niter=1,
+            white_noise=True, noise_whitening_wiener=noise_whitening_wiener,
+            imgsize=imgsize, physics=physics,
+            niter=1, # Convergence in one iteration (white noise)
+            mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
             device=device, verbose=verbose
-        ) # `noise_whitening` and `std_noise` are not used here (`white_noise=True`)
-        kwargs_trainer.update(preproc=wiener)
+        ) # Not all arguments are needed here (`white_noise=True`)
+        kwargs_trainer.update(preproc=gaussian_extractor)
         callback_list.append(
-            wlnn.deepinv.iterativemm.WienerWhiteNoiseParamsAlgoUpdater(
-                optim=wiener, noise_whitening=noise_whitening_wiener
+            wlnn.deepinv.pnpmcalens.ParamsAlgoUpdater(
+                optim=gaussian_extractor,
+                noise_whitening_wiener=noise_whitening_wiener
             )
         )
 
@@ -284,6 +285,14 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Split the Gaussian and non-Gaussian parts of the convergence maps."
+        )
+    )
+    parser.add_argument(
+        "--which-gaussian-extractor", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
+            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
         )
     )
     _commons.add_arguments_wiener(parser)

@@ -5,7 +5,6 @@ from torch import nn
 import deepinv as dinv
 
 from ... import utils
-from . import callbacks
 
 #########################################################################
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
@@ -155,23 +154,6 @@ class ProximalWiener(nn.Module):
         return out.real
 
 
-class WienerWhiteNoiseParamsAlgoUpdater(callbacks.BaseCallback):
-
-    def __init__(self, optim: dinv.optim.BaseOptim, noise_whitening=False):
-        self.optim = optim
-        self.noise_whitening = noise_whitening
-
-    def on_get_samples_end(self, physics):
-        # Get white noise standard deviation
-        # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
-        sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
-        g_param = utils.get_g_param(sigma, self.noise_whitening)
-        for i, step_size in enumerate(
-            self.optim.init_params_algo["stepsize"]
-        ): # Possibly, one step size per iteration
-            self.optim.init_params_algo["g_param"][i] = step_size * g_param
-
-
 #########################################################################
 # Metrics
 #########################################################################
@@ -237,7 +219,7 @@ class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
             self, *args, metric_dict: MetricDict=None,
-            wiener_estimate: dinv.optim.BaseOptim=None, **kwargs
+            gaussian_extractor: dinv.optim.BaseOptim=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -267,7 +249,7 @@ class BaseOptim(dinv.optim.BaseOptim):
             return out
         self.get_output = _get_output
 
-        self.wiener_estimate = wiener_estimate
+        self.gaussian_extractor = gaussian_extractor
 
 
     def _update_metrics(
@@ -325,11 +307,11 @@ class BaseOptim(dinv.optim.BaseOptim):
             self, y, physics, x_gt=None, compute_metrics=False,
             kwargs_wiener_estimate=None, **kwargs
     ):
-        if self.wiener_estimate is not None:
+        if self.gaussian_extractor is not None:
             if kwargs_wiener_estimate is None:
                 kwargs_wiener_estimate = {}
             with torch.no_grad():
-                x_init = self.wiener_estimate(
+                x_init = self.gaussian_extractor(
                     y, physics, x_gt=None,
                     compute_metrics=False, **kwargs_wiener_estimate
                 )
@@ -341,7 +323,7 @@ class BaseOptim(dinv.optim.BaseOptim):
             y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
         )
 
-        if self.wiener_estimate is not None:
+        if self.gaussian_extractor is not None:
             with torch.no_grad():
                 if compute_metrics:
                     x, metrics = out

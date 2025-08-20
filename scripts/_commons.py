@@ -34,6 +34,7 @@ BATCH_SIZE = 32
 NIMGS_SAVE = 16
 KEYS_MODEL = ['model_size', 'args_wienerinit']
 
+WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 CONFIDENCE_UQ = 2 # 2-sigma confidence
@@ -299,22 +300,18 @@ def get_dataloader_massmapping(
     return test_dataloader
 
 
-def get_wiener(
-        path_to_ps=PATH_TO_PS,
+def _get_datafidelity_params(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
-        return_modules=False, device="cpu", verbose=False
+        multfact_step_size=MULTFACT_STEP_SIZE,
+        device="cpu"
 ):
-    if verbose:
-        print("Get optimizer for iterative Wiener filtering")
-    powerspectrum, step_size, param_mahalanobis = \
-            get_powerspectrum_step_size_wienerinit(
-        path_to_ps=path_to_ps,
+    step_size, param_mahalanobis = \
+            get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
         multfact_step_size=multfact_step_size,
-        device=device, verbose=verbose
+        device=device
     )
     if not white_noise:
         data_fidelity = wlpnp.Mahalanobis(param_vector=param_mahalanobis)
@@ -323,8 +320,66 @@ def get_wiener(
         # Regular L2 data fidelity with unitary variance
         data_fidelity = dinv.optim.data_fidelity.L2()
         g_param = None # To be updated for each new noise realization
-    prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
     params_algo = {"stepsize": step_size, "g_param": g_param}
+
+    return data_fidelity, params_algo
+
+
+def get_datafidelity_prior_params_gaussian(
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE,
+        device="cpu"
+):
+    data_fidelity, params_algo = _get_datafidelity_params(
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size,
+        device=device
+    )
+    powerspectrum = torch.load(path_to_ps)
+    prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
+
+    return data_fidelity, prior, params_algo
+
+
+def get_datafidelity_prior_params_nongaussian(
+        denoiser, denoiser_uq=None,
+        white_noise=False, std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE, device="cpu"
+):
+    data_fidelity, params_algo = _get_datafidelity_params(
+        white_noise=white_noise, noise_whitening=True,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size,
+        device=device
+    ) # Noise-whitening data fidelity
+    prior = dinv.optim.prior.PnP(denoiser)
+    if denoiser_uq is not None:
+        prior_uq = dinv.optim.prior.PnP(denoiser_uq)
+    else:
+        prior_uq = None
+
+    return data_fidelity, prior, prior_uq, params_algo
+
+
+def get_wiener(
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
+        device="cpu", verbose=False
+):
+    if verbose:
+        print("Get optimizer for iterative Wiener filtering")
+    data_fidelity, prior, params_algo = get_datafidelity_prior_params_gaussian(
+        path_to_ps=path_to_ps,
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size,
+        device=device
+    )
     wiener = wlpnp.optim_builder(
         iteration="PGD",
         params_algo=params_algo.copy(),
@@ -332,17 +387,76 @@ def get_wiener(
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
     ).to(device)
 
-    if return_modules:
-        return wiener, params_algo, data_fidelity, prior
-
     return wiener
 
 
-def get_wiener_pnpmass(
-        denoiser, denoiser_uq,
+def get_gaussian_extractor(
+        which=WHICH_GAUSSIAN_EXTRACTOR,
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening_wiener=False,
+        imgsize=IMGSIZE, std_noise=None, physics=None,
+        multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        mcalens_update_ng_first=False,
+        device="cpu", verbose=False
+):
+    data_fidelity_g, prior_g, params_algo_g = get_datafidelity_prior_params_gaussian(
+        path_to_ps=path_to_ps,
+        white_noise=white_noise, noise_whitening=noise_whitening_wiener,
+        std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size,
+        device=device
+    )
+    if which == "wiener":
+        if verbose:
+            print("Wiener used as Gaussian extractor")
+        extractor = wlpnp.optim_builder(
+            iteration="PGD",
+            params_algo=params_algo_g.copy(),
+            data_fidelity=data_fidelity_g, prior=prior_g,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+        ).to(device)
+
+    elif which == "mcalens":
+        if verbose:
+            print("MCALens used as Gaussian extractor")
+        denoiser_ng, _ = instantiate_starlet_denoiser(
+            imgsize=imgsize,
+            starlet_detection_threshold=starlet_detection_threshold,
+            device=device, verbose=verbose
+        )
+        data_fidelity_ng, prior_ng, _, params_algo_ng = \
+                get_datafidelity_prior_params_nongaussian(
+            denoiser_ng, white_noise=white_noise,
+            std_noise=std_noise, physics=physics,
+            multfact_step_size=multfact_step_size,
+            device=device
+        )
+        extractor = wlpnpmcalens.optim_builder_mcalens(
+            iteration_g="PGD", iteration_ng="PGD",
+            params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo_ng.copy(),
+            data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
+            prior_g=prior_g, prior_ng=prior_ng,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            update_ng_first=mcalens_update_ng_first,
+            discard_ng=True, verbose=verbose
+        ).to(device)
+
+    else:
+        raise ValueError(
+            f"Invalid extractor '{which}'. "
+            "Supported extractors are 'wiener' and 'mcalens'."
+        )
+
+    return extractor
+
+
+def get_pnpmass(
+        denoiser, denoiser_uq, imgsize=IMGSIZE,
         std_noise=None, mask=None, physics=None,
         step_size=None, niter=NITER_PNPMASS,
         multfact_step_size=MULTFACT_STEP_SIZE, mode="regular",
+        which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first=False,
         switch_mode_for_uq=False,
         path_to_ps=PATH_TO_PS,
@@ -352,50 +466,53 @@ def get_wiener_pnpmass(
         niter_per_step_ng=NITER_PER_STEP_NG,
         device="cpu", verbose=False
 ):
-    # Instantiate data fidelity, prior and metrics
-    data_fidelity = wlpnp.Mahalanobis(
-        param_vector=std_noise
-    ) # Noise-whitening data fidelity
-    prior = dinv.optim.prior.PnP(denoiser)
-    if denoiser_uq is not None:
-        prior_uq = dinv.optim.prior.PnP(denoiser_uq)
-    else:
-        prior_uq = None
-    metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
-
+    data_fidelity, prior, prior_uq, params_algo = \
+            get_datafidelity_prior_params_nongaussian(
+        denoiser, denoiser_uq=denoiser_uq,
+        white_noise=False, std_noise=std_noise, physics=physics,
+        multfact_step_size=multfact_step_size, device=device
+    )
     if step_size is None or step_size <= 0:
-        upperbound_step_size = wlutils.get_sup_step_size(
-            param_mahalanobis=std_noise, # Noise-whitening data fidelity term
-            physics=physics, device=device
-        )
-        step_size = multfact_step_size * upperbound_step_size
         step_size_filename = "auto"
     else:
         step_size_filename = f"{step_size:.3f}"
-    params_algo={"stepsize": step_size, "g_param": step_size}
-
-    wiener, params_algo_g, data_fidelity_g, prior_g = get_wiener(
-        path_to_ps=path_to_ps,
-        white_noise=False, noise_whitening=noise_whitening_wiener,
-        std_noise=std_noise, physics=physics,
-        multfact_step_size=multfact_step_size, niter=niter_wiener,
-        return_modules=True,
-        device=device, verbose=verbose
-    )
+    metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
 
     if mode in ["regular", "residual"]:
-        wiener_estimate = _get_wiener_estimate(mode, wiener, verbose=verbose)
+        if mode == "residual":
+            if verbose:
+                print("Instantiate PnPMass on residuals (ResPnPMass)")
+            gaussian_extractor = get_gaussian_extractor(
+                which=which_gaussian_extractor,
+                path_to_ps=path_to_ps,
+                white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
+                imgsize=imgsize, std_noise=std_noise, physics=physics,
+                multfact_step_size=multfact_step_size, niter=niter_wiener,
+                mcalens_update_ng_first=False,
+                device="cpu", verbose=False
+            )
+        else:
+            if verbose:
+                print("Instantiate PnPMass")
+            gaussian_extractor = None
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             metric_dict=metric_dict, verbose=verbose,
-            wiener_estimate=wiener_estimate
+            gaussian_extractor=gaussian_extractor
         ).to(device)
 
     elif mode == "pnpmcalens":
         if verbose:
             print("Instantiate PnPMCALens")
+        data_fidelity_g, prior_g, params_algo_g = get_datafidelity_prior_params_gaussian(
+            path_to_ps=path_to_ps,
+            white_noise=False, noise_whitening=noise_whitening_wiener,
+            std_noise=std_noise, physics=physics,
+            multfact_step_size=multfact_step_size,
+            device=device
+        )
         pnpmass = wlpnpmcalens.optim_builder_mcalens(
             iteration_g="PGD", iteration_ng="PGD",
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
@@ -414,41 +531,20 @@ def get_wiener_pnpmass(
 
     if prior_uq is not None:
         if not switch_mode_for_uq:
-            # Use residual mode for PnPMCALens
-            mode_uq = mode if mode != "pnpmcalens" else "residual"
+            gaussian_extractor_uq = gaussian_extractor
         else:
-            mode_uq = "residual" if mode == "regular" else "regular"
-        wiener_estimate_uq = _get_wiener_estimate(mode_uq, wiener)
+            gaussian_extractor_uq = None
         pnpmass_uq = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior_uq,
             early_stop=False, max_iter=1, custom_init=wlpnp.ManualInit(),
             metric_dict=metric_dict, verbose=verbose,
-            wiener_estimate=wiener_estimate_uq
+            gaussian_extractor=gaussian_extractor_uq
         ).to(device)
     else:
         pnpmass_uq = None
 
-    return wiener, pnpmass, pnpmass_uq, step_size, step_size_filename
-
-
-def _get_wiener_estimate(mode, wiener, verbose=False):
-    if mode == "residual":
-        if wiener is None:
-            raise ValueError("Missing model for iterative Wiener filtering.")
-        wiener_estimate = wiener
-        if verbose:
-            print("Instantiate PnPMass on residuals (ResPnPMass)")
-    elif mode == "regular":
-        wiener_estimate = None
-        if verbose:
-            print("Instantiate PnPMass")
-    else:
-        raise ValueError(
-            f"Invalid mode '{mode}'. "
-            "Supported modes are 'regular' and 'residual'."
-        )
-    return wiener_estimate
+    return pnpmass, pnpmass_uq, step_size, step_size_filename
 
 
 # TODO: Merge the 3 functions below into one single function
@@ -493,14 +589,13 @@ def run_wiener_batch(
     return out
 
 
-def run_wiener_pnpmass_batch(
-        wiener: wlpnp.BaseOptim, pnpmass: wlpnp.BaseOptim,
-        pnpmass_uq: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
+def run_pnpmass_batch(
+        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim,
+        physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
-    listof_kappa_wiener = []
     listof_kappa_pnpmass = []
     listof_var_pnpmass = []
     listof_rmse_iter = []
@@ -511,11 +606,6 @@ def run_wiener_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            if wiener is not None:
-                kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
-            else:
-                kappa_wiener = None
-
             kappa_pnpmass, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
@@ -535,17 +625,11 @@ def run_wiener_pnpmass_batch(
                 var_pnpmass = torch.zeros(kappa_true.shape, device=device)
 
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            if wiener is not None:
-                listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    if wiener is not None:
-        kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    else:
-        kappa_wiener = None
     kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
@@ -554,7 +638,6 @@ def run_wiener_pnpmass_batch(
 
     out = {
         "kappa_true": kappa_true,
-        "kappa_wiener": kappa_wiener,
         "kappa_pnpmass": kappa_pnpmass,
         "kappa_pnpmass_g": kappa_pnpmass_g,
         "kappa_pnpmass_ng": kappa_pnpmass_ng,
@@ -620,16 +703,15 @@ def get_args_wienerinit(
         std_noise, mask, path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         multfact_step_size=MULTFACT_STEP_SIZE, niter=NITER_WIENER,
-        device="cpu", verbose=False
+        device="cpu"
 ):
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
-    powerspectrum, step_size, _ = \
-            get_powerspectrum_step_size_wienerinit(
-        path_to_ps=path_to_ps,
+    powerspectrum = torch.load(path_to_ps)
+    step_size, _ = get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
         multfact_step_size=multfact_step_size,
-        device=device, verbose=verbose
+        device=device
     ) # Bayesian Wiener filtering
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
@@ -639,16 +721,12 @@ def get_args_wienerinit(
     return args_wienerinit
 
 
-def get_powerspectrum_step_size_wienerinit(
-        path_to_ps=PATH_TO_PS,
+def get_step_size_param_mahalanobis(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
         multfact_step_size=MULTFACT_STEP_SIZE,
-        device="cpu", verbose=False
+        device="cpu"
 ):
-    if verbose:
-        print("Get Wiener initialization parameters")
-    powerspectrum = torch.load(path_to_ps)
     if not white_noise:
         param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
         step_size = wlutils.get_sup_step_size(
@@ -662,7 +740,7 @@ def get_powerspectrum_step_size_wienerinit(
         step_size = 1
         param_mahalanobis = None
 
-    return powerspectrum, step_size, param_mahalanobis
+    return step_size, param_mahalanobis
 
 
 def load_cqr(
@@ -993,6 +1071,15 @@ def add_arguments_pnpmode(parser):
         )
     )
     parser.add_argument(
+        "--which-gaussian-extractor", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
+            "Only used if `--mode` is set to 'residual'. "
+            f"Default = '{WHICH_GAUSSIAN_EXTRACTOR}'"
+        )
+    )
+    parser.add_argument(
         "--update-ng-first", action='store_true',
         default=argparse.SUPPRESS,
         help=(
@@ -1005,6 +1092,7 @@ def add_arguments_pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Use a starlet denoiser instead of a trained model. "
+            "Only works if `--mode` is set to 'pnpmcalens'. "
             "This option should be activated for standard MCALens."
         )
     )
@@ -1013,7 +1101,9 @@ def add_arguments_pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Detection threshold for computing the support of active "
-            f"starlet coefficients. Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
+            "starlet coefficients. "
+            "Only works if `--mode` is set to 'pnpmcalens'. "
+            f"Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
     parser.add_argument(

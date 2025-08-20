@@ -63,7 +63,7 @@ def main(
     args_wienerinit = _commons.get_args_wienerinit(
         std_noise, mask, path_to_ps=path_to_ps,
         multfact_step_size=multfact_step_size, niter=niter_wiener,
-        device=device, verbose=verbose
+        device=device
     )
     kwargs.update(args_wienerinit=args_wienerinit)
 

@@ -27,7 +27,9 @@ def main(
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        mode: str=_commons.MODE_PNPMASS, update_ng_first: bool=False,
+        mode: str=_commons.MODE_PNPMASS,
+        which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
+        update_ng_first: bool=False,
         switch_mode_for_uq: bool=False,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
@@ -97,12 +99,13 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        wiener, pnpmass, pnpmass_uq, tau, tau_filename = \
-                _commons.get_wiener_pnpmass(
-            denoiser, denoiser_uq,
+        pnpmass, pnpmass_uq, tau, tau_filename = \
+                _commons.get_pnpmass(
+            denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, mask=mask, physics=physics,
             step_size=tau, niter=niter,
             multfact_step_size=multfact_step_size, mode=mode,
+            which_gaussian_extractor=which_gaussian_extractor,
             update_ng_first=update_ng_first,
             switch_mode_for_uq=switch_mode_for_uq,
             path_to_ps=path_to_ps,
@@ -113,14 +116,13 @@ def main(
         )
 
         # Run PnPMass for each batch
-        out_wiener_pnpmass = _commons.run_wiener_pnpmass_batch(
-            wiener, pnpmass, pnpmass_uq,
+        out_wiener_pnpmass = _commons.run_pnpmass_batch(
+            pnpmass, pnpmass_uq,
             physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq,
             device=device, verbose=verbose,
         )
         kappa_true = out_wiener_pnpmass["kappa_true"]
-        kappa_wiener = out_wiener_pnpmass["kappa_wiener"]
         kappa_pnpmass = out_wiener_pnpmass["kappa_pnpmass"]
         kappa_pnpmass_g = out_wiener_pnpmass["kappa_pnpmass_g"]
         kappa_pnpmass_ng = out_wiener_pnpmass["kappa_pnpmass_ng"]
@@ -167,10 +169,6 @@ def main(
                 out_dict.update({
                     "kappa_pnpmass_g": kappa_pnpmass_g[:nimgs_save].cpu(),
                     "kappa_pnpmass_ng": kappa_pnpmass_ng[:nimgs_save].cpu(),
-                })
-            if wiener is not None:
-                out_dict.update({
-                    "kappa_wiener": kappa_wiener[:nimgs_save].cpu(),
                 })
         if cqr is not None:
             out_dict.update({

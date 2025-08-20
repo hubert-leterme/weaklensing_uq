@@ -3,7 +3,6 @@ import time
 import cProfile
 import threading
 import torch
-import deepinv as dinv
 
 class BaseCallback:
     def on_train_begin(self):

@@ -27,6 +27,7 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         mode: str=_commons.MODE_PNPMASS, switch_mode_for_uq: bool=False,
+        which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         niter_per_step_g: int=_commons.NITER_PER_STEP_G,
@@ -81,12 +82,13 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
     # Instantiate the PnP model
-    wiener, pnpmass, pnpmass_uq, step_size, step_size_filename = \
-            _commons.get_wiener_pnpmass(
-        denoiser, denoiser_uq,
+    pnpmass, pnpmass_uq, step_size, step_size_filename = \
+            _commons.get_pnpmass(
+        denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, niter=niter,
         multfact_step_size=multfact_step_size, mode=mode,
+        which_gaussian_extractor=which_gaussian_extractor,
         switch_mode_for_uq=switch_mode_for_uq,
         path_to_ps=path_to_ps,
         noise_whitening_wiener=noise_whitening_wiener,
@@ -97,8 +99,8 @@ def main(
 
     # Run PnPMass for each batch
     calib_dataloader = iter(calib_dataset)
-    out_pnpmass = _commons.run_wiener_pnpmass_batch(
-        wiener, pnpmass, pnpmass_uq,
+    out_pnpmass = _commons.run_pnpmass_batch(
+        pnpmass, pnpmass_uq,
         physics, calib_dataloader, step_size, niter,
         confidence_uq=confidence_uq,
         device=device, verbose=verbose,

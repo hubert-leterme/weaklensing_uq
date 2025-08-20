@@ -1,1 +1,1 @@
-from . import trainer, iterativemm, callbacks
+from . import trainer, iterativemm, pnpmcalens, callbacks
