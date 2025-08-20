@@ -28,8 +28,16 @@ class MCAIteration(nn.Module):
             iterator_g: dinv.optim.OptimIterator,
             iterator_ng: dinv.optim.OptimIterator,
             niter_per_step_g: int=NITER_PER_STEP_G,
-            niter_per_step_ng: int=NITER_PER_STEP_NG
+            niter_per_step_ng: int=NITER_PER_STEP_NG,
+            update_ng_first: bool=False
     ):
+        # Switch arguments if required
+        if update_ng_first:
+            iterator_g, iterator_ng = iterator_ng, iterator_g
+            niter_per_step_g, niter_per_step_ng = (
+                niter_per_step_ng, niter_per_step_g
+            )
+
         super().__init__()
         self.iterator_g = iterator_g
         self.iterator_ng = iterator_ng
@@ -45,6 +53,7 @@ class MCAIteration(nn.Module):
         self.has_cost = _ComponentWrapper(
             iterator_g.has_cost, iterator_ng.has_cost
         )
+        self.update_ng_first = update_ng_first
 
 
     def forward(
@@ -65,6 +74,17 @@ class MCAIteration(nn.Module):
         cur_data_fidelity_g, cur_data_fidelity_ng = cur_data_fidelity.get_components()
         cur_prior_g, cur_prior_ng = cur_prior.get_components()
         cur_params_g, cur_params_ng = _unmerge_dict(cur_params)
+
+        # Switch variables if required
+        if self.update_ng_first:
+            X_g, X_ng = X_ng, X_g
+            cur_data_fidelity_g, cur_data_fidelity_ng = (
+                cur_data_fidelity_ng, cur_data_fidelity_g
+            )
+            cur_prior_g, cur_prior_ng = cur_prior_ng, cur_prior_g
+            cur_params_g, cur_params_ng = (
+                cur_params_ng, cur_params_g
+            )
 
         # Compute the residual and update the Gaussian component
         y_g = _get_residual(y, x_ng, physics)
@@ -88,6 +108,12 @@ class MCAIteration(nn.Module):
         z_ng = X_ng["est"][1]
         F_ng = X_ng["cost"]
 
+        # Switch back variables if required
+        if self.update_ng_first:
+            x_g, x_ng = x_ng, x_g
+            z_g, z_ng = z_ng, z_g
+            F_g, F_ng = F_ng, F_g
+
         x = stack_tensor_components(x_g, x_ng)
         z = stack_tensor_components(z_g, z_ng)
         F = _ComponentWrapper(F_g, F_ng)
@@ -107,12 +133,13 @@ class BaseMCALens(iterativemm.BaseOptim):
             prior_g=None, prior_ng=None,
             custom_init=iterativemm.zero_init,
             set_output=lambda x: {"est": (x,)},
-            **kwargs
+            update_ng_first=False, **kwargs
     ):
         iterator = MCAIteration(
             iterator_g, iterator_ng,
             niter_per_step_g=niter_per_step_g,
-            niter_per_step_ng=niter_per_step_ng
+            niter_per_step_ng=niter_per_step_ng,
+            update_ng_first=update_ng_first
         )
         params_algo = _merge_dict(params_algo_g, params_algo_ng)
         data_fidelity = _ModuleWrapper(data_fidelity_g, data_fidelity_ng)
@@ -432,7 +459,7 @@ def optim_builder_mcalens(
     F_fn_g=None, F_fn_ng=None,
     g_first_g=False, g_first_ng=False,
     bregman_potential_g=None, bregman_potential_ng=None,
-    **kwargs,
+    update_ng_first=False, **kwargs,
 ):
     r"""
     Helper function for building an instance of the :class:`deepinv.optim.BaseOptim` class.
@@ -483,6 +510,6 @@ def optim_builder_mcalens(
         data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
         prior_g=prior_g, prior_ng=prior_ng,
         params_algo_g=params_algo_g, params_algo_ng=params_algo_ng,
-        max_iter=max_iter,
+        max_iter=max_iter, update_ng_first=update_ng_first,
         **kwargs,
     ).eval()

@@ -343,6 +343,7 @@ def get_wiener_pnpmass(
         std_noise=None, mask=None, physics=None,
         step_size=None, niter=NITER_PNPMASS,
         multfact_step_size=MULTFACT_STEP_SIZE, mode="regular",
+        update_ng_first=False,
         switch_mode_for_uq=False,
         path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
@@ -402,7 +403,7 @@ def get_wiener_pnpmass(
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-            metric_dict=metric_dict, verbose=True
+            metric_dict=metric_dict, update_ng_first=update_ng_first, verbose=True
         ).to(device)
 
     else:
@@ -989,6 +990,14 @@ def add_arguments_pnpmode(parser):
             "Mode for PnPMass. Possible values are: "
             "'regular', 'residual', 'pnpmcalens'. "
             "Default = 'regular'"
+        )
+    )
+    parser.add_argument(
+        "--update-ng-first", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Update the non-Gaussian component before the Gaussian component ."
+            "Only used if `--mode` is set to 'pnpmcalens'."
         )
     )
     parser.add_argument(
