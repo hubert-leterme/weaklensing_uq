@@ -94,7 +94,7 @@ def main(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
                 multfact_step_size=multfact_step_size_wiener,
-                niter=niter_wiener, device=device
+                niter=niter_wiener, device=device, verbose=verbose
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
