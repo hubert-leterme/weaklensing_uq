@@ -462,6 +462,7 @@ def get_pnpmass(
         path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
         niter_wiener=NITER_WIENER,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
         niter_per_step_g=NITER_PER_STEP_G,
         niter_per_step_ng=NITER_PER_STEP_NG,
         device="cpu", verbose=False
@@ -488,6 +489,7 @@ def get_pnpmass(
                 white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
                 imgsize=imgsize, std_noise=std_noise, physics=physics,
                 multfact_step_size=multfact_step_size, niter=niter_wiener,
+                starlet_detection_threshold=starlet_detection_threshold,
                 mcalens_update_ng_first=False,
                 device="cpu", verbose=False
             )
@@ -1092,7 +1094,7 @@ def add_arguments_pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Use a starlet denoiser instead of a trained model. "
-            "Only works if `--mode` is set to 'pnpmcalens'. "
+            "Only used if `--mode` is set to 'pnpmcalens'. "
             "This option should be activated for standard MCALens."
         )
     )
@@ -1102,7 +1104,8 @@ def add_arguments_pnpmode(parser):
         help=(
             "Detection threshold for computing the support of active "
             "starlet coefficients. "
-            "Only works if `--mode` is set to 'pnpmcalens'. "
+            "Works with `--mode residual --which-gaussian-extractor mcalens` "
+            "or `--mode pnpmcalens --starlet`. "
             f"Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )

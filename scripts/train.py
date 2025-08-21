@@ -37,6 +37,7 @@ def main(
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
+        starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         multfact_step_size_wiener=MULTFACT_STEP_SIZE,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
@@ -198,6 +199,7 @@ def main(
             white_noise=True, noise_whitening_wiener=noise_whitening_wiener,
             imgsize=imgsize, physics=physics,
             niter=1, # Convergence in one iteration (white noise)
+            starlet_detection_threshold=starlet_detection_threshold,
             mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
             device=device, verbose=verbose
         ) # Not all arguments are needed here (`white_noise=True`)
@@ -292,7 +294,18 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
+            "Only used if `--nongaussian` is activated. "
             f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
+        )
+    )
+    parser.add_argument(
+        "-thresh", "--starlet-detection-threshold", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Detection threshold for computing the support of active "
+            "starlet coefficients. "
+            "Works with `--nongaussian --which-gaussian-extractor mcalens`. "
+            f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
     _commons.add_arguments_wiener(parser)

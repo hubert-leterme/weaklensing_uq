@@ -29,6 +29,7 @@ def main(
         mode: str=_commons.MODE_PNPMASS, switch_mode_for_uq: bool=False,
         which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
+        starlet_detection_threshold: float=_commons.STARLET_DETECTION_THRESHOLD,
         multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
         niter_per_step_g: int=_commons.NITER_PER_STEP_G,
         niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
@@ -75,7 +76,9 @@ def main(
         )
     else:
         denoiser, denoiser_uq = _commons.instantiate_starlet_denoiser(
-            imgsize=imgsize, device=device, verbose=verbose, **kwargs
+            imgsize=imgsize,
+            starlet_detection_threshold=starlet_detection_threshold,
+            device=device, verbose=verbose, **kwargs
         )
 
     # Instantiate physics (forward model)
@@ -93,6 +96,7 @@ def main(
         path_to_ps=path_to_ps,
         noise_whitening_wiener=noise_whitening_wiener,
         niter_wiener=niter_wiener,
+        starlet_detection_threshold=starlet_detection_threshold,
         niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
         device=device, verbose=verbose
     )
