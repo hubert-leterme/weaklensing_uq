@@ -17,6 +17,7 @@ from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
+from wlmmuq.models.deepinv import callbacks as wlcallbacks
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
 from wlmmuq.kappatng import OPENINGANGLE
@@ -283,8 +284,9 @@ def instantiate_starlet_denoiser(
             f"a {int(starlet_detection_threshold)}-sigma detection threshold."
         )
     denoiser_uq = None # Conformal prediction computed from zero-valued error bars
+    callback = wlpnpmcalens.StarletResetter(denoiser)
 
-    return denoiser, denoiser_uq
+    return denoiser, denoiser_uq, callback
 
 
 def get_dataloader_massmapping(
@@ -416,11 +418,12 @@ def get_gaussian_extractor(
             data_fidelity=data_fidelity_g, prior=prior_g,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
         ).to(device)
+        callback = None
 
     elif which == "mcalens":
         if verbose:
             print("MCALens used as Gaussian extractor")
-        denoiser_ng, _ = instantiate_starlet_denoiser(
+        denoiser_ng, _, callback = instantiate_starlet_denoiser(
             imgsize=imgsize,
             starlet_detection_threshold=starlet_detection_threshold,
             device=device, verbose=verbose
@@ -448,7 +451,7 @@ def get_gaussian_extractor(
             "Supported extractors are 'wiener' and 'mcalens'."
         )
 
-    return extractor
+    return extractor, callback
 
 
 def get_pnpmass(
@@ -484,7 +487,8 @@ def get_pnpmass(
         if mode == "residual":
             if verbose:
                 print("Instantiate PnPMass on residuals (ResPnPMass)")
-            gaussian_extractor = get_gaussian_extractor(
+            gaussian_extractor, callback_gaussian_extractor = \
+                    get_gaussian_extractor(
                 which=which_gaussian_extractor,
                 path_to_ps=path_to_ps,
                 white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
@@ -498,6 +502,7 @@ def get_pnpmass(
             if verbose:
                 print("Instantiate PnPMass")
             gaussian_extractor = None
+            callback_gaussian_extractor = None
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior,
@@ -525,6 +530,7 @@ def get_pnpmass(
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             metric_dict=metric_dict, update_ng_first=update_ng_first, verbose=True
         ).to(device)
+        callback_gaussian_extractor = None
 
     else:
         raise ValueError(
@@ -547,7 +553,8 @@ def get_pnpmass(
     else:
         pnpmass_uq = None
 
-    return pnpmass, pnpmass_uq, step_size, step_size_filename
+    return pnpmass, pnpmass_uq, step_size, \
+        step_size_filename, callback_gaussian_extractor
 
 
 # TODO: Merge the 3 functions below into one single function
@@ -596,6 +603,7 @@ def run_pnpmass_batch(
         pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim,
         physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
+        callbacks: wlcallbacks.CallbackList | None = None,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -603,9 +611,13 @@ def run_pnpmass_batch(
     listof_var_pnpmass = []
     listof_rmse_iter = []
 
+    if callbacks is None:
+        callbacks = wlcallbacks.BaseCallback()
+
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
-    for kappa_true, gamma_noisy in pbar:
+    for i, (kappa_true, gamma_noisy) in enumerate(pbar):
+        callbacks.on_batch_begin(i)
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():

@@ -2,6 +2,7 @@ import argparse
 import time
 
 import wlmmuq.models.deepinv.iterativemm as wlpnp
+from wlmmuq.models.deepinv.callbacks import CallbackList
 import wlmmuq.utils as wlutils
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
@@ -74,8 +75,10 @@ def main(
             arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
             imgsize=imgsize, device=device, verbose=verbose, **kwargs
         )
+        callback_starlet_denoiser = None
     else:
-        denoiser, denoiser_uq = _commons.instantiate_starlet_denoiser(
+        denoiser, denoiser_uq, callback_starlet_denoiser = \
+                _commons.instantiate_starlet_denoiser(
             imgsize=imgsize,
             starlet_detection_threshold=starlet_detection_threshold,
             device=device, verbose=verbose, **kwargs
@@ -85,7 +88,7 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
     # Instantiate the PnP model
-    pnpmass, pnpmass_uq, step_size, step_size_filename = \
+    pnpmass, pnpmass_uq, step_size, step_size_filename, callback_gaussian_extractor = \
             _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
@@ -101,12 +104,20 @@ def main(
         device=device, verbose=verbose
     )
 
+    # Set callback list
+    callback_list = []
+    if callback_gaussian_extractor is not None:
+        callback_list.append(callback_gaussian_extractor)
+    if callback_starlet_denoiser is not None:
+        callback_list.append(callback_starlet_denoiser)
+    callbacks = CallbackList(callback_list)
+
     # Run PnPMass for each batch
     calib_dataloader = iter(calib_dataset)
     out_pnpmass = _commons.run_pnpmass_batch(
         pnpmass, pnpmass_uq,
         physics, calib_dataloader, step_size, niter,
-        confidence_uq=confidence_uq,
+        confidence_uq=confidence_uq, callbacks=callbacks,
         device=device, verbose=verbose,
     )
     kappa_true = out_pnpmass["kappa_true"]

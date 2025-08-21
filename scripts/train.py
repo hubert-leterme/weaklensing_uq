@@ -193,7 +193,8 @@ def main(
 
     if nongaussian:
         assert denoiser # Only for training a denoiser
-        gaussian_extractor = _commons.get_gaussian_extractor(
+        gaussian_extractor, callback_gaussian_extractor = \
+                _commons.get_gaussian_extractor(
             which=which_gaussian_extractor,
             path_to_ps=path_to_ps,
             white_noise=True, noise_whitening_wiener=noise_whitening_wiener,
@@ -204,6 +205,8 @@ def main(
             device=device, verbose=verbose
         ) # Not all arguments are needed here (`white_noise=True`)
         kwargs_trainer.update(preproc=gaussian_extractor)
+        if callback_gaussian_extractor is not None:
+            callback_list.append(callback_gaussian_extractor)
         callback_list.append(
             wlnn.deepinv.pnpmcalens.ParamsAlgoUpdater(
                 optim=gaussian_extractor,

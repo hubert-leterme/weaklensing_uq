@@ -426,6 +426,15 @@ class ParamsAlgoUpdater(callbacks.BaseCallback):
                 self.optim.init_params_algo["g_param"][i] = step_size * g_param_g
 
 
+class StarletResetter(callbacks.BaseCallback):
+
+    def __init__(self, starlet: Starlet2d):
+        self.starlet = starlet
+
+    def on_batch_begin(self, batch):
+        self.starlet.reset_buffers()
+
+
 class _ComponentWrapper:
     """
     Wrapper class to hold Gaussian and non-Gaussian components.
