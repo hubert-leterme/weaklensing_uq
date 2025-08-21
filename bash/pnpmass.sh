@@ -20,7 +20,7 @@ mkdir -p ${checkpoint_dir}/results_pnpmass
 optional_args_cleaned=$(echo "$optional_args" \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
   | sed 's/--switch-mode-for-uq//g' \
-  | sed 's/--starlet -thresh /--starlet /g' \
+  | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
   | sed 's/-cqr [^ ]\+//g' \

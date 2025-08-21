@@ -16,6 +16,7 @@ optional_args="${@:2}"
 # Set name of the denoiser
 optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-a //g' \
+  | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-s /--model-size /g' \
   | sed 's/-p /--pretrained /g' \
   | sed 's/-w [^ ]\+//g' \
