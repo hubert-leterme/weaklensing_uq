@@ -284,6 +284,11 @@ class Starlet2d(nn.Module):
             x -= self.x_prev
         wt = self.dec(x) # Wavelet decomposition
         if self.active_coefs is None:
+            if torch.is_tensor(sigma):
+                # The current shape of sigma is exptected to be (nimgs, 1, 1, 1).
+                # We need to broadcast it to (nimgs, 1, 1, 1, 1) to
+                # match the shape of the wavelet coefficients.
+                sigma = sigma.unsqueeze(-3) # Shape = (nimgs, 1, 1, 1, 1)
             self._set_active_coefs(wt, sigma) # Set for all subsequent forward passes
         wt *= self.active_coefs # Projection onto the support of active coefficients
         x_denoised = self.rec(wt) # Wavelet reconstruction
@@ -415,8 +420,8 @@ class ParamsAlgoUpdater(callbacks.BaseCallback):
             self.optim.init_params_algo["stepsize"]
         ): # Possibly, one step size per iteration
             if isinstance(self.optim, BaseMCALens):
-                self.optim.init_params_algo["g_param"][i].g = step_size * g_param_g
-                self.optim.init_params_algo["g_param"][i].ng = step_size * g_param_ng
+                self.optim.init_params_algo["g_param"][i].g = step_size.g * g_param_g
+                self.optim.init_params_algo["g_param"][i].ng = step_size.ng * g_param_ng
             else:
                 self.optim.init_params_algo["g_param"][i] = step_size * g_param_g
 
