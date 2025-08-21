@@ -475,6 +475,7 @@ def get_pnpmass(
     )
     if step_size is None or step_size <= 0:
         step_size_filename = "auto"
+        step_size = params_algo["stepsize"]
     else:
         step_size_filename = f"{step_size:.3f}"
     metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
