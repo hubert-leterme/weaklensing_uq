@@ -76,8 +76,7 @@ def main(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
-            convert_to_torch_tensor=True, inpainting=inpainting_deepmass,
-            verbose=verbose
+            inpainting=inpainting_deepmass, verbose=verbose
         )
         # Update arguments for data loading
         kwargs.update(std_noise=std_noise, mask=mask)

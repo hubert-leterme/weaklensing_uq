@@ -198,8 +198,8 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
 
 def get_std_noise(ngal, shapedisp, std_noise_mask):
 
-    out = np.nan_to_num(
-        shapedisp / np.sqrt(ngal), posinf=std_noise_mask
+    out = torch.nan_to_num(
+        shapedisp / ngal**0.5, posinf=std_noise_mask
     ) # standard deviation of the noise
 
     return out

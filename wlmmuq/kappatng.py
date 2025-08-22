@@ -3,6 +3,7 @@ import random
 import numpy as np
 import h5py
 import tqdm
+import torch
 
 from . import utils, cosmos, dataaugm
 from . import KTNG_DIR
@@ -267,6 +268,9 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
         imgsize, extent
     )
     mask = ngal > 0
+
+    ngal = torch.tensor(ngal, dtype=torch.float32)
+    mask = torch.tensor(mask, dtype=bool)
 
     out = {
         'ra_cosmos_median': ra_cosmos_median,

@@ -68,7 +68,7 @@ def get_device(verbose=False):
 def get_stdnoise_mask(
         path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
         imgsize=IMGSIZE,
-        cosmos_include_faint=False, convert_to_torch_tensor=False,
+        cosmos_include_faint=False,
         inpainting=False, verbose=False
 ):
     if path_to_std_noise is not None:
@@ -95,10 +95,6 @@ def get_stdnoise_mask(
         ngal = data_dict["ngal"]
         mask = data_dict["mask"]
         std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-
-        if convert_to_torch_tensor:
-            mask = torch.tensor(mask, dtype=bool)
-            std_noise = torch.tensor(std_noise, dtype=torch.float32)
 
     if inpainting:
         # Set the noise standard deviation for masked data

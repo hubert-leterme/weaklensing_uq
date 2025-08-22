@@ -60,8 +60,7 @@ def main(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
-        convert_to_torch_tensor=True, inpainting=inpainting,
-        verbose=verbose
+        inpainting=inpainting, verbose=verbose
     )
 
     # Load test set
