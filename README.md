@@ -15,14 +15,6 @@ conda activate wlmmuq
 
 Install `wlmmuq` library, provided in this repository, with `pip install .`.
 
-#### Additional packages
-
-To run Wiener and MCALens algorithms, the following packages must be installed manually.
-
-- `pycs` library, from the `cosmostat` repository (https://github.com/CosmoStat/cosmostat). Tested with commit nb `3eff4935bc3cd2368844c67452e429e0f4e7a127`. If `python -m pip install .` fails, simply specify the path to the git repository in `config.yml` (see below). Otherwise, leave it blank.
-
-- `pysparse` Python bindings, from the `Sparse2D` repository (https://github.com/CosmoStat/Sparse2D). Only needed for MCALens. Tested with commit nb `3f9d54863765980299cfe92e0624ba93ed7ff02b`.
-
 #### Configuration file
 
 Update `config.yml` provided at the root of this repository, to configure data directories and file paths:
@@ -30,25 +22,9 @@ Update `config.yml` provided at the root of this repository, to configure data d
 - `cosmos_dir`: Path to the COSMOS S10 weak lensing shear catalog (Schrabback et al. 2010). The directory contains data files named `cosmos_bright_cat_min.asc` and `cosmos_faint_cat.asc`.
 - `ktng_dir`: Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations. See `https://github.com/0satoken/kappaTNG` to download the dataset. The directory contains a file named `zs.dat` as well as HDF5 files named `LP[XXX]/LP[XXX]_run[001-100]_maps.hdf5`, where `[XXX]` ranges from `001` to `100`.
 
-#### Note
-
-If you encounter the error `ImportError: libpython3.11.so.1.0: cannot open shared object file: No such file or directory` when working within a virtual environment, you may need to append the path to the directory for the shared libraries to `$LD_LIBRARY_PATH`. For example: `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH`.
-
 ## Python scripts
 
 **TODO: update.**
-
-### Mass mapping with uncertainty quantification
-
-#### Compute point estimates
-
-```bash
-python scripts/massmapping.py wiener wiener_niter_12_nimgs_225_${datetime} /path/to/test/dataset.hdf5 --niter 12 --nimgs 225 -b 45 --seed 42 -v
-```
-
-```bash
-python scripts/massmapping.py mcalens mcalens_niter_${niter_mcalens}_Nsigma_5_nimgs_225_${datetime} /path/to/test/dataset.hdf5 --niter $niter_mcalens --Nsigma 5 --nimgs 225 -b 45 --seed 42 -v
-```
 
 ### Creating an augmented dataset
 
