@@ -3,7 +3,6 @@ import torch
 from torch import nn
 import torchinfo
 import deepinv as dinv
-import learnlet
 
 from .sunet import sunet
 from .deepinv import iterativemm
@@ -222,28 +221,33 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
 #=================================================================================
 
 # Learnlet is inherently noise-aware, no need to inherit from NoiseAwareModelMixin
-class Learnlet(ModelMixin, learnlet.Learnlet):
+try:
+    import learnlet
+except ImportError:
+    Learnlet = None
+else:
+    class Learnlet(ModelMixin, learnlet.Learnlet):
 
-    def __init__(
-            self, map_size=None, in_channels=1, out_channels=1,
-            pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
-    ):
-        self.map_size = map_size
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        if in_channels != 1 or out_channels != 1:
-            raise NotImplementedError
-        super().__init__(
-            map_size=map_size,
-            in_channels=in_channels, out_channels=out_channels,
-            pretrained_weights_dir=pretrained_weights_dir, **kwargs
-        )
+        def __init__(
+                self, map_size=None, in_channels=1, out_channels=1,
+                pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
+        ):
+            self.map_size = map_size
+            self.in_channels = in_channels
+            self.out_channels = out_channels
+            if in_channels != 1 or out_channels != 1:
+                raise NotImplementedError
+            super().__init__(
+                map_size=map_size,
+                in_channels=in_channels, out_channels=out_channels,
+                pretrained_weights_dir=pretrained_weights_dir, **kwargs
+            )
 
-    def _preprocess_kwargs(
-            self, map_size=None, in_channels=1, out_channels=1, **kwargs
-    ):
-        # map_size, in_channels and out_channels discarded
-        return kwargs
+        def _preprocess_kwargs(
+                self, map_size=None, in_channels=1, out_channels=1, **kwargs
+        ):
+            # map_size, in_channels and out_channels discarded
+            return kwargs
 
 
 #=================================================================================
