@@ -12,6 +12,7 @@ setup(
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
+        "tqdm",
         "numpy",
         "scipy",
         "scikit-image",
@@ -21,7 +22,8 @@ setup(
         "lenspack",
         "deepinv",
         "torch",
-        "torchinfo"
+        "torchinfo",
+        "timm",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
