@@ -32,6 +32,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-b [^ ]\+//g' \
   | sed 's/-f [^ ]\+//g' \
   | sed -E 's/-tau( [^-][^ ]*)+//g' \
+  | sed -E 's/-alph( [^-][^ ]*)+//g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
   | sed 's/-ig /--niter_g /g' \
