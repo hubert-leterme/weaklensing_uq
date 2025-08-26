@@ -13,6 +13,8 @@ from lenspack.utils import bin2d
 
 from . import ks93
 
+ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
+
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
 #vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -975,8 +977,8 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
 
 def get_sup_step_size(
-        param_mahalanobis: float | torch.Tensor, its=20, physics=None,
-        device: str | torch.device = "cpu"
+        param_mahalanobis: float | torch.Tensor, its=ITS_POWER_ITERATION,
+        physics=None, device: str | torch.device = "cpu"
 ):
     """
     Get the upper bound for the step size in PGD algorithms where the data
