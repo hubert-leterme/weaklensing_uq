@@ -301,14 +301,16 @@ def get_dataloader_massmapping(
 def _get_datafidelity_params(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
+        step_size=None, multfact_step_size=None,
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     step_size, param_mahalanobis = \
             get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     if not white_noise:
@@ -345,13 +347,15 @@ def get_datafidelity_prior_params_gaussian(
 def get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=None,
         white_noise=False, std_noise=None, physics=None,
-        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
+        step_size=None, multfact_step_size=None,
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     data_fidelity, params_algo = _get_datafidelity_params(
         white_noise=white_noise, noise_whitening=True,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     ) # Noise-whitening data fidelity
     prior = dinv.optim.prior.PnP(denoiser)
@@ -456,8 +460,9 @@ def get_gaussian_extractor(
 def get_pnpmass(
         denoiser, denoiser_uq, imgsize=IMGSIZE,
         std_noise=None, mask=None, physics=None,
-        step_size=None, niter=NITER_PNPMASS,
-        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE, mode="regular",
+        step_size=None, multfact_step_size=None,
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
+        niter=NITER_PNPMASS, mode="regular",
         which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first=False,
         switch_mode_for_uq=False,
@@ -473,14 +478,12 @@ def get_pnpmass(
             get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=denoiser_uq,
         white_noise=False, std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
-    if step_size is None or step_size <= 0:
-        step_size_filename = "auto"
-        step_size = params_algo["stepsize"]
-    else:
-        step_size_filename = f"{step_size:.3f}"
+    step_size = params_algo["stepsize"]
+    step_size_filename = f"{step_size:.3f}"
     metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
 
     if mode in ["regular", "residual"]:
@@ -745,7 +748,8 @@ def get_args_wienerinit(
 def get_step_size_param_mahalanobis(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
+        step_size=None, multfact_step_size=None,
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     if not white_noise:
@@ -755,9 +759,13 @@ def get_step_size_param_mahalanobis(
                 param_mahalanobis=param_mahalanobis,
                 physics=physics, device=device
             )
-            step_size *= multfact_sup_step_size
             if verbose:
-                print(f"Step size computed using power iteration = {step_size:.2e}")
+                print(
+                    f"Step size upper bound computed using power iteration = {step_size:.2e}"
+                )
+            step_size *= multfact_sup_step_size
+        if multfact_step_size is not None:
+            step_size *= multfact_step_size
     else:
         # The standard MSE is used as data fidelity
         # The parameter `g_param` for the proximal operator must be updated accordingly

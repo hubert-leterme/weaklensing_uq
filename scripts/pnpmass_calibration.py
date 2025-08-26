@@ -91,8 +91,8 @@ def main(
             _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
-        step_size=step_size, niter=niter,
-        multfact_sup_step_size=multfact_sup_step_size, mode=mode,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
+        niter=niter, mode=mode,
         which_gaussian_extractor=which_gaussian_extractor,
         switch_mode_for_uq=switch_mode_for_uq,
         path_to_ps=path_to_ps,

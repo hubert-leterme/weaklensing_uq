@@ -23,7 +23,9 @@ def main(
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         load_model_uq: bool=False,
         arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
-        step_size: float | list[float]=None, niter: int=_commons.NITER_PNPMASS,
+        step_size: float | list[float]=None,
+        multfact_step_size: float | list[float]=None,
+        niter: int=_commons.NITER_PNPMASS,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_PNPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
@@ -87,8 +89,10 @@ def main(
         )
 
     # Get step size
+    if not isinstance(multfact_step_size, list):
+        multfact_step_size = [multfact_step_size]
     if not isinstance(step_size, list):
-        step_size = [step_size]
+        step_size = len(multfact_step_size) * [step_size]
 
     # Load CQR, if available
     nimgs_calib, cqr = _commons.load_cqr(
@@ -99,7 +103,7 @@ def main(
     # Instantiate physics (forward model)
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
-    for tau in step_size:
+    for tau, alpha in zip(step_size, multfact_step_size):
         # Initialize iterator
         test_dataloader = iter(test_dataset)
 
@@ -108,8 +112,9 @@ def main(
                 _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, mask=mask, physics=physics,
-            step_size=tau, niter=niter,
-            multfact_sup_step_size=multfact_sup_step_size, mode=mode,
+            step_size=tau, multfact_step_size=alpha,
+            multfact_sup_step_size=multfact_sup_step_size,
+            niter=niter, mode=mode,
             which_gaussian_extractor=which_gaussian_extractor,
             update_ng_first=update_ng_first,
             switch_mode_for_uq=switch_mode_for_uq,
@@ -225,6 +230,13 @@ if __name__ == "__main__":
             f"{_commons.MULTFACT_SUP_STEP_SIZE:.2f} * upper_bound, "
             "where upper_bound is estimated from the noise standard deviation "
             "and the mask, using the power iteration method."
+        )
+    )
+    parser.add_argument(
+        "-alph", "--multfact-step-size", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Multiplicative factor for the step size. Several values can be provided."
         )
     )
     parser.add_argument(
