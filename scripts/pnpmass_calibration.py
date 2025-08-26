@@ -31,7 +31,7 @@ def main(
         which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
         starlet_detection_threshold: float=_commons.STARLET_DETECTION_THRESHOLD,
-        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
+        multfact_sup_step_size: float=_commons.MULTFACT_SUP_STEP_SIZE,
         niter_per_step_g: int=_commons.NITER_PER_STEP_G,
         niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
@@ -92,7 +92,7 @@ def main(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, niter=niter,
-        multfact_step_size=multfact_step_size, mode=mode,
+        multfact_sup_step_size=multfact_sup_step_size, mode=mode,
         which_gaussian_extractor=which_gaussian_extractor,
         switch_mode_for_uq=switch_mode_for_uq,
         path_to_ps=path_to_ps,
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Step size for the PnPMass algorithm. "
-            f"Default = {_commons.MULTFACT_STEP_SIZE:.2f} * upper_bound, "
+            f"Default = {_commons.MULTFACT_SUP_STEP_SIZE:.2f} * upper_bound, "
             "where upper_bound is estimated from the noise standard deviation "
             "and the mask, using the power iteration method"
         )

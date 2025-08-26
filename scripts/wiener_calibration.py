@@ -22,7 +22,7 @@ def main(
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        multfact_step_size: float=_commons.MULTFACT_STEP_SIZE,
+        multfact_sup_step_size: float=_commons.MULTFACT_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
@@ -63,7 +63,7 @@ def main(
         path_to_ps=path_to_ps,
         white_noise=False,
         std_noise=std_noise, physics=physics,
-        multfact_step_size=multfact_step_size, niter=niter_wiener,
+        multfact_sup_step_size=multfact_sup_step_size, niter=niter_wiener,
         device=device, verbose=verbose
     )
 

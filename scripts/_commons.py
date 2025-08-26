@@ -22,7 +22,7 @@ from wlmmuq.models.deepinv import callbacks as wlcallbacks
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
+from wlmmuq.models.torch import NITER_WIENER, MULTFACT_SUP_STEP_SIZE
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
 
@@ -301,14 +301,14 @@ def get_dataloader_massmapping(
 def _get_datafidelity_params(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     step_size, param_mahalanobis = \
             get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     if not white_noise:
@@ -327,13 +327,13 @@ def get_datafidelity_prior_params_gaussian(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     data_fidelity, params_algo = _get_datafidelity_params(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     powerspectrum = torch.load(path_to_ps)
@@ -345,13 +345,13 @@ def get_datafidelity_prior_params_gaussian(
 def get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=None,
         white_noise=False, std_noise=None, physics=None,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     data_fidelity, params_algo = _get_datafidelity_params(
         white_noise=white_noise, noise_whitening=True,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     ) # Noise-whitening data fidelity
     prior = dinv.optim.prior.PnP(denoiser)
@@ -367,7 +367,7 @@ def get_wiener(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         niter=NITER_WIENER, device="cpu", verbose=False
 ):
     if verbose:
@@ -376,7 +376,7 @@ def get_wiener(
         path_to_ps=path_to_ps,
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     wiener = wlpnp.optim_builder(
@@ -395,7 +395,7 @@ def get_gaussian_extractor(
         white_noise=False, noise_whitening_wiener=False,
         imgsize=IMGSIZE, std_noise=None, physics=None,
         step_size=None, step_size_ng=None,
-        multfact_step_size=MULTFACT_STEP_SIZE,
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         niter=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
         mcalens_update_ng_first=False,
@@ -405,7 +405,7 @@ def get_gaussian_extractor(
         path_to_ps=path_to_ps,
         white_noise=white_noise, noise_whitening=noise_whitening_wiener,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     if which == "wiener":
@@ -431,7 +431,7 @@ def get_gaussian_extractor(
                 get_datafidelity_prior_params_nongaussian(
             denoiser_ng, white_noise=white_noise,
             std_noise=std_noise, physics=physics,
-            step_size=step_size_ng, multfact_step_size=multfact_step_size,
+            step_size=step_size_ng, multfact_sup_step_size=multfact_sup_step_size,
             device=device, verbose=verbose
         )
         extractor = wlpnpmcalens.optim_builder_mcalens(
@@ -457,7 +457,7 @@ def get_pnpmass(
         denoiser, denoiser_uq, imgsize=IMGSIZE,
         std_noise=None, mask=None, physics=None,
         step_size=None, niter=NITER_PNPMASS,
-        multfact_step_size=MULTFACT_STEP_SIZE, mode="regular",
+        multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE, mode="regular",
         which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first=False,
         switch_mode_for_uq=False,
@@ -473,7 +473,7 @@ def get_pnpmass(
             get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=denoiser_uq,
         white_noise=False, std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     )
     if step_size is None or step_size <= 0:
@@ -496,7 +496,7 @@ def get_pnpmass(
                 white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
                 imgsize=imgsize, std_noise=std_noise, physics=physics,
                 step_size=None, step_size_ng=None,
-                multfact_step_size=multfact_step_size,
+                multfact_sup_step_size=multfact_sup_step_size,
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
                 mcalens_update_ng_first=False,
@@ -524,7 +524,7 @@ def get_pnpmass(
             path_to_ps=path_to_ps,
             white_noise=False, noise_whitening=noise_whitening_wiener,
             std_noise=std_noise, physics=physics,
-            step_size=None, multfact_step_size=multfact_step_size,
+            step_size=None, multfact_sup_step_size=multfact_sup_step_size,
             device=device, verbose=verbose
         )
         pnpmass = wlpnpmcalens.optim_builder_mcalens(
@@ -723,7 +723,7 @@ def get_inference_time(beg_time, verbose=False):
 def get_args_wienerinit(
         std_noise, mask, path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         niter=NITER_WIENER, device="cpu", verbose=False
 ):
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
@@ -731,7 +731,7 @@ def get_args_wienerinit(
     step_size, _ = get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, multfact_step_size=multfact_step_size,
+        step_size=step_size, multfact_sup_step_size=multfact_sup_step_size,
         device=device, verbose=verbose
     ) # Bayesian Wiener filtering
     args_wienerinit = dict(
@@ -745,7 +745,7 @@ def get_args_wienerinit(
 def get_step_size_param_mahalanobis(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, multfact_step_size=MULTFACT_STEP_SIZE,
+        step_size=None, multfact_sup_step_size=MULTFACT_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     if not white_noise:
@@ -755,7 +755,7 @@ def get_step_size_param_mahalanobis(
                 param_mahalanobis=param_mahalanobis,
                 physics=physics, device=device
             )
-            step_size *= multfact_step_size
+            step_size *= multfact_sup_step_size
             if verbose:
                 print(f"Step size computed using power iteration = {step_size:.2e}")
     else:

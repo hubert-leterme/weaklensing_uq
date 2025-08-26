@@ -12,7 +12,7 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
-from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, MULTFACT_STEP_SIZE
+from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, MULTFACT_SUP_STEP_SIZE
 
 NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
 NIMGS_VAL = 1440 # Remaining 2 realizations
@@ -38,7 +38,7 @@ def main(
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
-        multfact_step_size_wiener=MULTFACT_STEP_SIZE,
+        multfact_sup_step_size_wiener=MULTFACT_SUP_STEP_SIZE,
         order2=False, path_to_pred_dataset=None,
         path_to_order1_model=None, imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -92,7 +92,7 @@ def main(
             args_wienerinit = _commons.get_args_wienerinit(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
-                multfact_step_size=multfact_step_size_wiener,
+                multfact_sup_step_size=multfact_sup_step_size_wiener,
                 niter=niter_wiener, device=device, verbose=verbose
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
