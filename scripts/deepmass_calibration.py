@@ -25,7 +25,7 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         niter_wiener: int=NITER_WIENER,
-        multfact_sup_step_size: float=_commons.MULTFACT_SUP_STEP_SIZE,
+        eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
@@ -61,7 +61,7 @@ def main(
     # Load arguments for Wiener initialization
     args_wienerinit = _commons.get_args_wienerinit(
         std_noise, mask, path_to_ps=path_to_ps,
-        multfact_sup_step_size=multfact_sup_step_size, niter=niter_wiener,
+        eps_sup_step_size=eps_sup_step_size, niter=niter_wiener,
         device=device, verbose=verbose
     )
     kwargs.update(args_wienerinit=args_wienerinit)

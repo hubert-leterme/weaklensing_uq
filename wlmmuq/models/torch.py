@@ -16,7 +16,6 @@ METRIC_DICT = {
 }
 
 NITER_WIENER = 12 # For DeepMass
-MULTFACT_SUP_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
 
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
@@ -485,10 +484,10 @@ class NonGaussianSupLoss(dinv.loss.SupLoss):
     def __init__(
             self, powerspectrum_wiener: torch.Tensor, sigma_wiener: float=None,
             niter_wiener: int=NITER_WIENER,
-            multfact_sup_step_size_wiener: float=MULTFACT_SUP_STEP_SIZE, **kwargs
+            eps_sup_step_size_wiener: float=0., **kwargs
     ):
         super().__init__(**kwargs)
-        self.multfact_sup_step_size_wiener = multfact_sup_step_size_wiener
+        self.eps_sup_step_size_wiener = eps_sup_step_size_wiener
         if sigma_wiener is not None:
             std_noise_wiener = sigma_wiener * torch.ones_like(powerspectrum_wiener)
             step_size_wiener = self._get_step_size(sigma_wiener)
@@ -536,7 +535,7 @@ class NonGaussianSupLoss(dinv.loss.SupLoss):
 
 
     def _get_step_size(self, sigma):
-        return self.multfact_sup_step_size_wiener * sigma**2
+        return (1 - self.eps_sup_step_size_wiener) * sigma**2
 
 
 #=================================================================================
