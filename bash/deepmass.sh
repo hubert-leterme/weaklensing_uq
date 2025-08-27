@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set paths
-path_to_test_dataset=/ceph/checheurs/leterme231/Data/kappaTNG_cropped/LP001_cropped_384.hdf5
+path_to_test_dataset=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped_384.hdf5
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then

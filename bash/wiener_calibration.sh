@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set paths
-path_to_calibration_dataset=/ceph/checheurs/leterme231/Data/kappaTNG_augmented/LP001_augmented_384.hdf5
+path_to_calibration_dataset=/ceph/chercheurs/leterme231/kappaTNG_augmented/LP001_augmented_384.hdf5
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
