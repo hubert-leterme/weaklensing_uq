@@ -782,12 +782,14 @@ def get_step_size_param_mahalanobis(
 
 
 def load_cqr(
-        path_to_cqr, confidence_uq, imgsize,
+        path_to_cqr, confidence_uq, imgsize, parent_dir=None,
         device="cpu", verbose=False
 ):
     if path_to_cqr is not None:
+        if parent_dir is not None:
+            path_to_cqr = os.path.join(parent_dir, path_to_cqr)
         if verbose:
-            print("Load calibration function")
+            print(f"Load calibration parameters from {path_to_cqr}")
         alpha = wlutils.get_alpha_from_confidence(confidence_uq)
         cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
         checkpoint_cqr = torch.load(path_to_cqr)

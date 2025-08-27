@@ -58,7 +58,7 @@ def main(
 
     # Load CQR, if available
     nimgs_calib, cqr = _commons.load_cqr(
-        path_to_cqr, confidence_uq, imgsize,
+        path_to_cqr, confidence_uq, imgsize, parent_dir=output_dir,
         device=device, verbose=verbose
     )
 
