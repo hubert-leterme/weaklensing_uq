@@ -311,7 +311,7 @@ def _get_datafidelity_params(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
         step_size=step_size, multfact_step_size=multfact_step_size,
-        eps_sup_step_size=eps_sup_step_size,
+        eps=eps_sup_step_size,
         device=device, verbose=verbose
     )
     if not white_noise:
@@ -735,7 +735,7 @@ def get_args_wienerinit(
     step_size, _ = get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, eps_sup_step_size=eps_sup_step_size,
+        step_size=step_size, eps=eps_sup_step_size,
         device=device, verbose=verbose
     ) # Bayesian Wiener filtering
     args_wienerinit = dict(
@@ -750,7 +750,7 @@ def get_step_size_param_mahalanobis(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
         step_size=None, multfact_step_size=None,
-        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        eps=EPS_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     if not white_noise:
@@ -764,7 +764,7 @@ def get_step_size_param_mahalanobis(
                 print(
                     f"Step size upper bound computed using power iteration = {step_size:.2e}"
                 )
-            step_size *= (1 - eps_sup_step_size)
+            step_size *= (1 - eps)
         if multfact_step_size is not None:
             step_size *= multfact_step_size
     else:
