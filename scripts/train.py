@@ -305,8 +305,8 @@ if __name__ == "__main__":
         "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Train order-2 moment network. If activated, then either `--path-to-pred-dataset` "
-            "or `--path-to-order1-model` must be provided."
+            "Train order-2 moment network. If activated, then "
+            "`--timestamp-order1` and `--epoch-order1` must be provided."
         )
     )
     parser.add_argument(
