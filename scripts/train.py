@@ -1,3 +1,4 @@
+import os
 import argparse
 
 import torch
@@ -192,9 +193,11 @@ def main(
             )
         )
 
+    output_type = _commons.get_output_type(order2=order2)
+    save_path = os.path.join(checkpoint_dir, output_type)
     if resume:
         path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(
-            checkpoint_dir, timestamp_resume, epoch_resume, order2=order2
+            save_path, timestamp_resume, epoch_resume
         )
         if verbose:
             print(f"Resuming training from {path_to_checkpoint_pretrained}")
@@ -202,7 +205,7 @@ def main(
     trainer = wlnn.deepinv.trainer.Trainer(
         model,
         device=device,
-        save_path=checkpoint_dir,
+        save_path=save_path,
         verbose=verbose,
         scale_as_input=scale_as_input,
         physics=physics,

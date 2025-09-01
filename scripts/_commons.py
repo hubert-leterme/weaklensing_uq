@@ -172,15 +172,17 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_path_to_checkpoint(
-        checkpoint_dir, timestamp, epoch, order2=False
-):
+def get_output_type(order2=False):
     if not order2:
         output_type = "pe" # Point estimate
     else:
         output_type = "var" # Variance
+    return output_type
+
+
+def get_path_to_checkpoint(save_path, timestamp, epoch):
     path_to_checkpoint = os.path.join(
-        checkpoint_dir, output_type, timestamp, f"ckp_{epoch}.pth.tar"
+        save_path, timestamp, f"ckp_{epoch}.pth.tar"
     )
     return path_to_checkpoint
 
@@ -196,8 +198,10 @@ def load_trained_model(
     if timestamp is None:
         path_to_checkpoint = checkpoint_dir
     else:
+        output_type = get_output_type(order2=order2)
+        save_path = os.path.join(checkpoint_dir, output_type)
         path_to_checkpoint = get_path_to_checkpoint(
-            checkpoint_dir, timestamp, epoch, order2=order2
+            save_path, timestamp, epoch
         )
     if not order2:
         kwargs.update(meancentering=True, onlypositive=False)
