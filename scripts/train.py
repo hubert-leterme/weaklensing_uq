@@ -1,4 +1,3 @@
-import os
 import argparse
 
 import torch
@@ -19,11 +18,11 @@ NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_PS = 2048
 BATCH_SIZE_PS = 256
 NREAL_PER_IMG = 1
-NEPOCHS = 20
 LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
+CHECKPOINT_DIR = "."
 
 def main(
         path_to_augmented_dataset,
@@ -39,12 +38,13 @@ def main(
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        order2=False, path_to_pred_dataset=None,
-        path_to_order1_model=None, imgsize=IMGSIZE,
+        order2=False, timestamp_order1=None, epoch_order1=None,
+        imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
-        nepochs=NEPOCHS, batch_size=BATCH_SIZE,
+        nepochs=_commons.EPOCH, batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, checkpoint_dir='.', num_workers=NUM_WORKERS,
+        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=CHECKPOINT_DIR,
+        num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
@@ -111,19 +111,6 @@ def main(
     elif backend != 'torch':
         raise ValueError("Unsupported backend.")
 
-    kwargs_model_order1 = None
-    if order2:
-        if path_to_pred_dataset is not None:
-            kwargs.update(
-                order=2, pred_filepath=path_to_pred_dataset
-            )
-        else:
-            # No mean centering and only positive values in order-2 moment networks
-            kwargs_model_order1 = kwargs_model.copy()
-            kwargs_model.update(
-                meancentering=False, onlypositive=True
-            )
-
     if verbose:
         print("Initialize batch generators for training and validation")
     train_dataset = dataset_class(
@@ -151,22 +138,14 @@ def main(
     if verbose:
         model.summary()
 
-    # Set directories
-    output_type = _commons.get_output_type(order2)
-
-    checkpoint_dir = os.path.expanduser(checkpoint_dir)
-    checkpoint_dir = os.path.join(checkpoint_dir, output_type)
-    checkpoint_dir = os.path.normpath(checkpoint_dir)
-
     # Set loss function
     metric = wlnn.torch.METRIC_DICT[loss]
-    if order2 and path_to_pred_dataset is None:
-        order1_model = cnn_class(
-            map_size=imgsize, **kwargs_model_order1
+    if order2:
+        order1_model = _commons.load_trained_model(
+            checkpoint_dir, arch, timestamp_order1, epoch_order1,
+            imgsize=imgsize, order2=False,
+            device=device, verbose=verbose, **kwargs_model
         )
-        checkpoint_order1_model = torch.load(path_to_order1_model)
-        order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
-
         loss_fun = wlnn.torch.Order2SupLoss(
             order1_model=order1_model, metric=metric
         )
@@ -214,12 +193,12 @@ def main(
         )
 
     if resume:
-        ckpt_pretrained = os.path.join(
-            checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
+        path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(
+            checkpoint_dir, timestamp_resume, epoch_resume, order2=order2
         )
         if verbose:
-            print(f"Resuming training from {ckpt_pretrained}")
-        kwargs_trainer.update(ckpt_pretrained=ckpt_pretrained)
+            print(f"Resuming training from {path_to_checkpoint_pretrained}")
+        kwargs_trainer.update(ckpt_pretrained=path_to_checkpoint_pretrained)
     trainer = wlnn.deepinv.trainer.Trainer(
         model,
         device=device,
@@ -260,13 +239,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_augmented_dataset", type=str,
         help="Path to the augmented dataset (HDF5 file)"
-    )
-    parser.add_argument(
-        "--backend", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Deep learning framework used to train the model ('tensorflow' or 'torch')."
-        )
     )
     _commons.add_arguments_model(parser)
     parser.add_argument(
@@ -330,7 +302,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--order2", action='store_true',
+        "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Train order-2 moment network. If activated, then either `--path-to-pred-dataset` "
@@ -338,21 +310,21 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "-pred", "--path-to-pred-dataset", type=str,
+        "-t1", "--timestamp-order1", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Path to the prediction dataset (HDF5 file), computed with "
-            "a previously-trained network. This is useful to train a moment "
-            "network of order 2. Default = None"
+            "Timestamp of the trained order-1 moment network. "
+            "Only used if `--order2` is activated. "
+            "Default = None"
         )
     )
     parser.add_argument(
-        "-o1", "--path-to-order1-model", type=str,
+        "-e1", "--epoch-order1", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Path to the trained order-1 moment network. "
-            "This is useful to train a moment network of order 2. "
-            "Only works for PyTorch models. Default = None"
+            "Epoch of the checkpoint for the trained order-1 network. "
+            "Only used if `--order2` is activated. "
+            "Default = None"
         )
     )
     parser.add_argument(
@@ -393,7 +365,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Number of training epochs. "
-            f"Default = {NEPOCHS}"
+            f"Default = {_commons.EPOCH}"
         )
     )
     parser.add_argument(
@@ -432,7 +404,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--timestamp-resume", type=str,
+        "-tr", "--timestamp-resume", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Timestamp of the checkpoint to resume training from. "
@@ -441,7 +413,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--epoch-resume", type=int,
+        "-er", "--epoch-resume", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Epoch of the checkpoint to resume training from. "

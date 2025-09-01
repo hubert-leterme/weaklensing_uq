@@ -172,27 +172,32 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_output_type(order2=False):
+def get_path_to_checkpoint(
+        checkpoint_dir, timestamp, epoch, order2=False
+):
     if not order2:
         output_type = "pe" # Point estimate
     else:
         output_type = "var" # Variance
-    return output_type
+    path_to_checkpoint = os.path.join(
+        checkpoint_dir, output_type, timestamp, f"ckp_{epoch}.pth.tar"
+    )
+    return path_to_checkpoint
 
 
-def _load_trained_model(
+def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
         device="cpu", verbose=False, **kwargs
 ):
+    checkpoint_dir = os.path.expanduser(checkpoint_dir)
     cnn_class, _ = wlnn.MODEL_CLASSES[arch]
     if timestamp is None:
         path_to_checkpoint = checkpoint_dir
     else:
-        output_type = get_output_type(order2)
-        path_to_checkpoint = os.path.join(
-            checkpoint_dir, output_type, timestamp, f"ckp_{epoch}.pth.tar"
+        path_to_checkpoint = get_path_to_checkpoint(
+            checkpoint_dir, timestamp, epoch, order2=order2
         )
     if not order2:
         kwargs.update(meancentering=True, onlypositive=False)
@@ -227,7 +232,7 @@ def load_trained_models(
             "Model architecture must be provided with -a or --arch"
         )
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
-    model = _load_trained_model(
+    model = load_trained_model(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         imgsize=imgsize, order2=False, device=device,
         verbose=verbose, **kwargs_model
@@ -254,7 +259,7 @@ def load_trained_models(
         if epoch_uq is None:
             epoch_uq = epoch
 
-        model_uq = _load_trained_model(
+        model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
             device=device, verbose=verbose_uq,
