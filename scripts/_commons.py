@@ -661,6 +661,7 @@ def run_pnpmass_batch(
 
     res_pnpmass = confidence_uq * var_pnpmass**0.5
 
+    # TODO: Harmonize the output keys in the 3 functions
     out = {
         "kappa_true": kappa_true,
         "kappa_pnpmass": kappa_pnpmass,
