@@ -339,13 +339,17 @@ def get_datafidelity_prior_params_gaussian(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
-        step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        step_size=None,
+        multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
         device="cpu", verbose=False
 ):
     data_fidelity, params_algo = _get_datafidelity_params(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, eps_sup_step_size=eps_sup_step_size,
+        step_size=step_size,
+        multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
         device=device, verbose=verbose
     )
     powerspectrum = torch.load(path_to_ps)
@@ -409,6 +413,7 @@ def get_gaussian_extractor(
         white_noise=False, noise_whitening_wiener=False,
         imgsize=IMGSIZE, std_noise=None, physics=None,
         step_size=None, step_size_ng=None,
+        multfact_step_size=None,
         eps_sup_step_size=EPS_SUP_STEP_SIZE,
         niter=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
@@ -419,7 +424,9 @@ def get_gaussian_extractor(
         path_to_ps=path_to_ps,
         white_noise=white_noise, noise_whitening=noise_whitening_wiener,
         std_noise=std_noise, physics=physics,
-        step_size=step_size, eps_sup_step_size=eps_sup_step_size,
+        step_size=step_size,
+        multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
         device=device, verbose=verbose
     )
     if which == "wiener":
@@ -478,6 +485,7 @@ def get_pnpmass(
         switch_mode_for_uq=False,
         path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
+        multfact_step_size_gaussian=None,
         niter_wiener=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
         niter_per_step_g=NITER_PER_STEP_G,
@@ -509,6 +517,7 @@ def get_pnpmass(
                 white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
                 imgsize=imgsize, std_noise=std_noise, physics=physics,
                 step_size=None, step_size_ng=None,
+                multfact_step_size=multfact_step_size_gaussian,
                 eps_sup_step_size=eps_sup_step_size,
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
@@ -537,7 +546,9 @@ def get_pnpmass(
             path_to_ps=path_to_ps,
             white_noise=False, noise_whitening=noise_whitening_wiener,
             std_noise=std_noise, physics=physics,
-            step_size=None, eps_sup_step_size=eps_sup_step_size,
+            step_size=None,
+            multfact_step_size=multfact_step_size,
+            eps_sup_step_size=eps_sup_step_size,
             device=device, verbose=verbose
         )
         pnpmass = wlpnpmcalens.optim_builder_mcalens(
@@ -1182,6 +1193,14 @@ def add_arguments_pnpmode(parser):
         help=(
             "Number of iterations for one non-Gaussian step in PnPMCALens. "
             f"Default = {NITER_PER_STEP_NG}"
+        )
+    )
+    parser.add_argument(
+        "--multfact-step-size-gaussian", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Multiplicative factor for the step size in Gaussian extraction. "
+            "Only used if `--mode` is set to 'residual' or 'pnpmcalens'. "
         )
     )
     add_arguments_wiener(parser)
