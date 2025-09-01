@@ -512,7 +512,7 @@ def get_pnpmass(
                 eps_sup_step_size=eps_sup_step_size,
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
-                mcalens_update_ng_first=False,
+                mcalens_update_ng_first=update_ng_first,
                 device="cpu", verbose=False
             )
         else:
@@ -1134,7 +1134,8 @@ def add_arguments_pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Update the non-Gaussian component before the Gaussian component ."
-            "Only used if `--mode` is set to 'pnpmcalens'."
+            "Works with `--mode residual --which-gaussian-extractor mcalens` "
+            "or `--mode pnpmcalens`."
         )
     )
     parser.add_argument(
