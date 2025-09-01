@@ -20,10 +20,11 @@ setup(
         "matplotlib",
         "astropy",
         "lenspack",
-        "deepinv",
+        "deepinv==0.2.2",
         "torch",
         "torchinfo",
         "timm",
+        "wandb",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
