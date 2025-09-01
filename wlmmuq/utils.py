@@ -695,10 +695,12 @@ def get_metrics(pred, res, truth, **kwargs):
 
 
 def plot_means_errs(
-        list_of_means, list_of_stds, list_of_methods, xticklabels=None, sec_xticklabels=None,
+        list_of_means, list_of_stds, list_of_methods, xticklabels=None,
+        rotation_xticklabels=45, sec_xticklabels=None,
         xlabel=None, ylabel=None, drawtarget=True, alpha=None, drawbounds=True, offset=0.15,
-        y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None, loclegend=None,
-        figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None
+        y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None,
+        figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None,
+        args_legend_main=None, args_legend_other=None
 ):
     """
     Plot means with error bars representing standard deviations
@@ -712,17 +714,18 @@ def plot_means_errs(
         nvals = 1
 
     _, ax = plt.subplots(figsize=figsize)
+    handles_main = []
     for i, (means, stds, label) in enumerate(zip(list_of_means, list_of_stds, list_of_methods)):
         x_values = np.arange(nvals) + 1 + (i - (nseries - 1) / 2) * offset  # Adjusted x-coordinates
         means = np.array(means)
         stds = np.array(stds)
         mask = means != None # Array of booleans. Do not use `means is not None` as it returns False
-        plt.errorbar(
+        handle = plt.errorbar(
             x_values[mask], means[mask], yerr=stds[mask], fmt='.', capsize=3, label=label
         )
-
+        handles_main.append(handle)
     if xticklabels is not None:
-        plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=45)
+        plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=rotation_xticklabels)
     else:
         plt.xticks([])
     ax.set_xlim(0.5, nvals + 0.5)
@@ -744,14 +747,27 @@ def plot_means_errs(
         plt.xlabel(xlabel)
     if ylabel is not None:
         plt.ylabel(ylabel)
+    handles_other = []
     if drawtarget:
-        plt.axhline(y=alpha, color='red', linestyle='--', linewidth=0.8, label=r'$\alpha$ (target)')
+        handle = plt.axhline(
+            y=alpha, color='red', linestyle='--',
+            linewidth=0.8, label=r'$\alpha$ (target)'
+        )
+        handles_other.append(handle)
     if drawbounds:
-        plt.axhspan(
+        handle = plt.axhspan(
             y_lower, y_upper,
             color='yellow', alpha=0.3, linewidth=0., label="Theoretical bounds"
         )
-    plt.legend(loc=loclegend)
+        handles_other.append(handle)
+    if args_legend_main is None:
+        args_legend_main = {}
+    if args_legend_other is None:
+        args_legend_other = {}
+    legend_main = plt.legend(handles=handles_main, **args_legend_main)
+    plt.gca().add_artist(legend_main)
+    if handles_other != []:
+        plt.legend(handles=handles_other, **args_legend_other)
     if logscale:
         plt.yscale('log')
     kwargs = {}
@@ -940,19 +956,35 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
             self, *args, savefig=False, save_dir=None, extension=None, showpred=True,
-            **kwargs
+            showtruth=True, plot_title=False, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
         self.save_dir = save_dir
         self.extension = extension
+        self.showtruth = showtruth
         self.showpred = showpred
+        self.plot_title = plot_title
 
 
-    def visualize(self, filename: str=None, **kwargs):
+    def visualize(self, title: str=None, filename: str=None, **kwargs):
+
+        kwargs_title = {}
+        if self.plot_title:
+            kwargs_title.update(title=title)
+
+        if self.showtruth:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_truth(**kwargs_title)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"kappa.{self.extension}"), bbox_inches='tight'
+                )
+            plt.show()
+
         if self.showpred:
             plt.figure(figsize=(5, 3))
-            self.skyshow_pointestimate()
+            self.skyshow_pointestimate(**kwargs_title)
             if self.savefig:
                 plt.savefig(
                     os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
@@ -960,7 +992,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
             plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound("lower")
+        self.skyshow_bound("lower", **kwargs_title)
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
@@ -968,7 +1000,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound("upper")
+        self.skyshow_bound("upper", **kwargs_title)
         if self.savefig:
             plt.savefig(
                 os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
