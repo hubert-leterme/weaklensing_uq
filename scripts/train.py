@@ -105,6 +105,8 @@ def main(
         raise ValueError("Unsupported backend.")
 
     # Initialize model
+    if verbose:
+        print("Initialize model")
     model, scale_as_input = _commons.instantiate_model(
         arch, imgsize=imgsize, order2=order2,
         device=device, verbose=verbose, **kwargs_model
@@ -135,6 +137,8 @@ def main(
     # Set loss function
     metric = wlnn.torch.METRIC_DICT[loss]
     if order2:
+        if verbose:
+            print("Load trained order-1 moment network")
         order1_model = _commons.load_trained_model(
             checkpoint_dir, arch, timestamp_order1, epoch_order1,
             imgsize=imgsize, order2=False,
