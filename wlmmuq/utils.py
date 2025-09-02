@@ -881,27 +881,33 @@ class KappamapVisualizer:
         return out
 
 
-    def skyshow_truth(self, **kwargs):
-        return self.skyshow_kappamap(self.kappa_true, **kwargs)
+    def skyshow_truth(self, title=None, **kwargs):
+        if title is not None:
+            title = f"{title} (ground truth)"
+        return self.skyshow_kappamap(self.kappa_true, title=title, **kwargs)
 
-    def skyshow_pointestimate(self, **kwargs):
-        return self.skyshow_kappamap(self.kappa_pred, **kwargs)
+    def skyshow_pointestimate(self, title=None, **kwargs):
+        if title is not None:
+            title = f"{title} (point estimate)"
+        return self.skyshow_kappamap(self.kappa_pred, title=title, **kwargs)
 
 
-    def skyshow_variance(self, **kwargs):
+    def skyshow_variance(self, title=None, **kwargs):
 
         var_pred = self.var_pred
         if torch.is_tensor(var_pred):
             var_pred = var_pred.cpu().numpy()
+        if title is not None:
+            title = f"{title} (variance estimate)"
         skyshow(
             var_pred, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
             printxticks=False, printyticks=False, printcolorbar=True,
-            imgsize=self.imgsize, **kwargs
+            imgsize=self.imgsize, title=title, **kwargs
         )
 
 
-    def skyshow_bound(self, which, **kwargs):
+    def skyshow_bound(self, which, title=None, **kwargs):
 
         lower_bound, upper_bound = self.bounds
         if which == "lower":
@@ -912,13 +918,15 @@ class KappamapVisualizer:
             raise ValueError("Argument `which` must be either 'lower' or 'upper'")
         if torch.is_tensor(bound):
             bound = bound.cpu().numpy()
+        if title is not None:
+            title = f"{title} ({which} bound)"
 
         out = skyshow(
             bound,
             cmap="coolwarm", vmin=-self.vmax_bounds, vmax=self.vmax_bounds,
             extent=self.extent, boundaries=self.boundaries,
             printcolorbar=False, printxylabels=False, printxticks=False, printyticks=False,
-            imgsize=self.imgsize, **kwargs
+            imgsize=self.imgsize, title=title, **kwargs
         )
         if self.plot_colorbar:
             cbar = plt.colorbar()
@@ -933,30 +941,24 @@ class KappamapVisualizer:
 
 class KappamapVisualizerCompact(KappamapVisualizer):
 
-    def __init__(self, *args, msg='method?', **kwargs):
-        super().__init__(*args, **kwargs)
-        self.msg = msg
-
-    def visualize(self):
-        plt.figure(figsize=(12, 6))
-        plt.subplot(231)
-        self.skyshow_truth(title='Ground truth')
-        plt.subplot(232)
-        self.skyshow_pointestimate(title=f'Point estimate ({self.msg})')
-        plt.subplot(233)
-        self.skyshow_variance(title=f'Variance ({self.msg})')
-        plt.subplot(234)
-        self.skyshow_bound("lower", title=f'Lower bound ({self.msg})')
-        plt.subplot(235)
-        self.skyshow_bound("upper", title=f'Upper bound ({self.msg})')
+    def visualize(self, title: str=None, **kwargs):
+        plt.figure(figsize=(8, 6))
+        plt.subplot(221)
+        self.skyshow_pointestimate(title=title, **kwargs)
+        plt.subplot(222)
+        self.skyshow_variance(title=title, **kwargs)
+        plt.subplot(223)
+        self.skyshow_bound("lower", title=title, **kwargs)
+        plt.subplot(224)
+        self.skyshow_bound("upper", title=title, **kwargs)
         plt.show()
 
 
 class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
-            self, *args, savefig=False, save_dir=None, extension=None, showpred=True,
-            showtruth=True, plot_title=False, **kwargs
+            self, *args, savefig=False, save_dir=None, extension=None,
+            showtruth=True, showpred=True, showvar=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
@@ -964,46 +966,56 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         self.extension = extension
         self.showtruth = showtruth
         self.showpred = showpred
-        self.plot_title = plot_title
+        self.showvar = showvar
 
 
     def visualize(self, title: str=None, filename: str=None, **kwargs):
 
-        kwargs_title = {}
-        if self.plot_title:
-            kwargs_title.update(title=title)
-
         if self.showtruth:
             plt.figure(figsize=(5, 3))
-            self.skyshow_truth(**kwargs_title)
+            self.skyshow_truth(title=title, **kwargs)
             if self.savefig:
                 plt.savefig(
-                    os.path.join(self.save_dir, f"kappa.{self.extension}"), bbox_inches='tight'
+                    os.path.join(self.save_dir, f"kappa.{self.extension}"),
+                    bbox_inches='tight'
                 )
             plt.show()
 
         if self.showpred:
             plt.figure(figsize=(5, 3))
-            self.skyshow_pointestimate(**kwargs_title)
+            self.skyshow_pointestimate(title=title, **kwargs)
             if self.savefig:
                 plt.savefig(
-                    os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
+                    os.path.join(self.save_dir, f"{filename}.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
+
+        if self.showvar:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_variance(title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_var.{self.extension}"),
+                    bbox_inches='tight'
                 )
             plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound("lower", **kwargs_title)
+        self.skyshow_bound("lower", title=title, **kwargs)
         if self.savefig:
             plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
+                os.path.join(self.save_dir, f"{filename}_low.{self.extension}"),
+                bbox_inches='tight'
             )
         plt.show()
 
         plt.figure(figsize=(5, 3))
-        self.skyshow_bound("upper", **kwargs_title)
+        self.skyshow_bound("upper", title=title, **kwargs)
         if self.savefig:
             plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
+                os.path.join(self.save_dir, f"{filename}_high.{self.extension}"),
+                bbox_inches='tight'
             )
         plt.show()
 
