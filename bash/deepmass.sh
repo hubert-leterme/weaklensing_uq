@@ -34,7 +34,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
-output_filename=$(echo "results_deepmass_${optional_args_cleaned}" | sed 's/__/_/g')
+output_filename=$(echo "results_deepmass_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
 # Command to execute
 cmd=$(echo "python scripts/deepmass.py ${path_to_test_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)

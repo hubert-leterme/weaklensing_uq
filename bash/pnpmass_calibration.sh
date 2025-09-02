@@ -42,7 +42,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
-output_filename=$(echo "cqr_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g')
+output_filename=$(echo "cqr_pnpmass_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
 # Command to execute
 cmd=$(echo "python scripts/pnpmass_calibration.py ${path_to_calibration_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
