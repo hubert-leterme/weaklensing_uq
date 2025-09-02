@@ -30,7 +30,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-e /--epoch /g' \
   | sed 's/-uq //g' \
   | sed 's/-ps [^ ]\+//g' \
-  | sed 's/--save-tensors //g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')

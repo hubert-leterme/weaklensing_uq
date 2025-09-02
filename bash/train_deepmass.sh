@@ -15,6 +15,8 @@ optional_args="${@:2}"
 
 # Set model name
 optional_args_cleaned=$(echo "$optional_args" \
+  | sed 's/--timestamp-resume [^ ]\+//g' \
+  | sed 's/--epoch-resume [^ ]\+//g' \
   | sed 's/-a //g' \
   | sed 's/-s /--model-size /g' \
   | sed 's/-p /--pretrained /g' \
@@ -23,8 +25,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-e /--nepochs /g' \
   | sed 's/-lr /--learning-rate /g' \
   | sed 's/-r //g' \
-  | sed 's/--timestamp-resume [^ ]\+//g' \
-  | sed 's/--epoch-resume [^ ]\+//g' \
   | sed 's/--//g' \
   | xargs \
   | sed 's/ /_/g')
