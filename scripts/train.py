@@ -98,22 +98,23 @@ def main(
             )
             kwargs_model.update(args_wienerinit=args_wienerinit)
 
-    if arch is not None:
-        backend = arch.split(".")[0]
-        cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
-        if scale_as_input:
-            kwargs.update(scale_as_input=scale_as_input)
-    else:
-        cnn_class = None
-        scale_as_input = False
-
+    backend = arch.split(".")[0]
     if backend == 'tensorflow':
         raise ValueError("Deprecated TensorFlow backend. Use PyTorch instead.")
     elif backend != 'torch':
         raise ValueError("Unsupported backend.")
 
+    # Initialize model
+    model, scale_as_input = _commons.instantiate_model(
+        arch, imgsize=imgsize, order2=order2,
+        device=device, verbose=verbose, **kwargs_model
+    )
+    model.train()
+
+    # Initialize data loaders
     if verbose:
         print("Initialize batch generators for training and validation")
+    kwargs.update(scale_as_input=scale_as_input)
     train_dataset = dataset_class(
         hdf5_filepath=path_to_augmented_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
@@ -130,14 +131,6 @@ def main(
         num_workers=num_workers, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()
-
-    # Initialize model
-    model = cnn_class(
-        map_size=imgsize, **kwargs_model
-    ).to(device)
-
-    if verbose:
-        model.summary()
 
     # Set loss function
     metric = wlnn.torch.METRIC_DICT[loss]

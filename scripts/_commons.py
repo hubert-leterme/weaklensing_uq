@@ -187,14 +187,38 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
     return path_to_checkpoint
 
 
+def instantiate_model(
+        arch, imgsize=IMGSIZE, order2=False,
+        device="cpu", verbose=False, **kwargs
+):
+
+    if arch is None:
+        raise ValueError(
+            "Model architecture must be provided with -a or --arch"
+        )
+    if not order2:
+        kwargs.update(meancentering=True, onlypositive=False)
+    else:
+        kwargs.update(meancentering=False, onlypositive=True)
+    cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
+    model = cnn_class(map_size=imgsize, **kwargs).to(device)
+    if verbose:
+        model.summary()
+
+    return model, scale_as_input
+
+
 def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
         device="cpu", verbose=False, **kwargs
 ):
+    model, _ = instantiate_model(
+        arch, imgsize=imgsize, order2=order2,
+        device=device, verbose=verbose, **kwargs
+    )
     checkpoint_dir = os.path.expanduser(checkpoint_dir)
-    cnn_class, _ = wlnn.MODEL_CLASSES[arch]
     if timestamp is None:
         path_to_checkpoint = checkpoint_dir
     else:
@@ -203,13 +227,7 @@ def load_trained_model(
         path_to_checkpoint = get_path_to_checkpoint(
             save_path, timestamp, epoch
         )
-    if not order2:
-        kwargs.update(meancentering=True, onlypositive=False)
-    else:
-        kwargs.update(meancentering=False, onlypositive=True)
-
-    model = cnn_class(map_size=imgsize, **kwargs)
-    checkpoint = torch.load(path_to_checkpoint)
+    checkpoint = torch.load(path_to_checkpoint, map_location=device)
     state_dict = checkpoint['state_dict']
     if key_replacement_dict is not None:
         for old_key, new_key in key_replacement_dict.items():
@@ -218,9 +236,7 @@ def load_trained_model(
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
     model.load_state_dict(checkpoint['state_dict'])
-    model.eval().to(device)
-    if verbose:
-        model.summary()
+    model.eval()
 
     return model
 
@@ -231,10 +247,6 @@ def load_trained_models(
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
         imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
 ):
-    if arch is None:
-        raise ValueError(
-            "Model architecture must be provided with -a or --arch"
-        )
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     model = load_trained_model(
         checkpoint_dir, arch, timestamp, epoch=epoch,
