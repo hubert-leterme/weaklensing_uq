@@ -469,7 +469,7 @@ class Order2SupLoss(dinv.loss.SupLoss):
         with torch.no_grad():
             x_pred = self.order1_model(y, physics) # physics = sigma in the case of DRUNet
         x = (x - x_pred)**2
-        return super().forward(x_net, x, **kwargs)
+        return super().forward(x_net=x_net, x=x, y=y, physics=physics, **kwargs)
 
 
 #=================================================================================
