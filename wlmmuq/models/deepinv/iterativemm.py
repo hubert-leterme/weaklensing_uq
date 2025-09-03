@@ -317,7 +317,8 @@ class BaseOptim(dinv.optim.BaseOptim):
                 )
                 # Get residuals (input and ground truth)
                 y = y - physics.A(x_init)
-                x_gt = x_gt - x_init
+                if x_gt is not None:
+                    x_gt = x_gt - x_init
 
         out = super().forward(
             y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
