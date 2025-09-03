@@ -248,6 +248,8 @@ def load_trained_models(
         imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    if verbose:
+        print("Load trained order-1 model")
     model = load_trained_model(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         imgsize=imgsize, order2=False, device=device,
@@ -273,6 +275,8 @@ def load_trained_models(
         if epoch_uq is None:
             epoch_uq = epoch
 
+        if verbose:
+            print("Load trained order-2 model")
         model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
