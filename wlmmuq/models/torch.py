@@ -53,24 +53,37 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            meancentering: bool=True, onlypositive: bool=False, **kwargs
+            order2: bool=False, additional_outlayer_order2: str | None=None,
+            **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
             **kwargs
         )
         super().__init__(**kwargs)
-        if hasattr(self, 'additional_output'):
-            raise NotImplementedError("Attribute `additional_output` already exists.")
-        if meancentering:
-            if onlypositive:
-                warnings.warn("`onlypositive` is ignored when `meancentering` is True.")
-            self.additional_output = Meancentering()
-        elif onlypositive:
-            self.additional_output = nn.ReLU()
+        if hasattr(self, 'additional_outlayer'):
+            raise NotImplementedError("Attribute `additional_outlayer` already exists.")
+        if not order2:
+            self.additional_outlayer = Meancentering()
+            self.outrelu_eval = None
         else:
-            warnings.warn("No meancentering or positivity constraint applied.")
-            self.additional_output = None
+            if additional_outlayer_order2 is not None:
+                if additional_outlayer_order2 == "relu":
+                    self.additional_outlayer = nn.Sequential(
+                        Meancentering(), # Avoids vanishing gradients
+                        nn.ReLU()
+                    )
+                elif additional_outlayer_order2 == "leakyrelu":
+                    self.additional_outlayer = nn.LeakyReLU()
+                else:
+                    raise ValueError(
+                        "Unknown option for `enforce_nonnegativity_during_training`: "
+                        f"{additional_outlayer_order2}. "
+                        "Available options: 'relu', 'leakyrelu'."
+                    )
+            else:
+                self.additional_outlayer = None
+            self.outrelu_eval = nn.ReLU()
 
         # For printing summary
         fake_input_data = self._get_fake_input_data()
@@ -85,8 +98,10 @@ class ModelMixin:
 
     def forward(self, inp, *args, **kwargs):
         out = super().forward(inp, *args, **kwargs)
-        if self.additional_output is not None:
-            out = self.additional_output(out)
+        if self.additional_outlayer is not None:
+            out = self.additional_outlayer(out)
+        if self.outrelu_eval is not None and not self.training:
+            out = self.outrelu_eval(out)
         return out
 
 

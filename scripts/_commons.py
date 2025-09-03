@@ -172,11 +172,13 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_output_type(order2=False):
+def get_output_type(order2=False, additional_outlayer_order2=None):
     if not order2:
         output_type = "pe" # Point estimate
     else:
         output_type = "var" # Variance
+        if additional_outlayer_order2 is not None:
+            output_type = f"{output_type}_{additional_outlayer_order2}"
     return output_type
 
 
@@ -188,7 +190,7 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
 
 
 def instantiate_model(
-        arch, imgsize=IMGSIZE, order2=False,
+        arch, imgsize=IMGSIZE,
         device="cpu", verbose=False, **kwargs
 ):
 
@@ -196,10 +198,6 @@ def instantiate_model(
         raise ValueError(
             "Model architecture must be provided with -a or --arch"
         )
-    if not order2:
-        kwargs.update(meancentering=True, onlypositive=False)
-    else:
-        kwargs.update(meancentering=False, onlypositive=True)
     cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
     model = cnn_class(map_size=imgsize, **kwargs).to(device)
     if verbose:
@@ -211,18 +209,23 @@ def instantiate_model(
 def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
+        additional_outlayer_order2=None,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
         device="cpu", verbose=False, **kwargs
 ):
     model, _ = instantiate_model(
         arch, imgsize=imgsize, order2=order2,
+        additional_outlayer_order2=additional_outlayer_order2,
         device=device, verbose=verbose, **kwargs
     )
     checkpoint_dir = os.path.expanduser(checkpoint_dir)
     if timestamp is None:
         path_to_checkpoint = checkpoint_dir
     else:
-        output_type = get_output_type(order2=order2)
+        output_type = get_output_type(
+            order2=order2,
+            additional_outlayer_order2=additional_outlayer_order2
+        )
         save_path = os.path.join(checkpoint_dir, output_type)
         path_to_checkpoint = get_path_to_checkpoint(
             save_path, timestamp, epoch
@@ -245,6 +248,7 @@ def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=EPOCH,
         load_model_uq=False, checkpoint_dir_uq=None,
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
+        additional_outlayer_order2=None,
         imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
@@ -280,6 +284,7 @@ def load_trained_models(
         model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
+            additional_outlayer_order2=additional_outlayer_order2,
             device=device, verbose=verbose,
             **kwargs_model_uq
         )
@@ -969,6 +974,15 @@ def add_arguments_model(parser):
         help=(
             "Size of the model (DRUNet only). Possible values are: "
             f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--additional-outlayer-order2", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Type of additional output layer for the order-2 models. "
+            "Possible values are: 'relu', or 'leakyrelu'. Default = None "
+            "(i.e., ReLU is only applied at inference)"
         )
     )
 

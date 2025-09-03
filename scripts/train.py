@@ -39,7 +39,8 @@ def main(
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        order2=False, timestamp_order1=None, epoch_order1=None,
+        order2=False, additional_outlayer_order2=None,
+        timestamp_order1=None, epoch_order1=None,
         imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
         nepochs=_commons.EPOCH, batch_size=BATCH_SIZE,
@@ -109,6 +110,7 @@ def main(
         print("Initialize model")
     model, scale_as_input = _commons.instantiate_model(
         arch, imgsize=imgsize, order2=order2,
+        additional_outlayer_order2=additional_outlayer_order2,
         device=device, verbose=verbose, **kwargs_model
     )
     model.train()
@@ -190,7 +192,10 @@ def main(
             )
         )
 
-    output_type = _commons.get_output_type(order2=order2)
+    output_type = _commons.get_output_type(
+        order2=order2,
+        additional_outlayer_order2=additional_outlayer_order2
+    )
     save_path = os.path.join(checkpoint_dir, output_type)
     if resume:
         path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(
