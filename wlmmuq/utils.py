@@ -958,7 +958,8 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
             self, *args, savefig=False, save_dir=None, extension=None,
-            showtruth=True, showpred=True, showvar=True, **kwargs
+            showtruth=True, showpred=True, showvar=True, showbounds=True,
+            **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
@@ -967,6 +968,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         self.showtruth = showtruth
         self.showpred = showpred
         self.showvar = showvar
+        self.showbounds = showbounds
 
 
     def visualize(self, title: str=None, filename: str=None, **kwargs):
@@ -1001,22 +1003,24 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
                 )
             plt.show()
 
-        plt.figure(figsize=(5, 3))
-        self.skyshow_bound("lower", title=title, **kwargs)
-        if self.savefig:
-            plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_low.{self.extension}"),
-                bbox_inches='tight'
-            )
-        plt.show()
+        if self.showbounds:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_bound("lower", title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_low.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
 
-        plt.figure(figsize=(5, 3))
-        self.skyshow_bound("upper", title=title, **kwargs)
-        if self.savefig:
-            plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_high.{self.extension}"),
-                bbox_inches='tight'
-            )
+            plt.figure(figsize=(5, 3))
+            self.skyshow_bound("upper", title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_high.{self.extension}"),
+                    bbox_inches='tight'
+                )
+
         plt.show()
 
 
