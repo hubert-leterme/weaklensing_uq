@@ -33,7 +33,6 @@ def main(
         mode: str=_commons.MODE_PNPMASS,
         which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first: bool=False,
-        switch_mode_for_uq: bool=False,
         multfact_step_size_gaussian: float=None,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
         starlet_detection_threshold: float=_commons.STARLET_DETECTION_THRESHOLD,
@@ -109,7 +108,7 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass, pnpmass_uq, tau, tau_filename, callback_gaussian_extractor = \
+        pnpmass, tau, tau_filename, callback_gaussian_extractor = \
                 _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, mask=mask, physics=physics,
@@ -118,7 +117,6 @@ def main(
             niter=niter, mode=mode,
             which_gaussian_extractor=which_gaussian_extractor,
             update_ng_first=update_ng_first,
-            switch_mode_for_uq=switch_mode_for_uq,
             path_to_ps=path_to_ps,
             noise_whitening_wiener=noise_whitening_wiener,
             multfact_step_size_gaussian=multfact_step_size_gaussian,
@@ -138,8 +136,7 @@ def main(
 
         # Run PnPMass for each batch
         out_wiener_pnpmass = _commons.run_pnpmass_batch(
-            pnpmass, pnpmass_uq,
-            physics, test_dataloader, tau, niter,
+            pnpmass, physics, test_dataloader, tau, niter,
             confidence_uq=confidence_uq, callbacks=callbacks,
             device=device, verbose=verbose,
         )

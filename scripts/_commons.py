@@ -481,7 +481,7 @@ def get_gaussian_extractor(
             prior_g=prior_g, prior_ng=prior_ng,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             update_ng_first=mcalens_update_ng_first,
-            discard_ng=True, verbose=verbose
+            output_mode="discard_ng", verbose=verbose
         ).to(device)
 
     else:
@@ -501,7 +501,6 @@ def get_pnpmass(
         niter=NITER_PNPMASS, mode="regular",
         which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first=False,
-        switch_mode_for_uq=False,
         path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
         multfact_step_size_gaussian=None,
@@ -551,6 +550,7 @@ def get_pnpmass(
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior,
+            uq=True, prior_uq=prior_uq,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             metric_dict=metric_dict, verbose=verbose,
             gaussian_extractor=gaussian_extractor
@@ -576,8 +576,10 @@ def get_pnpmass(
             params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
+            uq=True, prior_uq=prior_uq,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-            metric_dict=metric_dict, update_ng_first=update_ng_first, verbose=True
+            metric_dict=metric_dict, update_ng_first=update_ng_first,
+            output_mode="add_components", verbose=True
         ).to(device)
         callback_gaussian_extractor = None
 
@@ -587,22 +589,7 @@ def get_pnpmass(
             "Supported modes are 'regular', 'residual', and 'pnpmcalens'."
         )
 
-    if prior_uq is not None:
-        if not switch_mode_for_uq:
-            gaussian_extractor_uq = gaussian_extractor
-        else:
-            gaussian_extractor_uq = None
-        pnpmass_uq = wlpnp.optim_builder(
-            iteration="PGD", params_algo=params_algo.copy(),
-            data_fidelity=data_fidelity, prior=prior_uq,
-            early_stop=False, max_iter=1, custom_init=wlpnp.ManualInit(),
-            metric_dict=metric_dict, verbose=verbose,
-            gaussian_extractor=gaussian_extractor_uq
-        ).to(device)
-    else:
-        pnpmass_uq = None
-
-    return pnpmass, pnpmass_uq, step_size, \
+    return pnpmass, step_size, \
         step_size_filename, callback_gaussian_extractor
 
 
@@ -649,8 +636,7 @@ def run_wiener_batch(
 
 
 def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim | wlpnp.BaseOptimOnResiduals,
-        pnpmass_uq: wlpnp.BaseOptim | wlpnp.BaseOptimOnResiduals,
+        pnpmass: wlpnp.BaseOptimWithUQ | wlpnpmcalens.BaseMCALensWithUQ,
         physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         callbacks: wlcallbacks.CallbackList | None = None,
@@ -671,24 +657,9 @@ def run_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            kappa_pnpmass, metrics = pnpmass(
+            (kappa_pnpmass, var_pnpmass), metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
-            if isinstance(pnpmass, wlpnpmcalens.BaseMCALens):
-                kappa_pnpmass_g, kappa_pnpmass_ng = \
-                    wlpnpmcalens.get_tensor_components(kappa_pnpmass)
-                kappa_pnpmass = wlpnpmcalens.add_tensor_components(kappa_pnpmass)
-            else:
-                kappa_pnpmass_g = kappa_pnpmass_ng = None
-            if pnpmass_uq is not None:
-                # Initialize the UQ iteration with the predicted kappa
-                pnpmass_uq.custom_init.X_init = (kappa_pnpmass,)
-                var_pnpmass = pnpmass_uq(
-                    gamma_noisy, physics, compute_metrics=False
-                )
-            else:
-                var_pnpmass = torch.zeros(kappa_true.shape, device=device)
-
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
@@ -705,8 +676,6 @@ def run_pnpmass_batch(
     out = {
         "kappa_true": kappa_true,
         "kappa_pnpmass": kappa_pnpmass,
-        "kappa_pnpmass_g": kappa_pnpmass_g,
-        "kappa_pnpmass_ng": kappa_pnpmass_ng,
         "var_pnpmass": var_pnpmass,
         "res_pnpmass": res_pnpmass,
         "rmse_iter": rmse_iter
@@ -1196,16 +1165,6 @@ def add_arguments_pnpmode(parser):
             "Works with `--mode residual --which-gaussian-extractor mcalens` "
             "or `--mode pnpmcalens --starlet`. "
             f"Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
-        )
-    )
-    parser.add_argument(
-        "--switch-mode-for-uq", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "If this argument is set and `--mode` is set to 'residual', "
-            "then UQ will not be computed on the residuals. This is useful when "
-            "the model used for UQ is different from the one used for the "
-            "point estimate, and is not trained on the residuals."
         )
     )
     parser.add_argument(

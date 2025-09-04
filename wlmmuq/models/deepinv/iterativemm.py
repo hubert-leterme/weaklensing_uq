@@ -300,6 +300,51 @@ class BaseOptim(dinv.optim.BaseOptim):
         return metrics
 
 
+class UQMixin:
+
+    def __init__(
+            self, iterator, *args, iterator_uq=None, prior_uq=None, **kwargs
+    ):
+        kwargs_main = {
+            k: kwargs.pop(k) for k in [
+                "prior", "early_stop", "max_iter", "metric_dict"
+            ] if k in kwargs
+        }
+        super().__init__(iterator, *args, **kwargs_main, **kwargs)
+        if prior_uq is not None:
+            self.uq = BaseOptim(
+                iterator_uq, *args, prior=prior_uq,
+                early_stop=False, max_iter=1, **kwargs
+            )
+        else:
+            self.uq = None
+
+
+    def forward(
+            self, y, physics, x_gt=None, compute_metrics=False, **kwargs
+    ):
+        x = super().forward(
+            y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
+        )
+        if compute_metrics:
+            x, metrics = x
+        if self.uq is not None:
+            # Initialize the UQ iteration with the prediction
+            self.uq.custom_init.X_init = (x,)
+            var = self.uq(
+                y, physics, compute_metrics=False
+            )
+        else:
+            var = torch.zeros(x.shape, device=x.device)
+
+        if compute_metrics:
+            out = (x, var), metrics
+        else:
+            out = x, var
+
+        return out
+
+
 class ResidualMixin:
 
     def __init__(
@@ -336,8 +381,7 @@ class ResidualMixin:
                     x, metrics = out
                 else:
                     x = out
-                    metrics = None
-                x = x + x_init # Add initial estimate
+                x = self._add_initial_estimate(x, x_init)
                 if compute_metrics:
                     out = x, metrics
                 else:
@@ -346,8 +390,21 @@ class ResidualMixin:
         return out
 
 
+    def _add_initial_estimate(self, x, x_init):
+        return x + x_init
+
+
+class BaseOptimWithUQ(UQMixin, BaseOptim):
+    pass
+
 class BaseOptimOnResiduals(ResidualMixin, BaseOptim):
     pass
+
+class BaseOptimWithUQOnResiduals(ResidualMixin, BaseOptimWithUQ):
+    def _add_initial_estimate(self, x, x_init):
+        x, var = x
+        x = super()._add_initial_estimate(x, x_init)
+        return x, var
 
 
 def zero_init(y: torch.Tensor, _unused_physics):
@@ -373,6 +430,7 @@ def optim_builder(
     params_algo={"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05},
     data_fidelity=None,
     prior=None,
+    uq=False, prior_uq=None,
     F_fn=None,
     g_first=False,
     bregman_potential=None,
@@ -413,11 +471,28 @@ def optim_builder(
         g_first=g_first,
         bregman_potential=bregman_potential,
     )
-    if gaussian_extractor is None:
-        optim_class = BaseOptim
-    else:
-        optim_class = BaseOptimOnResiduals
+    if gaussian_extractor is not None:
         kwargs.update(gaussian_extractor=gaussian_extractor)
+    if not uq:
+        if gaussian_extractor is None:
+            optim_class = BaseOptim
+        else:
+            optim_class = BaseOptimOnResiduals
+    else:
+        if gaussian_extractor is None:
+            optim_class = BaseOptimWithUQ
+        else:
+            optim_class = BaseOptimWithUQOnResiduals
+        if prior_uq is not None:
+            iterator_uq = dinv.optim.optimizers.create_iterator(
+                iteration,
+                prior=prior_uq,
+                F_fn=F_fn,
+                g_first=g_first,
+                bregman_potential=bregman_potential,
+            )
+            kwargs.update(iterator_uq=iterator_uq, prior_uq=prior_uq)
+
     return optim_class(
         iterator,
         has_cost=iterator.has_cost,

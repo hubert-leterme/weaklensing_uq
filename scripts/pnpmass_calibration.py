@@ -27,7 +27,7 @@ def main(
         nimgs_calib: int=_commons.NIMGS_CALIB, min_idx_filename_ori: str=None,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        mode: str=_commons.MODE_PNPMASS, switch_mode_for_uq: bool=False,
+        mode: str=_commons.MODE_PNPMASS,
         which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         multfact_step_size_gaussian: float=None,
         niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
@@ -88,14 +88,13 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
     # Instantiate the PnP model
-    pnpmass, pnpmass_uq, step_size, step_size_filename, callback_gaussian_extractor = \
+    pnpmass, step_size, step_size_filename, callback_gaussian_extractor = \
             _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, eps_sup_step_size=eps_sup_step_size,
         niter=niter, mode=mode,
         which_gaussian_extractor=which_gaussian_extractor,
-        switch_mode_for_uq=switch_mode_for_uq,
         path_to_ps=path_to_ps,
         noise_whitening_wiener=noise_whitening_wiener,
         multfact_step_size_gaussian=multfact_step_size_gaussian,
@@ -116,8 +115,7 @@ def main(
     # Run PnPMass for each batch
     calib_dataloader = iter(calib_dataset)
     out_pnpmass = _commons.run_pnpmass_batch(
-        pnpmass, pnpmass_uq,
-        physics, calib_dataloader, step_size, niter,
+        pnpmass, physics, calib_dataloader, step_size, niter,
         confidence_uq=confidence_uq, callbacks=callbacks,
         device=device, verbose=verbose,
     )
