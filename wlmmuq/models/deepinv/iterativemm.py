@@ -218,8 +218,7 @@ class MetricDict(dict):
 class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
-            self, *args, metric_dict: MetricDict=None,
-            gaussian_extractor: dinv.optim.BaseOptim=None, **kwargs
+            self, *args, metric_dict: MetricDict=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -248,8 +247,6 @@ class BaseOptim(dinv.optim.BaseOptim):
                 out = get_output_0(X)
             return out
         self.get_output = _get_output
-
-        self.gaussian_extractor = gaussian_extractor
 
 
     def _update_metrics(
@@ -303,6 +300,15 @@ class BaseOptim(dinv.optim.BaseOptim):
         return metrics
 
 
+class ResidualMixin:
+
+    def __init__(
+            self, *args, gaussian_extractor: dinv.optim.BaseOptim=None, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.gaussian_extractor = gaussian_extractor
+
+
     def forward(
             self, y, physics, x_gt=None, compute_metrics=False,
             kwargs_wiener_estimate=None, **kwargs
@@ -340,6 +346,10 @@ class BaseOptim(dinv.optim.BaseOptim):
         return out
 
 
+class BaseOptimOnResiduals(ResidualMixin, BaseOptim):
+    pass
+
+
 def zero_init(y: torch.Tensor, _unused_physics):
     """The optimization algorithm is initialized with zero-valued tensors"""
     x_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
@@ -366,6 +376,7 @@ def optim_builder(
     F_fn=None,
     g_first=False,
     bregman_potential=None,
+    gaussian_extractor=None,
     **kwargs,
 ):
     r"""
@@ -402,7 +413,12 @@ def optim_builder(
         g_first=g_first,
         bregman_potential=bregman_potential,
     )
-    return BaseOptim(
+    if gaussian_extractor is None:
+        optim_class = BaseOptim
+    else:
+        optim_class = BaseOptimOnResiduals
+        kwargs.update(gaussian_extractor=gaussian_extractor)
+    return optim_class(
         iterator,
         has_cost=iterator.has_cost,
         data_fidelity=data_fidelity,

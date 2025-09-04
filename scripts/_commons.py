@@ -649,7 +649,8 @@ def run_wiener_batch(
 
 
 def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim,
+        pnpmass: wlpnp.BaseOptim | wlpnp.BaseOptimOnResiduals,
+        pnpmass_uq: wlpnp.BaseOptim | wlpnp.BaseOptimOnResiduals,
         physics: wlpnp.MassMapping,
         dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
         callbacks: wlcallbacks.CallbackList | None = None,
