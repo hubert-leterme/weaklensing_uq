@@ -204,15 +204,6 @@ class BaseMCALens(iterativemm.BaseOptim):
         return X_out
 
 
-class BaseMCALensWithUQ(iterativemm.UQMixin, BaseMCALens):
-    def __init__(
-            self, *args, prior_uq=None, **kwargs
-    ):
-        if prior_uq is not None:
-            raise NotImplementedError
-        super().__init__(*args, prior_uq=prior_uq, **kwargs)
-
-
 class Starlet2d(nn.Module):
 
     def __init__(
@@ -548,7 +539,6 @@ def optim_builder_mcalens(
     params_algo_g=PARAMS_ALGO.copy(), params_algo_ng=PARAMS_ALGO.copy(),
     data_fidelity_g=None, data_fidelity_ng=None,
     prior_g=None, prior_ng=None,
-    uq=False, prior_uq=None,
     F_fn_g=None, F_fn_ng=None,
     g_first_g=False, g_first_ng=False,
     bregman_potential_g=None, bregman_potential_ng=None,
@@ -596,14 +586,8 @@ def optim_builder_mcalens(
         bregman_potential=bregman_potential_ng,
     )
     has_cost = iterator_g.has_cost or iterator_ng.has_cost
-    if not uq:
-        optim_class = BaseMCALens
-    else:
-        if prior_uq is not None:
-            raise NotImplementedError
-        optim_class = BaseMCALensWithUQ
 
-    return optim_class(
+    return BaseMCALens(
         iterator_g, iterator_ng,
         niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
         has_cost=has_cost,

@@ -108,8 +108,9 @@ def main(
         test_dataloader = iter(test_dataset)
 
         # Instantiate the PnP model
-        pnpmass, tau, tau_filename, callback_gaussian_extractor = \
-                _commons.get_pnpmass(
+        pnpmass, pnpmass_uq, gaussian_extractor, \
+                step_size, tau_filename, callback_gaussian_extractor = \
+                    _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, mask=mask, physics=physics,
             step_size=tau, multfact_step_size=alpha,
@@ -136,7 +137,8 @@ def main(
 
         # Run PnPMass for each batch
         out_wiener_pnpmass = _commons.run_pnpmass_batch(
-            pnpmass, physics, test_dataloader, tau, niter,
+            pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
+            gaussian_extractor=gaussian_extractor,
             confidence_uq=confidence_uq, callbacks=callbacks,
             device=device, verbose=verbose,
         )

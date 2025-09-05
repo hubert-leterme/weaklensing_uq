@@ -88,8 +88,9 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
     # Instantiate the PnP model
-    pnpmass, step_size, step_size_filename, callback_gaussian_extractor = \
-            _commons.get_pnpmass(
+    pnpmass, pnpmass_uq, gaussian_extractor, \
+            step_size, step_size_filename, callback_gaussian_extractor = \
+                _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
         step_size=step_size, eps_sup_step_size=eps_sup_step_size,
@@ -115,7 +116,8 @@ def main(
     # Run PnPMass for each batch
     calib_dataloader = iter(calib_dataset)
     out_pnpmass = _commons.run_pnpmass_batch(
-        pnpmass, physics, calib_dataloader, step_size, niter,
+        pnpmass, pnpmass_uq, physics, calib_dataloader, step_size, niter,
+        gaussian_extractor=gaussian_extractor,
         confidence_uq=confidence_uq, callbacks=callbacks,
         device=device, verbose=verbose,
     )

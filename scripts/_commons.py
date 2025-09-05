@@ -550,10 +550,8 @@ def get_pnpmass(
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior,
-            uq=True, prior_uq=prior_uq,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             metric_dict=metric_dict, verbose=verbose,
-            gaussian_extractor=gaussian_extractor
         ).to(device)
 
     elif mode == "pnpmcalens":
@@ -576,11 +574,11 @@ def get_pnpmass(
             params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
-            uq=True, prior_uq=prior_uq,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
             metric_dict=metric_dict, update_ng_first=update_ng_first,
             output_mode="add_components", verbose=True
         ).to(device)
+        gaussian_extractor = None
         callback_gaussian_extractor = None
 
     else:
@@ -589,8 +587,22 @@ def get_pnpmass(
             "Supported modes are 'regular', 'residual', and 'pnpmcalens'."
         )
 
-    return pnpmass, step_size, \
-        step_size_filename, callback_gaussian_extractor
+    if denoiser_uq is not None:
+        pnpmass_uq = wlpnp.optim_builder(
+            iteration="PGD", params_algo=params_algo.copy(),
+            data_fidelity=data_fidelity, prior=prior_uq,
+            early_stop=False, max_iter=1, custom_init=wlpnp.zero_init,
+            verbose=verbose
+        ).to(device)
+    else:
+        pnpmass_uq = None
+
+    out = (
+        pnpmass, pnpmass_uq, gaussian_extractor,
+        step_size, step_size_filename, callback_gaussian_extractor
+    )
+
+    return out
 
 
 # TODO: Merge the 3 functions below into one single function
@@ -636,10 +648,12 @@ def run_wiener_batch(
 
 
 def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptimWithUQ | wlpnpmcalens.BaseMCALensWithUQ,
+        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim | None,
         physics: wlpnp.MassMapping,
-        dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
-        callbacks: wlcallbacks.CallbackList | None = None,
+        dataloader, step_size, niter,
+        gaussian_extractor: wlpnp.BaseOptim | None=None,
+        confidence_uq=CONFIDENCE_UQ,
+        callbacks: wlcallbacks.CallbackList | None=None,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -657,13 +671,31 @@ def run_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            (kappa_pnpmass, var_pnpmass), metrics = pnpmass(
+            if gaussian_extractor is not None:
+                kappa_g = gaussian_extractor(
+                    gamma_noisy, physics, x_gt=None, compute_metrics=False
+                )
+                gamma_noisy = gamma_noisy - physics.A(kappa_g)
+                kappa_true = kappa_true - kappa_g
+
+            kappa_pnpmass, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
+            if pnpmass_uq is not None:
+                pnpmass_uq.custom_init.X_init = (kappa_pnpmass,)
+                var_pnpmass = pnpmass_uq(
+                    gamma_noisy, physics, compute_metrics=False
+                )
+            else:
+                var_pnpmass = torch.zeros(kappa_pnpmass.shape, device=device)
+
+            if gaussian_extractor is not None:
+                kappa_pnpmass = kappa_pnpmass + kappa_g
+
+        listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
