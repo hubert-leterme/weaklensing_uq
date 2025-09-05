@@ -31,7 +31,7 @@ optional_args_cleaned=$(echo "$optional_args" \
 model_name=$(echo "deepmass_${optional_args_cleaned}" | sed 's/__/_/g')
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --wiener-init ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

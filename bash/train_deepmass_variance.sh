@@ -15,7 +15,7 @@ model_name=$2
 optional_args="${@:3}"
 
 # Command to execute
-cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --wiener-init --order2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${path_to_augmented_dataset} --order2 ${optional_args} --lr-scheduler --checkpoint-dir ${checkpoint_dir}/${model_name} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
