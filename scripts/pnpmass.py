@@ -109,7 +109,7 @@ def main(
 
         # Instantiate the PnP model
         pnpmass, pnpmass_uq, gaussian_extractor, \
-                step_size, tau_filename, callback_gaussian_extractor = \
+                tau, tau_filename, callback_gaussian_extractor = \
                     _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, mask=mask, physics=physics,
@@ -144,8 +144,6 @@ def main(
         )
         kappa_true = out_wiener_pnpmass["kappa_true"]
         kappa_pnpmass = out_wiener_pnpmass["kappa_pnpmass"]
-        kappa_pnpmass_g = out_wiener_pnpmass["kappa_pnpmass_g"]
-        kappa_pnpmass_ng = out_wiener_pnpmass["kappa_pnpmass_ng"]
         var_pnpmass = out_wiener_pnpmass["var_pnpmass"]
         res_pnpmass = out_wiener_pnpmass["res_pnpmass"]
         rmse_iter = out_wiener_pnpmass["rmse_iter"]
@@ -185,11 +183,6 @@ def main(
                 "var_pnpmass": var_pnpmass[:nimgs_save].cpu(),
                 "res_pnpmass": res_pnpmass[:nimgs_save].cpu(),
             })
-            if kappa_pnpmass_g is not None:
-                out_dict.update({
-                    "kappa_pnpmass_g": kappa_pnpmass_g[:nimgs_save].cpu(),
-                    "kappa_pnpmass_ng": kappa_pnpmass_ng[:nimgs_save].cpu(),
-                })
         if cqr is not None:
             out_dict.update({
                 "cqr_time": cqr_time,
