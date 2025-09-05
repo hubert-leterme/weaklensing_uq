@@ -540,7 +540,7 @@ def get_pnpmass(
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
                 mcalens_update_ng_first=update_ng_first,
-                device="cpu", verbose=False
+                device=device, verbose=False
             )
         else:
             if verbose:
