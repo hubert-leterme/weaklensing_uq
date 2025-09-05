@@ -130,9 +130,7 @@ def main(
                 "res_wiener_cqr": res_wiener_cqr[:nimgs_save].cpu(),
             })
     _commons.save_results(
-        out_dict, path_to_output, now,
-        confidence_uq=confidence_uq,
-        verbose=verbose
+        out_dict, path_to_output, now, verbose=verbose
     )
 
 

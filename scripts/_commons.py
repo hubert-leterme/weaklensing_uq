@@ -900,15 +900,10 @@ def get_metrics(
 
 def save_results(
         out_dict, path_to_output, now,
-        step_size=None, load_model_uq=False,
-        confidence_uq=None, verbose=False
+        step_size=None, verbose=False
 ):
     if step_size is not None:
         path_to_output = f"{path_to_output}_step-size_{step_size}"
-    if load_model_uq:
-        path_to_output = (
-            f"{path_to_output}_{confidence_uq}-sigma"
-        )
     path_to_output = f"{path_to_output}_{now}.pt"
     if verbose:
         print(f"Save results to {path_to_output}")

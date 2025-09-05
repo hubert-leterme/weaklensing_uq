@@ -145,7 +145,6 @@ def main(
     }
     _commons.save_results(
         out_dict, path_to_output, now, step_size=step_size_filename,
-        load_model_uq=load_model_uq, confidence_uq=confidence_uq,
         verbose=verbose
     )
 
