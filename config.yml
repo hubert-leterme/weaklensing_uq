@@ -17,4 +17,8 @@ path_to_ps: path/to/powerspectrum.pt
 learnlets_pretrained_weights_dir: path/to/weights
 
 key_replacement_dict:
-  wiener_init.optim.data_fidelity.0.d.var: wiener_init.optim.data_fidelity.0.d.param_vector
+  wiener_init.optim.data_fidelity.0.d.var: preproc.optim.data_fidelity.0.d.param_vector
+  wiener_init.optim.data_fidelity.0.d.param_vector: preproc.optim.data_fidelity.0.d.param_vector
+  wiener_init.optim.prior.0.denoiser.powerspectrum: preproc.optim.prior.0.denoiser.powerspectrum
+  wiener_init.physics.mask: preproc.physics.mask
+  wiener_init.physics.noise_model.sigma: preproc.physics.noise_model.sigma
