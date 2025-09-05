@@ -9,6 +9,6 @@ MODEL_CLASSES = {
     "torch.SUNet": (torch.SUNet, False),
     "torch.SUNetNoiseAware": (torch.SUNetNoiseAware, True),
     "torch.Learnlet": (torch.Learnlet, True),
-    "torch.UNetWienerInit": (torch.UNetWienerInit, False),
-    "torch.SUNetWienerInit": (torch.SUNetWienerInit, False),
+    "torch.UNetPreproc": (torch.UNetPreproc, False),
+    "torch.SUNetPreproc": (torch.SUNetPreproc, False),
 } # (model_class, scale_as_input)

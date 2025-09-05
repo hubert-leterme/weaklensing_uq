@@ -33,7 +33,9 @@ EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
 NIMGS_SAVE = 16
-KEYS_MODEL = ['model_size', 'args_wienerinit']
+KEYS_MODEL = [
+    'no_bias', 'model_size', 'mode_preproc', 'args_preproc'
+] # Arguments passed to the model's constructor
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
 WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
@@ -187,6 +189,37 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
         save_path, timestamp, f"ckp_{epoch}.pth.tar"
     )
     return path_to_checkpoint
+
+
+def update_kwargs_model(
+        kwargs_model,
+        std_noise=None, mask=None, path_to_ps=None,
+        noise_whitening_wiener=None,
+        eps_sup_step_size_wiener=None,
+        niter_wiener=None, device="cpu", verbose=False
+):
+    try:
+        mode_preproc = kwargs_model["mode_preproc"]
+    except KeyError:
+        mode_preproc = None
+    if mode_preproc is not None:
+        # Load arguments for Wiener or KS initialization
+        # Only for DeepMass (denoiser = False)
+        if mode_preproc == "wiener":
+            args_preproc = get_args_wienerinit(
+                std_noise, mask, path_to_ps=path_to_ps,
+                noise_whitening=noise_whitening_wiener,
+                eps_sup_step_size=eps_sup_step_size_wiener,
+                niter=niter_wiener, device=device, verbose=verbose
+            )
+        elif mode_preproc == "ks":
+            args_preproc = {"std_noise": std_noise, "mask": mask}
+        else:
+            raise ValueError(
+                f"Invalid preprocessing mode '{mode_preproc}'. "
+                "Supported modes are 'wiener' and 'ks'."
+            )
+        kwargs_model.update(args_preproc=args_preproc)
 
 
 def instantiate_model(
@@ -974,12 +1007,66 @@ def add_arguments_model(parser):
         )
     )
     parser.add_argument(
+        "--no-bias", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Do not use bias in convolution or batch "
+            "normalization layers."
+        )
+    )
+    parser.add_argument(
+        "-m", "--mode-preproc", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Preprocessing mode for DeepMass: 'wiener' or 'ks'. "
+            "This option is incompatible with flag `--denoiser`. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
         "--additional-outlayer-order2", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Type of additional output layer for the order-2 models. "
             "Possible values are: 'relu', or 'leakyrelu'. Default = None "
             "(i.e., ReLU is only applied at inference)"
+        )
+    )
+
+
+def add_arguments_model_order1(parser):
+
+    parser.add_argument(
+        "-a1", "--arch-order1", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Architecture of the order-1 model. Possible values are: "
+            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "-s1", "--model-size-order1", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Size of the order-1 model (DRUNet only). Possible values are: "
+            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--no-bias-order1", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Do not use bias in convolution or batch "
+            "normalization layers (order-1 model)."
+        )
+    )
+    parser.add_argument(
+        "-m1", "--mode-preproc-order1", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Preprocessing mode for DeepMass (order-1 model): 'wiener' or 'ks'. "
+            "This option is incompatible with flag `--denoiser`. "
+            "Default = None"
         )
     )
 

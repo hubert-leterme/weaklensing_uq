@@ -33,13 +33,14 @@ def main(
         cosmos_include_faint=False,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         backend=None, arch=None, denoiser=False,
-        wiener_init=False, nongaussian=False,
+        nongaussian=False,
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
         order2=False, additional_outlayer_order2=None,
+        arch_order1=None,
         timestamp_order1=None, epoch_order1=None,
         imgsize=IMGSIZE,
         nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
@@ -59,15 +60,8 @@ def main(
 
     callback_list = []
 
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
-    try:
-        no_bias = kwargs.pop("no_bias")
-    except KeyError:
-        pass
-    else:
-        kwargs_model.update(bias=not no_bias)
-
     if denoiser:
+        std_noise = mask = None
         dataset_class = wlds.HDF5DatasetDenoiser
         noise_model = dinv.physics.GaussianNoise(sigma=0) # sigma to be updated
         physics = dinv.physics.LinearPhysics(noise_model=noise_model)
@@ -88,17 +82,6 @@ def main(
             sigma=std_noise, mask=mask
         )
 
-        if wiener_init:
-            # Load arguments for Wiener initialization
-            # Only for DeepMass (denoiser = False)
-            args_wienerinit = _commons.get_args_wienerinit(
-                std_noise, mask, path_to_ps=path_to_ps,
-                noise_whitening=noise_whitening_wiener,
-                eps_sup_step_size=eps_sup_step_size_wiener,
-                niter=niter_wiener, device=device, verbose=verbose
-            )
-            kwargs_model.update(args_wienerinit=args_wienerinit)
-
     backend = arch.split(".")[0]
     if backend == 'tensorflow':
         raise ValueError("Deprecated TensorFlow backend. Use PyTorch instead.")
@@ -108,12 +91,52 @@ def main(
     # Initialize model
     if verbose:
         print("Initialize model")
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    _commons.update_kwargs_model(
+        kwargs_model,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        noise_whitening_wiener=noise_whitening_wiener,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener, device=device, verbose=verbose
+    )
     model, scale_as_input = _commons.instantiate_model(
         arch, imgsize=imgsize, order2=order2,
         additional_outlayer_order2=additional_outlayer_order2,
         device=device, verbose=verbose, **kwargs_model
     )
     model.train()
+
+    # Set loss function
+    metric = wlnn.torch.METRIC_DICT[loss]
+    if order2:
+        if verbose:
+            print("Load trained order-1 moment network")
+        if arch_order1 is None:
+            arch_order1 = arch
+            kwargs_model_order1 = kwargs_model.copy()
+        else:
+            kwargs_model_order1 = {}
+            for k in KEYS_MODEL:
+                k1 = f"{k}_order1"
+                if k1 in kwargs:
+                    kwargs_model_order1.update({k: kwargs.pop(k1)})
+            _commons.update_kwargs_model(
+                kwargs_model_order1,
+                std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+                noise_whitening_wiener=noise_whitening_wiener,
+                eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+                niter_wiener=niter_wiener, device=device, verbose=verbose
+            )
+        order1_model = _commons.load_trained_model(
+            checkpoint_dir, arch_order1, timestamp_order1, epoch_order1,
+            imgsize=imgsize, order2=False,
+            device=device, verbose=verbose, **kwargs_model_order1
+        )
+        loss_fun = wlnn.torch.Order2SupLoss(
+            order1_model=order1_model, metric=metric
+        )
+    else:
+        loss_fun = dinv.loss.SupLoss(metric=metric)
 
     # Initialize data loaders
     if verbose:
@@ -135,22 +158,6 @@ def main(
         num_workers=num_workers, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()
-
-    # Set loss function
-    metric = wlnn.torch.METRIC_DICT[loss]
-    if order2:
-        if verbose:
-            print("Load trained order-1 moment network")
-        order1_model = _commons.load_trained_model(
-            checkpoint_dir, arch, timestamp_order1, epoch_order1,
-            imgsize=imgsize, order2=False,
-            device=device, verbose=verbose, **kwargs_model
-        )
-        loss_fun = wlnn.torch.Order2SupLoss(
-            order1_model=order1_model, metric=metric
-        )
-    else:
-        loss_fun = dinv.loss.SupLoss(metric=metric)
 
     # Set optimizer and learning rate scheduler
     optimizer = torch.optim.Adam(
@@ -182,7 +189,7 @@ def main(
             mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
             device=device, verbose=verbose
         ) # Not all arguments are needed here (`white_noise=True`)
-        kwargs_trainer.update(preproc=gaussian_extractor)
+        kwargs_trainer.update(preproc_for_residual=gaussian_extractor)
         if callback_gaussian_extractor is not None:
             callback_list.append(callback_gaussian_extractor)
         callback_list.append(
@@ -255,17 +262,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--wiener-init", action='store_true',
+        "-ng", "--nongaussian", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Use Wiener initialization."
-        )
-    )
-    parser.add_argument(
-        "--nongaussian", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Split the Gaussian and non-Gaussian parts of the convergence maps."
+            "Split the Gaussian and non-Gaussian parts of the convergence maps. "
+            "This option is only compatible with flag `--denoiser`."
         )
     )
     parser.add_argument(
@@ -314,6 +315,7 @@ if __name__ == "__main__":
             "`--timestamp-order1` and `--epoch-order1` must be provided."
         )
     )
+    _commons.add_arguments_model_order1(parser)
     parser.add_argument(
         "-t1", "--timestamp-order1", type=str,
         default=argparse.SUPPRESS,
@@ -355,14 +357,6 @@ if __name__ == "__main__":
         help=(
             "Number of noise realizations per image. "
             f"Default = {NREAL_PER_IMG}"
-        )
-    )
-    parser.add_argument(
-        "--no-bias", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Do not use bias in convolution or batch "
-            "normalization layers."
         )
     )
     parser.add_argument(

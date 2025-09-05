@@ -1,4 +1,3 @@
-import warnings
 import torch
 from torch import nn
 import torchinfo
@@ -195,14 +194,15 @@ class NoiseAwareModelMixin(ModelMixin):
 class DRUNet(ModelMixin, dinv.models.DRUNet):
 
     def __init__(
-            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+            self, map_size=None, in_channels=1, out_channels=1,
+            no_bias=False, **kwargs
     ):
         self.map_size = map_size
         self.in_channels = in_channels
         self.out_channels = out_channels
         super().__init__(
             map_size=map_size, in_channels=in_channels,
-            out_channels=out_channels, **kwargs
+            out_channels=out_channels, bias=not no_bias, **kwargs
         )
 
     def _preprocess_kwargs(
@@ -274,64 +274,64 @@ class BaseUNet(nn.Module):
     https://github.com/NiallJeffrey/DeepMass
 
     """
-    def __init__(self, in_channels=1, out_channels=1, bias=True):
+    def __init__(self, in_channels=1, out_channels=1, no_bias=False):
 
         super().__init__()
 
         # Encoder blocks
         self.enc1 = nn.Sequential(
-            nn.Conv2d(in_channels, 16, 3, padding='same', bias=bias),
+            nn.Conv2d(in_channels, 16, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(16, affine=bias)
+            nn.BatchNorm2d(16, affine=not no_bias)
         )
         self.pool1 = nn.AvgPool2d(2)
 
         self.enc2 = nn.Sequential(
-            nn.Conv2d(16, 32, 3, padding='same', bias=bias),
+            nn.Conv2d(16, 32, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(32, affine=bias)
+            nn.BatchNorm2d(32, affine=not no_bias)
         )
         self.pool2 = nn.AvgPool2d(2)
 
         self.enc3 = nn.Sequential(
-            nn.Conv2d(32, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(32, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
         self.pool3 = nn.AvgPool2d(2)
 
         self.enc4 = nn.Sequential(
-            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(64, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
         self.pool4 = nn.AvgPool2d(2)
 
         self.encdeep = nn.Sequential(
-            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(64, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
 
         # Decoder convolutions
         self.decdeep = nn.Sequential(
-            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(128, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias),
+            nn.BatchNorm2d(64, affine=not no_bias),
         )
         self.dec5 = nn.Sequential(
-            nn.BatchNorm2d(128, affine=bias),
-            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(128, affine=not no_bias),
+            nn.Conv2d(128, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
         self.dec6 = nn.Sequential(
-            nn.BatchNorm2d(96, affine=bias),
-            nn.Conv2d(96, 32, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(96, affine=not no_bias),
+            nn.Conv2d(96, 32, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
         self.dec7 = nn.Sequential(
-            nn.BatchNorm2d(48, affine=bias),
-            nn.Conv2d(48, 16, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(48, affine=not no_bias),
+            nn.Conv2d(48, 16, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
 
@@ -488,10 +488,10 @@ class Order2SupLoss(dinv.loss.SupLoss):
 
 
 #=================================================================================
-# DeepMass with Wiener initialization
+# DeepMass with Wiener or KS initialization
 #=================================================================================
 
-class IterativeWiener(nn.Module):
+class WienerInit(nn.Module):
 
     def __init__(
             self, step_size: float,
@@ -520,25 +520,49 @@ class IterativeWiener(nn.Module):
         return self.optim(gamma_noisy, self.physics)
 
 
-class WienerInitMixin:
+class KSInit(nn.Module):
 
     def __init__(
-            self, args_wienerinit: dict, *args, **kwargs
+            self, std_noise: torch.Tensor, mask:torch.Tensor=None
+    ):
+        super().__init__()
+        self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
+
+
+    def forward(self, gamma_noisy):
+        return self.physics.A_adj(gamma_noisy)
+
+
+class PreprocMixin:
+
+    def __init__(
+            self, mode_preproc: str, args_preproc: dict,
+            *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.wiener_init = IterativeWiener(**args_wienerinit)
+        if mode_preproc == "wiener":
+            preproc_class = WienerInit
+        elif mode_preproc == "ks":
+            preproc_class = KSInit
+        else:
+            raise ValueError(
+                f"Unknown preprocessing mode: {mode_preproc}. "
+                "Available modes: 'wiener', 'ks'."
+            )
+        self.preproc = preproc_class(**args_preproc)
 
 
     def forward(self, inp, *args, **kwargs):
-        inp = self.wiener_init(inp)
+        with torch.no_grad():
+            inp = self.preproc(inp)
         out = super().forward(inp, *args, **kwargs)
         return out
 
 
-class UNetWienerInit(WienerInitMixin, UNet):
+class UNetPreproc(PreprocMixin, UNet):
     pass
 
-class SUNetWienerInit(WienerInitMixin, SUNet):
+class SUNetPreproc(PreprocMixin, SUNet):
     pass
 
 
