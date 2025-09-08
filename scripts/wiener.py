@@ -14,7 +14,6 @@ OUTPUT_FILENAME = "results_wiener"
 
 def main(
         path_to_test_dataset: str, output_dir: str,
-        path_to_cqr: str=None,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
@@ -25,12 +24,20 @@ def main(
         num_workers: int=NUM_WORKERS,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        multfact_confidence_uq: float=None,
+        cqr_filename: str=None, timestamp_cqr: str=None,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
 ):
     _commons.set_seed(seed)
 
+    if cqr_filename is not None:
+        path_to_cqr = _commons.get_path_to_output(
+            output_dir, cqr_filename
+        ) # E.g., "checkpoint/dir/cqr_wiener"
+    else:
+        path_to_cqr = None
     path_to_output = _commons.get_path_to_output(
         output_dir, output_filename
     ) # E.g., "output/dir/results_wiener"
@@ -56,12 +63,6 @@ def main(
         num_workers, std_noise, mask, shuffle=False
     )
 
-    # Load CQR, if available
-    nimgs_calib, cqr = _commons.load_cqr(
-        path_to_cqr, confidence_uq, imgsize, parent_dir=output_dir,
-        device=device, verbose=verbose
-    )
-
     # Instantiate physics (forward model)
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
@@ -78,60 +79,47 @@ def main(
     test_dataloader = iter(test_dataset)
     mask = mask.to(device)
     out_wiener = _commons.run_wiener_batch(
-        wiener, physics, test_dataloader, confidence_uq=confidence_uq,
+        wiener, physics, test_dataloader,
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
     kappa_wiener = out_wiener["kappa_wiener"]
     var_wiener = out_wiener["var_wiener"]
-    res_wiener = out_wiener["res_wiener"]
     rmse = out_wiener["rmse"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
-    res_wiener_cqr, cqr_time = _commons.get_calibrated_residuals(
-        cqr, res_wiener, verbose=verbose
-    )
+    if not isinstance(multfact_confidence_uq, list):
+        multfact_confidence_uq = [multfact_confidence_uq]
 
-    # Compute miscoverage rate and size of prediction intervals
-    err_wiener, predinterv_wiener, err_wiener_cqr, \
-            predinterv_wiener_cqr, metrics_time = _commons.get_metrics(
-        kappa_wiener, res_wiener, kappa_true, res_cqr=res_wiener_cqr,
-        mask=mask, verbose=verbose
-    )
-
-    out_dict = {
-        "inference_time": inference_time,
-        "metrics_time": metrics_time,
-        "nimgs_test": nimgs_test,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-        "rmse": rmse.cpu(),
-        "err_wiener": err_wiener.cpu(),
-        "predinterv_wiener": predinterv_wiener.cpu(),
-    }
-    if save_tensors:
+    for rho in multfact_confidence_uq:
+        out_dict = _commons.apply_calibration_and_get_metrics(
+            kappa_wiener, var_wiener, kappa_true,
+            path_to_cqr, timestamp_cqr, confidence_uq,
+            imgsize=imgsize,
+            multfact_confidence_uq=rho,
+            mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+            device=device, verbose=verbose
+        )
         out_dict.update({
-            "kappa_true": kappa_true[:nimgs_save].cpu(),
-            "kappa_wiener": kappa_wiener[:nimgs_save].cpu(),
-            "var_wiener": var_wiener[:nimgs_save].cpu(),
-            "res_wiener": res_wiener[:nimgs_save].cpu(),
-        })
-    if cqr is not None:
-        out_dict.update({
-            "cqr_time": cqr_time,
-            "nimgs_calib": nimgs_calib,
-            "err_wiener_cqr": err_wiener_cqr.cpu(),
-            "predinterv_wiener_cqr": predinterv_wiener_cqr.cpu(),
+            "inference_time": inference_time,
+            "niter": niter_wiener,
+            "nimgs_test": nimgs_test,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "rmse": rmse.cpu(),
         })
         if save_tensors:
             out_dict.update({
-                "res_wiener_cqr": res_wiener_cqr[:nimgs_save].cpu(),
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+                "kappa_pred": kappa_wiener[:nimgs_save].cpu(),
+                "var": var_wiener[:nimgs_save].cpu(),
             })
-    _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
-    )
+        _commons.save_results(
+            out_dict, path_to_output, now,
+            multfact_confidence_uq=rho, verbose=verbose
+        )
 
 
 if __name__ == "__main__":
@@ -144,6 +132,7 @@ if __name__ == "__main__":
         "output_dir", type=str,
         help="Output directory (where the results will be saved)"
     )
+    _commons.add_arguments_uq(parser)
     _commons.add_arguments_cqr(parser)
     _commons.add_arguments_test_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_wiener(parser)

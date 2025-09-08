@@ -24,6 +24,7 @@ def main(
         num_workers: int=NUM_WORKERS,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        multfact_confidence_uq: float=None,
         output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
 ):
@@ -71,33 +72,42 @@ def main(
     calib_dataloader = iter(calib_dataset)
     mask = mask.to(device)
     out_wiener = _commons.run_wiener_batch(
-        wiener, physics, calib_dataloader, confidence_uq=confidence_uq,
+        wiener, physics, calib_dataloader,
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
     kappa_wiener = out_wiener["kappa_wiener"]
-    res_wiener = out_wiener["res_wiener"]
+    var_wiener = out_wiener["var_wiener"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Instantiate CQR model and compute the calibration parameters
-    cqr = _commons.get_cqr(
-        kappa_wiener, res_wiener, kappa_true, imgsize, confidence_uq,
-        device=device, verbose=verbose
-    )
+    if not isinstance(multfact_confidence_uq, list):
+        multfact_confidence_uq = [multfact_confidence_uq]
 
-    inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
-
-    out_dict = {
-        "state_dict": cqr.state_dict(),
-        "inference_time": inference_time,
-        "nimgs_calib": nimgs_calib,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-    }
-    _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
-    )
+    for rho in multfact_confidence_uq:
+        beg_time = time.time()
+        cqr = _commons.get_cqr(
+            kappa_wiener, var_wiener, kappa_true, imgsize, confidence_uq,
+            multfact_confidence_uq=multfact_confidence_uq,
+            device=device, verbose=verbose
+        )
+        calibration_time = _commons.get_inference_time(
+            beg_time, which="calibration", verbose=False
+        )
+        out_dict = {
+            "state_dict": cqr.state_dict(),
+            "inference_time": inference_time,
+            "calibration_time": calibration_time,
+            "nimgs_calib": nimgs_calib,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "multfact_confidence_uq": rho,
+        }
+        _commons.save_results(
+            out_dict, path_to_output, now,
+            multfact_confidence_uq=rho, verbose=verbose
+        )
 
 
 if __name__ == "__main__":
@@ -110,6 +120,7 @@ if __name__ == "__main__":
         "output_dir", type=str,
         help="Output directory (where the results will be saved)"
     )
+    _commons.add_arguments_uq(parser)
     _commons.add_arguments_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _commons.add_arguments_wiener(parser)
     _commons.add_arguments_output(parser, OUTPUT_FILENAME)

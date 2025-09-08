@@ -36,6 +36,7 @@ def main(
         niter_per_step_g: int=_commons.NITER_PER_STEP_G,
         niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        multfact_confidence_uq: float=None,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -89,7 +90,7 @@ def main(
 
     # Instantiate the PnP model
     pnpmass, pnpmass_uq, gaussian_extractor, \
-            step_size, step_size_filename, callback_gaussian_extractor = \
+            step_size, callback_gaussian_extractor = \
                 _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
         std_noise=std_noise, mask=mask, physics=physics,
@@ -118,35 +119,45 @@ def main(
     out_pnpmass = _commons.run_pnpmass_batch(
         pnpmass, pnpmass_uq, physics, calib_dataloader, step_size, niter,
         gaussian_extractor=gaussian_extractor,
-        confidence_uq=confidence_uq, callbacks=callbacks,
+        callbacks=callbacks,
         device=device, verbose=verbose,
     )
     kappa_true = out_pnpmass["kappa_true"]
     kappa_pnpmass = out_pnpmass["kappa_pnpmass"]
-    res_pnpmass = out_pnpmass["res_pnpmass"]
-
-    # Instantiate CQR model and compute the calibration parameters
-    cqr = _commons.get_cqr(
-        kappa_pnpmass, res_pnpmass, kappa_true, imgsize, confidence_uq,
-        device=device, verbose=verbose
-    )
+    var_pnpmass = out_pnpmass["var_pnpmass"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
-    out_dict = {
-        "state_dict": cqr.state_dict(),
-        "inference_time": inference_time,
-        "step_size": step_size,
-        "arch": arch,
-        "niter": niter,
-        "nimgs_calib": nimgs_calib,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-    }
-    _commons.save_results(
-        out_dict, path_to_output, now, step_size=step_size_filename,
-        verbose=verbose
-    )
+    # Instantiate CQR model and compute the calibration parameters
+    if not isinstance(multfact_confidence_uq, list):
+        multfact_confidence_uq = [multfact_confidence_uq]
+
+    for rho in multfact_confidence_uq:
+        beg_time = time.time()
+        cqr = _commons.get_cqr(
+            kappa_pnpmass, var_pnpmass, kappa_true, imgsize, confidence_uq,
+            multfact_confidence_uq=rho,
+            device=device, verbose=verbose
+        )
+        calibration_time = _commons.get_inference_time(
+            beg_time, which="calibration", verbose=False
+        )
+        out_dict = {
+            "state_dict": cqr.state_dict(),
+            "inference_time": inference_time,
+            "calibration_time": calibration_time,
+            "step_size": step_size,
+            "arch": arch,
+            "niter": niter,
+            "nimgs_calib": nimgs_calib,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "multfact_confidence_uq": rho,
+        }
+        _commons.save_results(
+            out_dict, path_to_output, now, step_size=step_size,
+            multfact_confidence_uq=rho, verbose=verbose
+        )
 
 
 if __name__ == "__main__":
@@ -159,6 +170,7 @@ if __name__ == "__main__":
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
+    _commons.add_arguments_uq(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_model_uq(parser)
     _commons.add_arguments_checkpoint(parser)

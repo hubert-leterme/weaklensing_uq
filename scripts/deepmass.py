@@ -11,10 +11,10 @@ import _commons
 
 OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
+from pnpmass_calibration import OUTPUT_DIR as CQR_DIR
 
 def main(
         path_to_test_dataset: str, checkpoint_dir: str, checkpoint_dir_uq: str=None,
-        path_to_cqr: str=None,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps: str=PATH_TO_PS,
@@ -28,12 +28,21 @@ def main(
         niter_wiener: int=NITER_WIENER,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        multfact_confidence_uq: float=None,
+        cqr_dir: str=CQR_DIR,
+        cqr_filename: str=None, timestamp_cqr: str=None,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
     _commons.set_seed(seed)
 
+    if cqr_filename is not None:
+        path_to_cqr = _commons.get_path_to_output(
+            cqr_dir, cqr_filename, checkpoint_dir=checkpoint_dir
+        ) # E.g., "checkpoint/dir/cqr_deepmass"
+    else:
+        path_to_cqr = None
     path_to_output = _commons.get_path_to_output(
         output_dir, output_filename, checkpoint_dir=checkpoint_dir
     ) # E.g., "checkpoint/dir/results_deepmass"
@@ -75,72 +84,51 @@ def main(
         imgsize=imgsize, device=device, verbose=verbose, **kwargs
     )
 
-    # Load CQR, if available
-    nimgs_calib, cqr = _commons.load_cqr(
-        path_to_cqr, confidence_uq, imgsize, parent_dir=checkpoint_dir,
-        device=device, verbose=verbose
-    )
-
     # Run DeepMass for each batch
     test_dataloader = iter(test_dataset)
     mask = mask.to(device)
     out_deepmass = _commons.run_deepmass_batch(
-        deepmass, deepmass_uq,
-        test_dataloader, confidence_uq=confidence_uq,
+        deepmass, deepmass_uq, test_dataloader,
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
     kappa_deepmass = out_deepmass["kappa_deepmass"]
     var_deepmass = out_deepmass["var_deepmass"]
-    res_deepmass = out_deepmass["res_deepmass"]
     rmse = out_deepmass["rmse"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
-    res_deepmass_cqr, cqr_time = _commons.get_calibrated_residuals(
-        cqr, res_deepmass, verbose=verbose
-    )
+    if not isinstance(multfact_confidence_uq, list):
+        multfact_confidence_uq = [multfact_confidence_uq]
 
-    # Compute miscoverage rate and size of prediction intervals
-    err_deepmass, predinterv_deepmass, err_deepmass_cqr, \
-            predinterv_deepmass_cqr, metrics_time = _commons.get_metrics(
-        kappa_deepmass, res_deepmass, kappa_true, res_cqr=res_deepmass_cqr,
-        mask=mask, verbose=verbose
-    )
-
-    out_dict = {
-        "inference_time": inference_time,
-        "metrics_time": metrics_time,
-        "arch": arch,
-        "nimgs_test": nimgs_test,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-        "rmse": rmse.cpu(),
-        "err_deepmass": err_deepmass.cpu(),
-        "predinterv_deepmass": predinterv_deepmass.cpu(),
-    }
-    if save_tensors:
+    for rho in multfact_confidence_uq:
+        out_dict = _commons.apply_calibration_and_get_metrics(
+            kappa_deepmass, var_deepmass, kappa_true,
+            path_to_cqr, timestamp_cqr, confidence_uq,
+            imgsize=imgsize,
+            multfact_confidence_uq=rho,
+            mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+            device=device, verbose=verbose
+        )
         out_dict.update({
-            "kappa_true": kappa_true[:nimgs_save].cpu(),
-            "kappa_deepmass": kappa_deepmass[:nimgs_save].cpu(),
-            "var_deepmass": var_deepmass[:nimgs_save].cpu(),
-            "res_deepmass": res_deepmass[:nimgs_save].cpu(),
-        })
-    if cqr is not None:
-        out_dict.update({
-            "cqr_time": cqr_time,
-            "nimgs_calib": nimgs_calib,
-            "err_deepmass_cqr": err_deepmass_cqr.cpu(),
-            "predinterv_deepmass_cqr": predinterv_deepmass_cqr.cpu(),
+            "inference_time": inference_time,
+            "arch": arch,
+            "nimgs_test": nimgs_test,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "rmse": rmse.cpu(),
         })
         if save_tensors:
             out_dict.update({
-                "res_deepmass_cqr": res_deepmass_cqr[:nimgs_save].cpu(),
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+                "kappa_pred": kappa_deepmass[:nimgs_save].cpu(),
+                "var": var_deepmass[:nimgs_save].cpu(),
             })
-    _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
-    )
+        _commons.save_results(
+            out_dict, path_to_output, now,
+            multfact_confidence_uq=rho, verbose=verbose
+        )
 
 
 if __name__ == "__main__":
@@ -153,6 +141,7 @@ if __name__ == "__main__":
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
+    _commons.add_arguments_uq(parser)
     _commons.add_arguments_cqr(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_model_uq(parser)

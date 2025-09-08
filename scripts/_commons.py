@@ -552,7 +552,6 @@ def get_pnpmass(
         device=device, verbose=verbose
     )
     step_size = params_algo["stepsize"]
-    step_size_filename = f"{step_size:.3f}"
     metric_dict={"rmse": wlpnp.RMSE(mask=mask)} # RMSE computed within the mask
 
     if mode in ["regular", "residual"]:
@@ -632,7 +631,7 @@ def get_pnpmass(
 
     out = (
         pnpmass, pnpmass_uq, gaussian_extractor,
-        step_size, step_size_filename, callback_gaussian_extractor
+        step_size, callback_gaussian_extractor
     )
 
     return out
@@ -641,8 +640,7 @@ def get_pnpmass(
 # TODO: Merge the 3 functions below into one single function
 def run_wiener_batch(
         wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
-        dataloader, confidence_uq=CONFIDENCE_UQ,
-        mask=None, device="cpu", verbose=False
+        dataloader, mask=None, device="cpu", verbose=False
 ):
     listof_kappa_true = []
     listof_kappa_wiener = []
@@ -668,13 +666,10 @@ def run_wiener_batch(
     var_wiener = torch.cat(listof_var_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
 
-    res_wiener = confidence_uq * var_wiener**0.5
-
     out = {
         "kappa_true": kappa_true,
         "kappa_wiener": kappa_wiener,
         "var_wiener": var_wiener,
-        "res_wiener": res_wiener,
         "rmse": rmse
     }
     return out
@@ -685,7 +680,6 @@ def run_pnpmass_batch(
         physics: wlpnp.MassMapping,
         dataloader, step_size, niter,
         gaussian_extractor: wlpnp.BaseOptim | None=None,
-        confidence_uq=CONFIDENCE_UQ,
         callbacks: wlcallbacks.CallbackList | None=None,
         device="cpu", verbose=False
 ):
@@ -735,14 +729,11 @@ def run_pnpmass_batch(
     var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
 
-    res_pnpmass = confidence_uq * var_pnpmass**0.5
-
     # TODO: Harmonize the output keys in the 3 functions
     out = {
         "kappa_true": kappa_true,
         "kappa_pnpmass": kappa_pnpmass,
         "var_pnpmass": var_pnpmass,
-        "res_pnpmass": res_pnpmass,
         "rmse_iter": rmse_iter
     }
     return out
@@ -750,8 +741,7 @@ def run_pnpmass_batch(
 
 def run_deepmass_batch(
         deepmass: wlpnp.BaseOptim, deepmass_uq: wlpnp.BaseOptim,
-        dataloader, confidence_uq=CONFIDENCE_UQ,
-        mask=None, device="cpu", verbose=False
+        dataloader, mask=None, device="cpu", verbose=False
 ):
     listof_kappa_true = []
     listof_kappa_deepmass = []
@@ -780,22 +770,28 @@ def run_deepmass_batch(
     var_deepmass = torch.cat(listof_var_deepmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
 
-    res_deepmass = confidence_uq * var_deepmass**0.5
-
     out = {
         "kappa_true": kappa_true,
         "kappa_deepmass": kappa_deepmass,
         "var_deepmass": var_deepmass,
-        "res_deepmass": res_deepmass,
         "rmse": rmse
     }
     return out
 
 
-def get_inference_time(beg_time, verbose=False):
+def get_error_bars(
+        var, confidence_uq, multfact_confidence_uq=None
+):
+    out = confidence_uq * var**0.5
+    if multfact_confidence_uq is not None:
+        out *= multfact_confidence_uq
+    return out
+
+
+def get_inference_time(beg_time, which="inference", verbose=False):
     inference_time = time.time() - beg_time
     if verbose:
-        print(f"Total inference time: {inference_time:.2f} seconds")
+        print(f"Total {which} time: {inference_time:.2f} seconds")
     return inference_time
 
 
@@ -856,57 +852,100 @@ def get_step_size_param_mahalanobis(
     return step_size, param_mahalanobis
 
 
-def load_cqr(
-        path_to_cqr, confidence_uq, imgsize, parent_dir=None,
-        device="cpu", verbose=False
-):
-    if path_to_cqr is not None:
-        if parent_dir is not None:
-            path_to_cqr = os.path.join(parent_dir, path_to_cqr)
-        if verbose:
-            print(f"Load calibration parameters from {path_to_cqr}")
-        alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-        cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
-        checkpoint_cqr = torch.load(path_to_cqr)
-        assert confidence_uq == checkpoint_cqr["confidence_uq"]
-        nimgs_calib = checkpoint_cqr["nimgs_calib"]
-        cqr.load_state_dict(checkpoint_cqr["state_dict"])
-        cqr.eval().to(device)
-    else:
-        nimgs_calib = None
-        cqr = None
-
-    return nimgs_calib, cqr
-
-
 def get_cqr(
-        kappa_pred, res, kappa_true,
-        imgsize, confidence_uq, device="cpu", verbose=False
+        kappa_pred, var, kappa_true, imgsize, confidence_uq,
+        multfact_confidence_uq=None,
+        device="cpu", verbose=False
 ):
     if verbose:
         print("Instantiate CQR model and compute the calibration parameters")
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
     cqr = wlcqr.AddCQR(alpha, map_size=imgsize).to(device)
+    res = get_error_bars(
+        var, confidence_uq, multfact_confidence_uq=multfact_confidence_uq
+    )
     cqr.calibrate(kappa_pred, res, kappa_true)
 
     return cqr
 
 
-def get_calibrated_residuals(cqr, res, verbose=False):
+def apply_calibration_and_get_metrics(
+        kappa_pred, var, kappa_true,
+        path_to_cqr, timestamp_cqr, confidence_uq,
+        imgsize=IMGSIZE,
+        step_size=None, multfact_confidence_uq=None,
+        mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
+        device="cpu", verbose=False
+):
+    # Compute pre-calibration residuals
+    res = get_error_bars(
+        var, confidence_uq,
+        multfact_confidence_uq=multfact_confidence_uq
+    )
 
-    if cqr is not None:
+    if path_to_cqr is not None:
+        # Load the file containing the calibration parameters
         beg_time = time.time()
+        alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+        cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
+
+        path_to_cqr = _complete_path_to_torch_saved_objects(
+            path_to_cqr, timestamp_cqr, step_size=step_size,
+            multfact_confidence_uq=multfact_confidence_uq
+        )
+        if verbose:
+            print(f"Load calibration parameters from {path_to_cqr}")
+        checkpoint_cqr = torch.load(path_to_cqr)
+        nimgs_calib = checkpoint_cqr["nimgs_calib"]
+        cqr.load_state_dict(checkpoint_cqr["state_dict"])
+        cqr.eval().to(device)
+
+        # Apply calibration
         if verbose:
             print("Calibrate residuals with CQR")
         res_cqr = cqr(res)
         cqr_time = time.time() - beg_time
         if verbose:
             print(f"Calibration time: {cqr_time:.2f} seconds")
+
     else:
+        nimgs_calib = None
         res_cqr = None
         cqr_time = None
 
-    return res_cqr, cqr_time
+    # Compute miscoverage rate and size of prediction intervals
+    beg_time = time.time()
+    err, predinterv, _, _ = wlutils.get_metrics(
+        kappa_pred, res, kappa_true, mask=mask
+    )
+    if res_cqr is not None:
+        err_cqr, predinterv_cqr, _, _ = wlutils.get_metrics(
+            kappa_pred, res_cqr, kappa_true, mask=mask
+        )
+    else:
+        err_cqr = None
+        predinterv_cqr = None
+    metrics_time = time.time() - beg_time
+    if verbose:
+        print(f"Metrics computation time: {metrics_time:.2f} seconds")
+
+    out = {
+        "cqr_time": cqr_time,
+        "metrics_time": metrics_time,
+        "nimgs_calib": nimgs_calib,
+        "err": err.cpu(),
+        "predinterv": predinterv.cpu(),
+        "err_cqr": err_cqr.cpu(),
+        "predinterv_cqr": predinterv_cqr.cpu(),
+    }
+    if save_tensors:
+        out.update({
+            "res": res[:nimgs_save].cpu(),
+            "res_cqr": res_cqr[:nimgs_save].cpu() \
+                if res_cqr is not None else None,
+        })
+
+    return out
 
 
 def get_metrics(
@@ -933,15 +972,29 @@ def get_metrics(
 
 def save_results(
         out_dict, path_to_output, now,
-        step_size=None, verbose=False
+        step_size=None, multfact_confidence_uq=None,
+        verbose=False
 ):
-    if step_size is not None:
-        path_to_output = f"{path_to_output}_step-size_{step_size}"
-    path_to_output = f"{path_to_output}_{now}.pt"
+    path_to_output = _complete_path_to_torch_saved_objects(
+        path_to_output, now, step_size=step_size,
+        multfact_confidence_uq=multfact_confidence_uq
+    )
     if verbose:
         print(f"Save results to {path_to_output}")
 
     torch.save(out_dict, path_to_output)
+
+
+def _complete_path_to_torch_saved_objects(
+        path, timestamp, step_size=None, multfact_confidence_uq=None
+):
+    if step_size is not None:
+        path = f"{path}_step-size_{step_size:.3f}"
+    if multfact_confidence_uq is not None:
+        path = f"{path}_rho_{multfact_confidence_uq}"
+    path = f"{path}_{timestamp}.pt"
+
+    return path
 
 
 def add_arguments_create_dataset(parser):
@@ -977,13 +1030,39 @@ def add_arguments_create_dataset(parser):
     )
 
 
+def add_arguments_uq(parser):
+
+    parser.add_argument(
+        "--confidence-uq", type=float,
+        default=argparse.SUPPRESS,
+        help=f"Level of confidence for UQ. Default = {CONFIDENCE_UQ:.1f}-sigma"
+    )
+    parser.add_argument(
+        "-rho", "--multfact-confidence-uq", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Multiplicative factor for the level of confidence for UQ. "
+            "Several values can be provided. "
+            "Default = None (no multiplicative factor)"
+        )
+    )
+
+
 def add_arguments_cqr(parser):
 
     parser.add_argument(
-        "-cqr", "--path-to-cqr", type=str, default=None,
+        "-cqr", "--cqr-filename", type=str, default=None,
         help=(
-            "Path to the CQR checkpoint (optional). "
-            "If provided, the residuals will be calibrated with CQR"
+            "Filename for the calibration parameters (without '_rho_...', without timestamp, "
+            "without extension). If provided, the residuals will be calibrated with CQR."
+        )
+    )
+    parser.add_argument(
+        "-tcqr", "--timestamp-cqr", type=str, default=None,
+        help=(
+            "Timestamp of the calibration parameters to load. "
+            "Must be provided if `-cqr` is provided. "
+            "Default = None"
         )
     )
 
@@ -1129,7 +1208,7 @@ def add_arguments_checkpoint(parser):
         "-t0", "--timestamp_uq", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Timestamp of the model to load. "
+            "Timestamp of the order-1 model to load. "
             "Default = None"
         )
     )

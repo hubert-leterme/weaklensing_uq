@@ -27,6 +27,7 @@ def main(
         niter_wiener: int=NITER_WIENER,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        multfact_confidence_uq: float=None,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
 ):
@@ -79,34 +80,47 @@ def main(
     mask = mask.to(device)
     out_deepmass = _commons.run_deepmass_batch(
         deepmass, deepmass_uq,
-        calib_dataloader, confidence_uq=confidence_uq,
+        calib_dataloader,
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
     kappa_deepmass = out_deepmass["kappa_deepmass"]
-    res_deepmass = out_deepmass["res_deepmass"]
+    var_deepmass = out_deepmass["var_deepmass"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Instantiate CQR model and compute the calibration parameters
-    cqr = _commons.get_cqr(
-        kappa_deepmass, res_deepmass, kappa_true, imgsize, confidence_uq,
-        device=device, verbose=verbose
-    )
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
-    out_dict = {
-        "state_dict": cqr.state_dict(),
-        "inference_time": inference_time,
-        "arch": arch,
-        "nimgs_calib": nimgs_calib,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-    }
-    _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
-    )
+    if not isinstance(multfact_confidence_uq, list):
+        multfact_confidence_uq = [multfact_confidence_uq]
+
+    for rho in multfact_confidence_uq:
+        beg_time = time.time()
+
+        cqr = _commons.get_cqr(
+            kappa_deepmass, var_deepmass, kappa_true, imgsize, confidence_uq,
+            multfact_confidence_uq=rho,
+            device=device, verbose=verbose
+        )
+        calibration_time = _commons.get_inference_time(
+            beg_time, which="calibration", verbose=False
+        )
+        out_dict = {
+            "state_dict": cqr.state_dict(),
+            "inference_time": inference_time,
+            "calibration_time": calibration_time,
+            "arch": arch,
+            "nimgs_calib": nimgs_calib,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "multfact_confidence_uq": rho,
+        }
+        _commons.save_results(
+            out_dict, path_to_output, now,
+            multfact_confidence_uq=rho, verbose=verbose
+        )
 
 
 if __name__ == "__main__":
@@ -119,6 +133,7 @@ if __name__ == "__main__":
         "checkpoint_dir", type=str,
         help="Checkpoint directory (containing the './pe' and './var' subdirectories)"
     )
+    _commons.add_arguments_uq(parser)
     _commons.add_arguments_model(parser)
     _commons.add_arguments_model_uq(parser)
     _commons.add_arguments_checkpoint(parser)
