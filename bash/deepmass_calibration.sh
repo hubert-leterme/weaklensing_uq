@@ -27,7 +27,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
-  | sed 's/-uq //g' \
+  | sed -E 's/(^| )-uq($| )/\1\2/g' \
   | sed 's/-ps [^ ]\+//g' \
   | sed 's/--//g' \
   | xargs \

@@ -18,12 +18,16 @@ mkdir -p ${checkpoint_dir}/results_pnpmass
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
+  | sed -E 's/-tau( [^-][^ ]*)+//g' \
+  | sed -E 's/-alph( [^-][^ ]*)+//g' \
+  | sed -E 's/-rho( [^-][^ ]*)+//g' \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
   | sed 's/--switch-mode-for-uq//g' \
   | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
   | sed 's/-cqr [^ ]\+//g' \
+  | sed 's/-tcqr [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
@@ -31,15 +35,13 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-w [^ ]\+//g' \
   | sed 's/-b [^ ]\+//g' \
   | sed 's/-f [^ ]\+//g' \
-  | sed -E 's/-tau( [^-][^ ]*)+//g' \
-  | sed -E 's/-alph( [^-][^ ]*)+//g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
   | sed 's/-ig /--niter_g /g' \
   | sed 's/-ing /--niter_ng /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-nw /--noise-whitening-wiener /g' \
-  | sed 's/-uq //g' \
+  | sed -E 's/(^| )-uq($| )/\1\2/g' \
   | sed 's/-ps [^ ]\+//g' \
   | sed 's/--//g' \
   | xargs \

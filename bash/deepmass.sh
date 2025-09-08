@@ -19,6 +19,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
   | sed 's/-cqr [^ ]\+//g' \
+  | sed 's/-tcqr [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
@@ -28,7 +29,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
-  | sed 's/-uq //g' \
+  | sed -E 's/(^| )-uq($| )/\1\2/g' \
   | sed 's/-ps [^ ]\+//g' \
   | sed 's/--//g' \
   | xargs \
