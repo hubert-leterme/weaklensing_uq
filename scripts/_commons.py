@@ -1029,12 +1029,15 @@ def get_metrics(
 
 def save_results(
         out_dict, path_to_output, now,
-        step_size=None, multfact_confidence_uq=None,
+        step_size=None,
+        multfact_confidence_uq=None,
+        addconst_confidence_uq=None,
         verbose=False
 ):
     path_to_output = _complete_path_to_torch_saved_objects(
         path_to_output, now, step_size=step_size,
-        multfact_confidence_uq=multfact_confidence_uq
+        multfact_confidence_uq=multfact_confidence_uq,
+        addconst_confidence_uq=addconst_confidence_uq
     )
     if verbose:
         print(f"Save results to {path_to_output}")
@@ -1043,12 +1046,16 @@ def save_results(
 
 
 def _complete_path_to_torch_saved_objects(
-        path, timestamp, step_size=None, multfact_confidence_uq=None
+        path, timestamp, step_size=None,
+        multfact_confidence_uq=None,
+        addconst_confidence_uq=None
 ):
     if step_size is not None:
         path = f"{path}_step-size_{step_size:.3f}"
     if multfact_confidence_uq is not None:
         path = f"{path}_rho_{multfact_confidence_uq}"
+    if addconst_confidence_uq is not None:
+        path = f"{path}_const_{addconst_confidence_uq}"
     path = f"{path}_{timestamp}.pt"
 
     return path

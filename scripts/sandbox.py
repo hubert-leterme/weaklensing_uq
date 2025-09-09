@@ -1,4 +1,4 @@
-#!/bin/bash
+import torch
 
 # Set paths
 path_to_test_dataset=~/Documents/Data/kappaTNG_cropped/LP001_cropped_384.hdf5
@@ -32,7 +32,6 @@ mkdir -p ${checkpoint_dir}/results_pnpmass
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
-  | sed 's/--switch-mode-for-uq//g' \
   | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
