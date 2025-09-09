@@ -27,7 +27,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
-  | sed 's/-cqr [^ ]\+//g' \
   | sed 's/-tcqr [^ ]\+//g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
@@ -42,6 +41,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-ing /--niter_ng /g' \
   | sed 's/-i /--niter /g' \
   | sed 's/-nw /--noise-whitening-wiener /g' \
+  | sed -E 's/(^| )-cqr($| )/\1\2/g' \
   | sed -E 's/(^| )-uq($| )/\1\2/g' \
   | sed 's/-ps [^ ]\+//g' \
   | sed 's/--//g' \
