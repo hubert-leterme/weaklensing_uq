@@ -1054,9 +1054,9 @@ def _complete_path_to_torch_saved_objects(
     if step_size is not None:
         path = f"{path}_step-size_{step_size:.3f}"
     if multfact_confidence_uq is not None:
-        path = f"{path}_rho_{multfact_confidence_uq}"
+        path = f"{path}_rho_{multfact_confidence_uq:.3f}"
     if addconst_confidence_uq is not None:
-        path = f"{path}_const_{addconst_confidence_uq}"
+        path = f"{path}_const_{addconst_confidence_uq:.3f}"
     path = f"{path}_{timestamp}.pt"
 
     return path
