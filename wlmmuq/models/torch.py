@@ -67,18 +67,15 @@ class ModelMixin:
             self.outrelu_eval = None
         else:
             if additional_outlayer_order2 is not None:
-                if additional_outlayer_order2 == "relu":
-                    self.additional_outlayer = nn.Sequential(
-                        Meancentering(), # Avoids vanishing gradients
-                        nn.ReLU()
-                    )
+                if additional_outlayer_order2 == "meancentering":
+                    self.additional_outlayer = Meancentering()
                 elif additional_outlayer_order2 == "leakyrelu":
-                    self.additional_outlayer = nn.LeakyReLU()
+                    self.additional_outlayer = nn.LeakyReLU() # Avoids vanishing gradients
                 else:
                     raise ValueError(
                         "Unknown option for `enforce_nonnegativity_during_training`: "
                         f"{additional_outlayer_order2}. "
-                        "Available options: 'relu', 'leakyrelu'."
+                        "Available options: 'meancentering', 'leakyrelu'."
                     )
             else:
                 self.additional_outlayer = None

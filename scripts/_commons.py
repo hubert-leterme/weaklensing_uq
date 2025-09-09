@@ -34,7 +34,8 @@ IMGSIZE = 384
 BATCH_SIZE = 32
 NIMGS_SAVE = 16
 KEYS_MODEL = [
-    'no_bias', 'model_size', 'mode_preproc', 'args_preproc'
+    "no_bias", "model_size", "mode_preproc",
+    "args_preproc", "additional_outlayer_order2"
 ] # Arguments passed to the model's constructor
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
@@ -1107,8 +1108,9 @@ def add_arguments_model(parser):
         default=argparse.SUPPRESS,
         help=(
             "Type of additional output layer for the order-2 models. "
-            "Possible values are: 'relu', or 'leakyrelu'. Default = None "
-            "(i.e., ReLU is only applied at inference)"
+            "Possible values are: 'meancentering' | 'leakyrelu'. "
+            "In any case, ReLU is applied at the output in evaluation mode. "
+            "Default = None"
         )
     )
 
