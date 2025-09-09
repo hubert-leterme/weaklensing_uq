@@ -18,9 +18,10 @@ mkdir -p ${checkpoint_dir}/cqr_pnpmass
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
-  | sed -E 's/-tau( [^-][^ ]*)+//g' \
-  | sed -E 's/-alph( [^-][^ ]*)+//g' \
-  | sed -E 's/-rho( [^-][^ ]*)+//g' \
+  | sed -E 's/-tau( (-?[0-9]+(\.[0-9]+)?))+//g' \
+  | sed -E 's/-alph( (-?[0-9]+(\.[0-9]+)?))+//g' \
+  | sed -E 's/-rho( (-?[0-9]+(\.[0-9]+)?))+//g' \
+  | sed -E 's/-const( (-?[0-9]+(\.[0-9]+)?))+//g' \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
   | sed 's/--switch-mode-for-uq//g' \
   | sed 's/-thresh /--starlet-detection-threshold /g' \

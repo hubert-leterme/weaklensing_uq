@@ -48,6 +48,8 @@ INPAINTING_WIENER = False
 INPAINTING_PNPMASS = False
 INPAINTING_DEEPMASS = True
 
+MODE_CQR = "addcqr"
+
 def set_seed(seed):
     """Set the random seed for reproducibility."""
     if seed is not None:
@@ -781,11 +783,18 @@ def run_deepmass_batch(
 
 
 def get_error_bars(
-        var, confidence_uq, multfact_confidence_uq=None
-):
-    out = confidence_uq * var**0.5
-    if multfact_confidence_uq is not None:
-        out *= multfact_confidence_uq
+        var, confidence_uq=CONFIDENCE_UQ,
+        multfact_confidence_uq=None,
+        addconst_confidence_uq=None
+):  
+    if multfact_confidence_uq is None:
+        multfact_confidence_uq = 1.
+    if addconst_confidence_uq is None:
+        addconst_confidence_uq = 0.
+    out = multfact_confidence_uq * var**0.5 + addconst_confidence_uq
+    out = torch.relu(out)
+    out = confidence_uq * out
+
     return out
 
 
@@ -853,17 +862,59 @@ def get_step_size_param_mahalanobis(
     return step_size, param_mahalanobis
 
 
+def convert_into_param_lists(params1, params2):
+
+    if not isinstance(params1, list) and isinstance(params2, list):
+        if isinstance(params1, list) and not isinstance(params2, list):
+            params2 = len(params1) * [params2]
+        elif not isinstance(params1, list) and isinstance(params2, list):
+            params1 = len(params2) * [params1]
+        else:
+            params1 = [params1]
+            params2 = [params2]
+    else:
+        assert len(params1) == len(params2)
+    
+    return params1, params2
+
+
+def instantiate_cqr(
+        confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
+        mode=MODE_CQR, device="cpu"
+):
+    if mode == "addcqr":
+        cqr_class = wlcqr.AddCQR
+    elif mode == "multcqr":
+        cqr_class = wlcqr.MultCQR
+    else:
+        raise ValueError(
+            f"Invalid CQR mode '{mode}'. "
+            "Supported modes are 'addcqr' and 'multcqr'."
+        )
+    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+    cqr = cqr_class(alpha, map_size=imgsize).to(device)
+
+    return cqr
+
+
 def get_cqr(
-        kappa_pred, var, kappa_true, imgsize, confidence_uq,
+        kappa_pred, var, kappa_true,
+        confidence_uq=CONFIDENCE_UQ,
+        imgsize=IMGSIZE, mode=MODE_CQR,
         multfact_confidence_uq=None,
+        addconst_confidence_uq=None,
         device="cpu", verbose=False
 ):
     if verbose:
         print("Instantiate CQR model and compute the calibration parameters")
-    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-    cqr = wlcqr.AddCQR(alpha, map_size=imgsize).to(device)
     res = get_error_bars(
-        var, confidence_uq, multfact_confidence_uq=multfact_confidence_uq
+        var, confidence_uq=confidence_uq,
+        multfact_confidence_uq=multfact_confidence_uq,
+        addconst_confidence_uq=addconst_confidence_uq
+    )
+    cqr = instantiate_cqr(
+        confidence_uq=confidence_uq, imgsize=imgsize,
+        mode=mode, device=device
     )
     cqr.calibrate(kappa_pred, res, kappa_true)
 
@@ -872,24 +923,29 @@ def get_cqr(
 
 def apply_calibration_and_get_metrics(
         kappa_pred, var, kappa_true,
-        path_to_cqr, timestamp_cqr, confidence_uq,
-        imgsize=IMGSIZE,
-        step_size=None, multfact_confidence_uq=None,
+        path_to_cqr, timestamp_cqr,
+        confidence_uq=CONFIDENCE_UQ,
+        imgsize=IMGSIZE, mode=MODE_CQR,
+        step_size=None,
+        multfact_confidence_uq=None,
+        addconst_confidence_uq=None,
         mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
         device="cpu", verbose=False
 ):
     # Compute pre-calibration residuals
     res = get_error_bars(
-        var, confidence_uq,
-        multfact_confidence_uq=multfact_confidence_uq
+        var, confidence_uq=confidence_uq,
+        multfact_confidence_uq=multfact_confidence_uq,
+        addconst_confidence_uq=addconst_confidence_uq
     )
 
     if path_to_cqr is not None:
         # Load the file containing the calibration parameters
         beg_time = time.time()
-        alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-        cqr = wlcqr.AddCQR(alpha, map_size=imgsize)
-
+        cqr = instantiate_cqr(
+            confidence_uq=confidence_uq, imgsize=imgsize,
+            mode=mode, device=device
+        )
         path_to_cqr = _complete_path_to_torch_saved_objects(
             path_to_cqr, timestamp_cqr, step_size=step_size,
             multfact_confidence_uq=multfact_confidence_uq
@@ -1034,6 +1090,13 @@ def add_arguments_create_dataset(parser):
 def add_arguments_uq(parser):
 
     parser.add_argument(
+        "--mode-cqr", type=str, default=None,
+        help=(
+            "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
+            f"Default = {MODE_CQR}"
+        )
+    )
+    parser.add_argument(
         "--confidence-uq", type=float,
         default=argparse.SUPPRESS,
         help=f"Level of confidence for UQ. Default = {CONFIDENCE_UQ:.1f}-sigma"
@@ -1044,7 +1107,16 @@ def add_arguments_uq(parser):
         help=(
             "Multiplicative factor for the level of confidence for UQ. "
             "Several values can be provided. "
-            "Default = None (no multiplicative factor)"
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "-const", "--addconst-confidence-uq", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Additive constant for the level of confidence for UQ. "
+            "Several values can be provided. "
+            "Default = None"
         )
     )
 

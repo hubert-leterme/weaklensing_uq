@@ -39,8 +39,10 @@ def main(
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         niter_per_step_g: int=_commons.NITER_PER_STEP_G,
         niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
+        mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         multfact_confidence_uq: float=None,
+        addconst_confidence_uq: float=None,
         cqr_dir: str=CQR_DIR,
         cqr_filename: str=None, timestamp_cqr: str=None,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
@@ -106,6 +108,11 @@ def main(
     # Instantiate physics (forward model)
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
 
+    multfact_confidence_uq, addconst_confidence_uq = \
+        _commons.convert_into_param_lists(
+            multfact_confidence_uq, addconst_confidence_uq
+        )
+
     for tau, alpha in zip(step_size, multfact_step_size):
         # Initialize iterator
         test_dataloader = iter(test_dataset)
@@ -154,15 +161,15 @@ def main(
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
         # Calibrate with CQR, if available
-        if not isinstance(multfact_confidence_uq, list):
-            multfact_confidence_uq = [multfact_confidence_uq]
-
-        for rho in multfact_confidence_uq:
+        for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
             out_dict = _commons.apply_calibration_and_get_metrics(
                 kappa_pnpmass, var_pnpmass, kappa_true,
-                path_to_cqr, timestamp_cqr, confidence_uq,
-                imgsize=imgsize, step_size=tau,
+                path_to_cqr, timestamp_cqr,
+                confidence_uq=confidence_uq,
+                imgsize=imgsize, mode=mode_cqr,
+                step_size=tau,
                 multfact_confidence_uq=rho,
+                addconst_confidence_uq=const,
                 mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                 device=device, verbose=verbose
             )

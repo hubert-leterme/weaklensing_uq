@@ -23,8 +23,10 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
+        mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         multfact_confidence_uq: float=None,
+        addconst_confidence_uq: float=None,
         cqr_filename: str=None, timestamp_cqr: str=None,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_filename: str=OUTPUT_FILENAME,
@@ -90,15 +92,19 @@ def main(
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
-    if not isinstance(multfact_confidence_uq, list):
-        multfact_confidence_uq = [multfact_confidence_uq]
+    multfact_confidence_uq, addconst_confidence_uq = \
+        _commons.convert_into_param_lists(
+            multfact_confidence_uq, addconst_confidence_uq
+        )
 
-    for rho in multfact_confidence_uq:
+    for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         out_dict = _commons.apply_calibration_and_get_metrics(
             kappa_wiener, var_wiener, kappa_true,
-            path_to_cqr, timestamp_cqr, confidence_uq,
-            imgsize=imgsize,
+            path_to_cqr, timestamp_cqr,
+            confidence_uq=confidence_uq,
+            imgsize=imgsize, mode=mode_cqr,
             multfact_confidence_uq=rho,
+            addconst_confidence_uq=const,
             mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
             device=device, verbose=verbose
         )

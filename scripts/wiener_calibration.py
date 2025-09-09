@@ -23,8 +23,10 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
+        mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         multfact_confidence_uq: float=None,
+        addconst_confidence_uq: float=None,
         output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
 ):
@@ -82,14 +84,19 @@ def main(
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Instantiate CQR model and compute the calibration parameters
-    if not isinstance(multfact_confidence_uq, list):
-        multfact_confidence_uq = [multfact_confidence_uq]
+    multfact_confidence_uq, addconst_confidence_uq = \
+        _commons.convert_into_param_lists(
+            multfact_confidence_uq, addconst_confidence_uq
+        )
 
-    for rho in multfact_confidence_uq:
+    for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         beg_time = time.time()
         cqr = _commons.get_cqr(
-            kappa_wiener, var_wiener, kappa_true, imgsize, confidence_uq,
+            kappa_wiener, var_wiener, kappa_true,
+            confidence_uq=confidence_uq,
+            imgsize=imgsize, mode=mode_cqr,
             multfact_confidence_uq=multfact_confidence_uq,
+            addconst_confidence_uq=const,
             device=device, verbose=verbose
         )
         calibration_time = _commons.get_inference_time(
