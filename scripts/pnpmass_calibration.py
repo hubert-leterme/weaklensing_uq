@@ -164,7 +164,7 @@ def main(
         _commons.save_results(
             out_dict, path_to_output, now, step_size=step_size,
             multfact_confidence_uq=rho,
-            addconst_confidence_uq=addconst_confidence_uq,
+            addconst_confidence_uq=const,
             verbose=verbose
         )
 

@@ -948,7 +948,8 @@ def apply_calibration_and_get_metrics(
         )
         path_to_cqr = _complete_path_to_torch_saved_objects(
             path_to_cqr, timestamp_cqr, step_size=step_size,
-            multfact_confidence_uq=multfact_confidence_uq
+            multfact_confidence_uq=multfact_confidence_uq,
+            addconst_confidence_uq=addconst_confidence_uq
         )
         if verbose:
             print(f"Load calibration parameters from {path_to_cqr}")
