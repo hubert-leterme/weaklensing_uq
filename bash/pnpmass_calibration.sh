@@ -27,6 +27,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-thresh /--starlet-detection-threshold /g' \
   | sed 's/-auq [^ ]\+//g' \
   | sed 's/-suq [^ ]\+//g' \
+  | sed 's/--mode-cqr /--mode /g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
