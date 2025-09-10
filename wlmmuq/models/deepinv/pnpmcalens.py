@@ -155,7 +155,6 @@ class BaseMCALens(iterativemm.BaseOptim):
             data_fidelity=data_fidelity,
             prior=prior,
             custom_init=custom_init,
-            gaussian_extractor=None,
             **kwargs
         )
         self.set_output = set_output
