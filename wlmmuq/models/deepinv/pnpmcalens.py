@@ -180,6 +180,8 @@ class BaseMCALens(iterativemm.BaseOptim):
         x = super().forward(
             y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
         ) # Shape = (nimgs, 2, nchannels, nx, ny)
+        if compute_metrics:
+            x, metrics = x
         if self.output_mode is not None:
             if self.output_mode == "discard_ng":
                 x, _ = get_tensor_components(x) # Shape = (nimgs, nchannels, nx, ny)
@@ -190,6 +192,8 @@ class BaseMCALens(iterativemm.BaseOptim):
                     f"Unknown output_mode: {self.output_mode}. "
                     f"Should be either None, 'discard_ng' or 'add_components'."
                 )
+        if compute_metrics:
+            x = x, metrics
         return x
 
 
