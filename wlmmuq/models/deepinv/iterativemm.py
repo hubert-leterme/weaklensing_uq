@@ -158,7 +158,7 @@ class ProximalWiener(nn.Module):
 # Metrics
 #########################################################################
 
-class MSE(dinv.metric.MSE):
+class MeancenterMaskMixin:
 
     def __init__(
             self, mask: torch.Tensor=None, meancentering: bool=True,
@@ -182,9 +182,23 @@ class MSE(dinv.metric.MSE):
         return super().metric(x_net, x, *args, **kwargs)
 
 
-class RMSE(MSE):
+class SquareRootMixin:
     def metric(self, x_net, x, *args, **kwargs):
         return super().metric(x_net, x, *args, **kwargs) ** 0.5
+
+
+class MSE(MeancenterMaskMixin, dinv.metric.MSE):
+    pass
+
+class NMSE(MeancenterMaskMixin, dinv.metric.NMSE):
+    pass
+
+
+class RMSE(SquareRootMixin, MSE):
+    """Root Mean Squared Error metric."""
+
+class NRMSE(SquareRootMixin, NMSE):
+    """Normalized Root Mean Squared Error metric."""
 
 
 #########################################################################

@@ -97,6 +97,7 @@ def main(
     kappa_deepmass = out_deepmass["kappa_deepmass"]
     var_deepmass = out_deepmass["var_deepmass"]
     rmse = out_deepmass["rmse"]
+    nrmse = out_deepmass["nrmse"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -124,6 +125,7 @@ def main(
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
             "rmse": rmse.cpu(),
+            "nrmse": nrmse.cpu(),
         })
         if save_tensors:
             out_dict.update({

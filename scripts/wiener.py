@@ -88,6 +88,7 @@ def main(
     kappa_wiener = out_wiener["kappa_wiener"]
     var_wiener = out_wiener["var_wiener"]
     rmse = out_wiener["rmse"]
+    nrmse = out_wiener["nrmse"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -115,6 +116,7 @@ def main(
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
             "rmse": rmse.cpu(),
+            "nrmse": nrmse.cpu(),
         })
         if save_tensors:
             out_dict.update({

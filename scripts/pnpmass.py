@@ -147,16 +147,17 @@ def main(
         callbacks = CallbackList(callback_list)
 
         # Run PnPMass for each batch
-        out_wiener_pnpmass = _commons.run_pnpmass_batch(
+        out_pnpmass = _commons.run_pnpmass_batch(
             pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
             gaussian_extractor=gaussian_extractor,
             callbacks=callbacks,
             device=device, verbose=verbose,
         )
-        kappa_true = out_wiener_pnpmass["kappa_true"]
-        kappa_pnpmass = out_wiener_pnpmass["kappa_pnpmass"]
-        var_pnpmass = out_wiener_pnpmass["var_pnpmass"]
-        rmse_iter = out_wiener_pnpmass["rmse_iter"]
+        kappa_true = out_pnpmass["kappa_true"]
+        kappa_pnpmass = out_pnpmass["kappa_pnpmass"]
+        var_pnpmass = out_pnpmass["var_pnpmass"]
+        rmse = out_pnpmass["rmse"]
+        nrmse = out_pnpmass["nrmse"]
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -181,7 +182,8 @@ def main(
                 "nimgs_test": nimgs_test,
                 "imgsize": imgsize,
                 "confidence_uq": confidence_uq,
-                "rmse": rmse_iter.cpu(),
+                "rmse": rmse.cpu(),
+                "nrmse": nrmse.cpu(),
             })
             if save_tensors:
                 out_dict.update({
