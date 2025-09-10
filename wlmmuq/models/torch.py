@@ -533,8 +533,8 @@ class KSInit(nn.Module):
 class PreprocMixin:
 
     def __init__(
-            self, mode_preproc: str, args_preproc: dict,
-            *args, **kwargs
+            self, mode_preproc: str,
+            *args, args_preproc: dict=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
         if mode_preproc == "wiener":
@@ -546,6 +546,8 @@ class PreprocMixin:
                 f"Unknown preprocessing mode: {mode_preproc}. "
                 "Available modes: 'wiener', 'ks'."
             )
+        if args_preproc is None:
+            args_preproc = {}
         self.preproc = preproc_class(**args_preproc)
 
 
