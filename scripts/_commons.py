@@ -1119,7 +1119,8 @@ def add_arguments_create_dataset(parser):
 def add_arguments_uq(parser):
 
     parser.add_argument(
-        "--mode-cqr", type=str, default=None,
+        "--mode-cqr", type=str,
+        default=argparse.SUPPRESS,
         help=(
             "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
             f"Default = {MODE_CQR}"
