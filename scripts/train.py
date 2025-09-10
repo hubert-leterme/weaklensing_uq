@@ -39,7 +39,7 @@ def main(
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        order2=False, additional_outlayer_order2=None,
+        order2=False, additional_outlayer=None,
         arch_order1=None,
         timestamp_order1=None, epoch_order1=None,
         imgsize=IMGSIZE,
@@ -101,7 +101,7 @@ def main(
     )
     model, scale_as_input = _commons.instantiate_model(
         arch, imgsize=imgsize, order2=order2,
-        additional_outlayer_order2=additional_outlayer_order2,
+        additional_outlayer=additional_outlayer,
         device=device, verbose=verbose, **kwargs_model
     )
     model.train()
@@ -201,7 +201,7 @@ def main(
 
     output_type = _commons.get_output_type(
         order2=order2,
-        additional_outlayer_order2=additional_outlayer_order2
+        additional_outlayer=additional_outlayer
     )
     save_path = os.path.join(checkpoint_dir, output_type)
     if resume:

@@ -35,7 +35,7 @@ BATCH_SIZE = 32
 NIMGS_SAVE = 16
 KEYS_MODEL = [
     "no_bias", "model_size", "mode_preproc",
-    "args_preproc", "additional_outlayer_order2"
+    "args_preproc", "additional_outlayer"
 ] # Arguments passed to the model's constructor
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
@@ -177,13 +177,13 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_output_type(order2=False, additional_outlayer_order2=None):
+def get_output_type(order2=False, additional_outlayer=None):
     if not order2:
         output_type = "pe" # Point estimate
     else:
         output_type = "var" # Variance
-        if additional_outlayer_order2 is not None:
-            output_type = f"{output_type}_{additional_outlayer_order2}"
+    if additional_outlayer is not None:
+        output_type = f"{output_type}_{additional_outlayer}"
     return output_type
 
 
@@ -245,13 +245,13 @@ def instantiate_model(
 def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
-        additional_outlayer_order2=None,
+        additional_outlayer=None,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
         device="cpu", verbose=False, **kwargs
 ):
     model, _ = instantiate_model(
         arch, imgsize=imgsize, order2=order2,
-        additional_outlayer_order2=additional_outlayer_order2,
+        additional_outlayer=additional_outlayer,
         device=device, verbose=verbose, **kwargs
     )
     checkpoint_dir = os.path.expanduser(checkpoint_dir)
@@ -260,7 +260,7 @@ def load_trained_model(
     else:
         output_type = get_output_type(
             order2=order2,
-            additional_outlayer_order2=additional_outlayer_order2
+            additional_outlayer=additional_outlayer
         )
         save_path = os.path.join(checkpoint_dir, output_type)
         path_to_checkpoint = get_path_to_checkpoint(
@@ -284,7 +284,6 @@ def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=EPOCH,
         load_model_uq=False, checkpoint_dir_uq=None,
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
-        additional_outlayer_order2=None,
         imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
@@ -320,7 +319,6 @@ def load_trained_models(
         model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
-            additional_outlayer_order2=additional_outlayer_order2,
             device=device, verbose=verbose,
             **kwargs_model_uq
         )
@@ -1201,15 +1199,15 @@ def add_arguments_model(parser):
         default=argparse.SUPPRESS,
         help=(
             "Preprocessing mode for DeepMass: 'wiener' or 'ks'. "
-            "This option is incompatible with flag `--denoiser`. "
             "Default = None"
         )
     )
     parser.add_argument(
-        "--additional-outlayer-order2", type=str,
+        "--additional-outlayer", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Type of additional output layer for the order-2 models. "
+            "Type of additional output layer. "
+            "Only used for training order-2 models. "
             "Possible values are: 'meancentering' | 'leakyrelu'. "
             "In any case, ReLU is applied at the output in evaluation mode. "
             "Default = None"
@@ -1248,7 +1246,6 @@ def add_arguments_model_order1(parser):
         default=argparse.SUPPRESS,
         help=(
             "Preprocessing mode for DeepMass (order-1 model): 'wiener' or 'ks'. "
-            "This option is incompatible with flag `--denoiser`. "
             "Default = None"
         )
     )
@@ -1271,6 +1268,32 @@ def add_arguments_model_uq(parser):
         help=(
             "Size of the order-2 model (DRUNet only). Possible values are: "
             f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+        )
+    )
+    parser.add_argument(
+        "--no-bias-uq", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Do not use bias in convolution or batch "
+            "normalization layers (order-2 models)."
+        )
+    )
+    parser.add_argument(
+        "-muq", "--mode-preproc-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Preprocessing mode for DeepMass (order-2 model): 'wiener' or 'ks'. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--additional-outlayer-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Type of additional output layer (order-2 model). "
+            "Possible values are: 'meancentering' | 'leakyrelu'. "
+            "In any case, ReLU is applied at the output in evaluation mode. "
+            "Default = None"
         )
     )
 

@@ -52,7 +52,7 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            order2: bool=False, additional_outlayer_order2: str | None=None,
+            order2: bool=False, additional_outlayer: str | None=None,
             **kwargs
     ):
         kwargs = self._preprocess_kwargs(
@@ -63,18 +63,24 @@ class ModelMixin:
         if hasattr(self, 'additional_outlayer'):
             raise NotImplementedError("Attribute `additional_outlayer` already exists.")
         if not order2:
+            if additional_outlayer is not None:
+                raise ValueError(
+                    "Mean centering used as output layer in order-1 models. "
+                    f"Argument `additional_outlayer` ('{additional_outlayer}') "
+                    "should not be provided."
+                )
             self.additional_outlayer = Meancentering()
             self.outrelu_eval = None
         else:
-            if additional_outlayer_order2 is not None:
-                if additional_outlayer_order2 == "meancentering":
+            if additional_outlayer is not None:
+                if additional_outlayer == "meancentering":
                     self.additional_outlayer = Meancentering()
-                elif additional_outlayer_order2 == "leakyrelu":
+                elif additional_outlayer == "leakyrelu":
                     self.additional_outlayer = nn.LeakyReLU() # Avoids vanishing gradients
                 else:
                     raise ValueError(
                         "Unknown option for `enforce_nonnegativity_during_training`: "
-                        f"{additional_outlayer_order2}. "
+                        f"{additional_outlayer}. "
                         "Available options: 'meancentering', 'leakyrelu'."
                     )
             else:
