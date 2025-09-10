@@ -885,7 +885,9 @@ def get_step_size_param_mahalanobis(
 
 def convert_into_param_lists(params1, params2):
 
-    if not isinstance(params1, list) and isinstance(params2, list):
+    if isinstance(params1, list) and isinstance(params2, list):
+        assert len(params1) == len(params2)
+    else:
         if isinstance(params1, list) and not isinstance(params2, list):
             params2 = len(params1) * [params2]
         elif not isinstance(params1, list) and isinstance(params2, list):
@@ -893,9 +895,7 @@ def convert_into_param_lists(params1, params2):
         else:
             params1 = [params1]
             params2 = [params2]
-    else:
-        assert len(params1) == len(params2)
-    
+
     return params1, params2
 
 
