@@ -154,8 +154,8 @@ def main(
             device=device, verbose=verbose,
         )
         kappa_true = out_pnpmass["kappa_true"]
-        kappa_pnpmass = out_pnpmass["kappa_pnpmass"]
-        var_pnpmass = out_pnpmass["var_pnpmass"]
+        kappa_pred = out_pnpmass["kappa_pred"]
+        var = out_pnpmass["var"]
         rmse = out_pnpmass["rmse"]
         nrmse = out_pnpmass["nrmse"]
 
@@ -164,7 +164,7 @@ def main(
         # Calibrate with CQR, if available
         for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
             out_dict = _commons.apply_calibration_and_get_metrics(
-                kappa_pnpmass, var_pnpmass, kappa_true,
+                kappa_pred, var, kappa_true,
                 path_to_cqr, timestamp_cqr,
                 confidence_uq=confidence_uq,
                 imgsize=imgsize, mode=mode_cqr,
@@ -188,8 +188,8 @@ def main(
             if save_tensors:
                 out_dict.update({
                     "kappa_true": kappa_true[:nimgs_save].cpu(),
-                    "kappa_pred": kappa_pnpmass[:nimgs_save].cpu(),
-                    "var": var_pnpmass[:nimgs_save].cpu(),
+                    "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+                    "var": var[:nimgs_save].cpu(),
                 })
             _commons.save_results(
                 out_dict, path_to_output, now, step_size=tau,

@@ -673,8 +673,8 @@ def run_wiener_batch(
         dataloader, mask=None, device="cpu", verbose=False
 ):
     listof_kappa_true = []
-    listof_kappa_wiener = []
-    listof_var_wiener = [] # Zero-valued tensors
+    listof_kappa_pred = []
+    listof_var = [] # Zero-valued tensors
     listof_rmse = []
     listof_nrmse = []
 
@@ -683,29 +683,29 @@ def run_wiener_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            kappa_wiener = wiener(gamma_noisy, physics)
-            var_wiener = torch.zeros(kappa_true.shape, device=device)
+            kappa_pred = wiener(gamma_noisy, physics)
+            var = torch.zeros(kappa_true.shape, device=device)
             rmse_fn = wlpnp.RMSE(mask=mask).to(device)
             nrmse_fn = wlpnp.NRMSE(mask=mask).to(device)
-            rmse = rmse_fn(kappa_wiener, kappa_true)
-            nrmse = nrmse_fn(kappa_wiener, kappa_true)
+            rmse = rmse_fn(kappa_pred, kappa_true)
+            nrmse = nrmse_fn(kappa_pred, kappa_true)
 
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var_wiener.append(var_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse.append(rmse) # Shape = (batch_size,)
             listof_nrmse.append(nrmse) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var_wiener = torch.cat(listof_var_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
     nrmse = torch.cat(listof_nrmse, dim=0) # Shape = (nimgs,)
 
     out = {
         "kappa_true": kappa_true,
-        "kappa_wiener": kappa_wiener,
-        "var_wiener": var_wiener,
+        "kappa_pred": kappa_pred,
+        "var": var,
         "rmse": rmse,
         "nrmse": nrmse,
     }
@@ -721,8 +721,8 @@ def run_pnpmass_batch(
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
-    listof_kappa_pnpmass = []
-    listof_var_pnpmass = []
+    listof_kappa_pred = []
+    listof_var = []
     listof_rmse = []
     listof_nrmse = []
 
@@ -743,37 +743,37 @@ def run_pnpmass_batch(
                 gamma_noisy = gamma_noisy - physics.A(kappa_g)
                 kappa_true = kappa_true - kappa_g
 
-            kappa_pnpmass, metrics = pnpmass(
+            kappa_pred, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
             if pnpmass_uq is not None:
-                pnpmass_uq.custom_init.X_init = (kappa_pnpmass,)
-                var_pnpmass = pnpmass_uq(
+                pnpmass_uq.custom_init.X_init = (kappa_pred,)
+                var = pnpmass_uq(
                     gamma_noisy, physics, compute_metrics=False
                 )
             else:
-                var_pnpmass = torch.zeros(kappa_pnpmass.shape, device=device)
+                var = torch.zeros(kappa_pred.shape, device=device)
 
             if gaussian_extractor is not None:
-                kappa_pnpmass = kappa_pnpmass + kappa_g
+                kappa_pred = kappa_pred + kappa_g
 
         listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_rmse.append(metrics["rmse"]) # Shape = (batch_size, niter)
         listof_nrmse.append(metrics["nrmse"]) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
     nrmse = torch.cat(listof_nrmse, dim=0) # Shape = (nimgs, niter)
 
     # TODO: Harmonize the output keys in the 3 functions
     out = {
         "kappa_true": kappa_true,
-        "kappa_pnpmass": kappa_pnpmass,
-        "var_pnpmass": var_pnpmass,
+        "kappa_pred": kappa_pred,
+        "var": var,
         "rmse": rmse,
         "nrmse": nrmse,
     }
@@ -785,8 +785,8 @@ def run_deepmass_batch(
         dataloader, mask=None, device="cpu", verbose=False
 ):
     listof_kappa_true = []
-    listof_kappa_deepmass = []
-    listof_var_deepmass = []
+    listof_kappa_pred = []
+    listof_var = []
     listof_rmse = []
     listof_nrmse = []
 
@@ -795,32 +795,32 @@ def run_deepmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            kappa_deepmass = deepmass(gamma_noisy)
+            kappa_pred = deepmass(gamma_noisy)
             if deepmass_uq is not None:
-                var_deepmass = deepmass_uq(gamma_noisy)
+                var = deepmass_uq(gamma_noisy)
             else:
-                var_deepmass = torch.zeros(kappa_true.shape, device=device)
+                var = torch.zeros(kappa_true.shape, device=device)
             rmse_fn = wlpnp.RMSE(mask=mask).to(device)
             nrmse_fn = wlpnp.NRMSE(mask=mask).to(device)
-            rmse = rmse_fn(kappa_deepmass, kappa_true)
-            nrmse = nrmse_fn(kappa_deepmass, kappa_true)
+            rmse = rmse_fn(kappa_pred, kappa_true)
+            nrmse = nrmse_fn(kappa_pred, kappa_true)
 
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_deepmass.append(kappa_deepmass) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var_deepmass.append(var_deepmass) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse.append(rmse) # Shape = (batch_size,)
             listof_nrmse.append(nrmse) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_deepmass = torch.cat(listof_kappa_deepmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var_deepmass = torch.cat(listof_var_deepmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
     nrmse = torch.cat(listof_nrmse, dim=0) # Shape = (nimgs,)
 
     out = {
         "kappa_true": kappa_true,
-        "kappa_deepmass": kappa_deepmass,
-        "var_deepmass": var_deepmass,
+        "kappa_pred": kappa_pred,
+        "var": var,
         "rmse": rmse,
         "nrmse": nrmse,
     }

@@ -834,14 +834,14 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, kappa_true=None, kappa_pred=None, var_pred=None, res_pred=None,
+            self, kappa_true=None, kappa_pred=None, var=None, res_pred=None,
             extent=None, boundaries=None, mask=None, imgsize=None,
             vmin=None, vmax=None, vmax_sqdiff=None, vmax_bounds=None,
             plot_colorbar=False,
     ):
         self.kappa_true = kappa_true
         self.kappa_pred = kappa_pred
-        self.var_pred = var_pred
+        self.var = var
         self.res_pred = res_pred
         self.extent = extent
         self.boundaries = boundaries
@@ -894,13 +894,13 @@ class KappamapVisualizer:
 
     def skyshow_variance(self, title=None, **kwargs):
 
-        var_pred = self.var_pred
-        if torch.is_tensor(var_pred):
-            var_pred = var_pred.cpu().numpy()
+        var = self.var
+        if torch.is_tensor(var):
+            var = var.cpu().numpy()
         if title is not None:
             title = f"{title} (variance estimate)"
         skyshow(
-            var_pred, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
+            var, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
             printxticks=False, printyticks=False, printcolorbar=True,
             imgsize=self.imgsize, title=title, **kwargs

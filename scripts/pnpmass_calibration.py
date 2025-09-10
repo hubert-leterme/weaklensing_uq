@@ -125,8 +125,8 @@ def main(
         device=device, verbose=verbose,
     )
     kappa_true = out_pnpmass["kappa_true"]
-    kappa_pnpmass = out_pnpmass["kappa_pnpmass"]
-    var_pnpmass = out_pnpmass["var_pnpmass"]
+    kappa_pred = out_pnpmass["kappa_pred"]
+    var = out_pnpmass["var"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -139,7 +139,7 @@ def main(
     for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         beg_time = time.time()
         cqr = _commons.get_cqr(
-            kappa_pnpmass, var_pnpmass, kappa_true,
+            kappa_pred, var, kappa_true,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
             multfact_confidence_uq=rho,

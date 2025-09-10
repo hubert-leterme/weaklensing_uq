@@ -78,8 +78,8 @@ def main(
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
-    kappa_wiener = out_wiener["kappa_wiener"]
-    var_wiener = out_wiener["var_wiener"]
+    kappa_pred = out_wiener["kappa_pred"]
+    var = out_wiener["var"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -92,7 +92,7 @@ def main(
     for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         beg_time = time.time()
         cqr = _commons.get_cqr(
-            kappa_wiener, var_wiener, kappa_true,
+            kappa_pred, var, kappa_true,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
             multfact_confidence_uq=rho,

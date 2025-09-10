@@ -90,8 +90,8 @@ def main(
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
-    kappa_deepmass = out_deepmass["kappa_deepmass"]
-    var_deepmass = out_deepmass["var_deepmass"]
+    kappa_pred = out_deepmass["kappa_pred"]
+    var = out_deepmass["var"]
     rmse = out_deepmass["rmse"]
     nrmse = out_deepmass["nrmse"]
 
@@ -105,7 +105,7 @@ def main(
 
     for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         out_dict = _commons.apply_calibration_and_get_metrics(
-            kappa_deepmass, var_deepmass, kappa_true,
+            kappa_pred, var, kappa_true,
             path_to_cqr, timestamp_cqr,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
@@ -126,8 +126,8 @@ def main(
         if save_tensors:
             out_dict.update({
                 "kappa_true": kappa_true[:nimgs_save].cpu(),
-                "kappa_pred": kappa_deepmass[:nimgs_save].cpu(),
-                "var": var_deepmass[:nimgs_save].cpu(),
+                "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+                "var": var[:nimgs_save].cpu(),
             })
         _commons.save_results(
             out_dict, path_to_output, now,

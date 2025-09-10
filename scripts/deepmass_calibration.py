@@ -82,8 +82,8 @@ def main(
         mask=mask, device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
-    kappa_deepmass = out_deepmass["kappa_deepmass"]
-    var_deepmass = out_deepmass["var_deepmass"]
+    kappa_pred = out_deepmass["kappa_pred"]
+    var = out_deepmass["var"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -97,7 +97,7 @@ def main(
         beg_time = time.time()
 
         cqr = _commons.get_cqr(
-            kappa_deepmass, var_deepmass, kappa_true,
+            kappa_pred, var, kappa_true,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
             multfact_confidence_uq=rho,
