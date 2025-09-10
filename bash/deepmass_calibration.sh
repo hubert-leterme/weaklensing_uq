@@ -17,9 +17,11 @@ optional_args="${@:3}"
 optional_args_cleaned=$(echo "$optional_args" \
   | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
   | sed 's/-auq [^ ]\+//g' \
-  | sed 's/-suq [^ ]\+//g' \
+  | sed 's/-suq /--model-size-uq /g' \
+  | sed 's/-muq /--mode-preproc-uq /g' \
   | sed 's/-a [^ ]\+//g' \
   | sed 's/-s [^ ]\+//g' \
+  | sed 's/-m [^ ]\+//g' \
   | sed 's/-t [^ ]\+//g' \
   | sed 's/-t0 [^ ]\+//g' \
   | sed 's/-w [^ ]\+//g' \
@@ -27,7 +29,6 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/-f [^ ]\+//g' \
   | sed 's/-e0 [^ ]\+//g' \
   | sed 's/-e /--epoch /g' \
-  | sed 's/-m /--mode-preproc /g' \
   | sed -E 's/(^| )-uq($| )/\1\2/g' \
   | sed 's/-ps [^ ]\+//g' \
   | sed 's/--//g' \
