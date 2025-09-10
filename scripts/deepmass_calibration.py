@@ -61,20 +61,16 @@ def main(
         shuffle=True, min_idx_filename_ori=min_idx_filename_ori
     )
 
-    # Update arguments for preprocessing
-    _commons.update_kwargs_model(
-        kwargs,
-        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        eps_sup_step_size_wiener=eps_sup_step_size,
-        niter_wiener=niter_wiener, device=device, verbose=verbose
-    )
-
     # Load trained models
     deepmass, deepmass_uq = _commons.load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
         arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        imgsize=imgsize, device=device, verbose=verbose, **kwargs
+        imgsize=imgsize,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose, **kwargs
     )
 
     # Run DeepMass for each batch

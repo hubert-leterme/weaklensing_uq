@@ -247,8 +247,20 @@ def load_trained_model(
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         additional_outlayer=None,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
+        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        noise_whitening_wiener=False,
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER,
         device="cpu", verbose=False, **kwargs
 ):
+    update_kwargs_model(
+        kwargs,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        noise_whitening_wiener=noise_whitening_wiener,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose
+    )
     model, _ = instantiate_model(
         arch, imgsize=imgsize, order2=order2,
         additional_outlayer=additional_outlayer,
@@ -284,15 +296,25 @@ def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=EPOCH,
         load_model_uq=False, checkpoint_dir_uq=None,
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
-        imgsize=IMGSIZE, device="cpu", verbose=False, **kwargs
+        imgsize=IMGSIZE,
+        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        noise_whitening_wiener=False,
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER,
+        device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     if verbose:
         print("Load trained order-1 model")
     model = load_trained_model(
         checkpoint_dir, arch, timestamp, epoch=epoch,
-        imgsize=imgsize, order2=False, device=device,
-        verbose=verbose, **kwargs_model
+        imgsize=imgsize, order2=False,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        noise_whitening_wiener=noise_whitening_wiener,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose,
+        **kwargs_model
     )
     if load_model_uq:
         if checkpoint_dir_uq is None:
@@ -319,6 +341,10 @@ def load_trained_models(
         model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
+            std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+            noise_whitening_wiener=noise_whitening_wiener,
+            eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+            niter_wiener=niter_wiener,
             device=device, verbose=verbose,
             **kwargs_model_uq
         )
