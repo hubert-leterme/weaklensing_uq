@@ -11,7 +11,7 @@ import _commons
 
 OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
-from pnpmass_calibration import OUTPUT_DIR as CQR_DIR
+from deepmass_calibration import OUTPUT_DIR as CQR_DIR
 
 def main(
         path_to_test_dataset: str, checkpoint_dir: str, checkpoint_dir_uq: str=None,
