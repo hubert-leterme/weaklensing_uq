@@ -95,7 +95,7 @@ def main(
             kappa_wiener, var_wiener, kappa_true,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
-            multfact_confidence_uq=multfact_confidence_uq,
+            multfact_confidence_uq=rho,
             addconst_confidence_uq=const,
             device=device, verbose=verbose
         )
