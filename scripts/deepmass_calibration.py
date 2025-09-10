@@ -61,13 +61,13 @@ def main(
         shuffle=True, min_idx_filename_ori=min_idx_filename_ori
     )
 
-    # Load arguments for Wiener initialization
-    args_wienerinit = _commons.get_args_wienerinit(
-        std_noise, mask, path_to_ps=path_to_ps,
-        eps_sup_step_size=eps_sup_step_size, niter=niter_wiener,
-        device=device, verbose=verbose
+    # Update arguments for preprocessing
+    _commons.update_kwargs_model(
+        kwargs,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size,
+        niter_wiener=niter_wiener, device=device, verbose=verbose
     )
-    kwargs.update(args_wienerinit=args_wienerinit)
 
     # Load trained models
     deepmass, deepmass_uq = _commons.load_trained_models(
