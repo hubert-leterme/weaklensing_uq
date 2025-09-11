@@ -87,15 +87,16 @@ def main(
             device=device, verbose=verbose, **kwargs
         )
 
-    # Instantiate physics (forward model)
+    # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
 
     # Instantiate the PnP model
     pnpmass, pnpmass_uq, gaussian_extractor, \
             step_size, callback_gaussian_extractor = \
                 _commons.get_pnpmass(
         denoiser, denoiser_uq, imgsize=imgsize,
-        std_noise=std_noise, mask=mask, physics=physics,
+        std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
         step_size=step_size, eps_sup_step_size=eps_sup_step_size,
         niter=niter, mode=mode,
         which_gaussian_extractor=which_gaussian_extractor,
@@ -120,7 +121,7 @@ def main(
     calib_dataloader = iter(calib_dataset)
     out_pnpmass = _commons.run_pnpmass_batch(
         pnpmass, pnpmass_uq, physics, calib_dataloader, step_size, niter,
-        gaussian_extractor=gaussian_extractor,
+        rmse_fn=rmse_fn, gaussian_extractor=gaussian_extractor,
         callbacks=callbacks,
         device=device, verbose=verbose,
     )

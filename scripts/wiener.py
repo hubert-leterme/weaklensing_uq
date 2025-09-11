@@ -65,8 +65,9 @@ def main(
         num_workers, std_noise, mask, shuffle=False
     )
 
-    # Instantiate physics (forward model)
+    # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
 
     # Instantiate the Wiener model
     wiener = _commons.get_wiener(
@@ -79,10 +80,10 @@ def main(
 
     # Run iterative Wiener for each batch
     test_dataloader = iter(test_dataset)
-    mask = mask.to(device)
+    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
     out_wiener = _commons.run_wiener_batch(
         wiener, physics, test_dataloader,
-        mask=mask, device=device, verbose=verbose,
+        rmse_fn=rmse_fn, device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
     kappa_pred = out_wiener["kappa_pred"]
@@ -93,6 +94,7 @@ def main(
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
+    mask = mask.to(device)
     multfact_confidence_uq, addconst_confidence_uq = \
         _commons.convert_into_param_lists(
             multfact_confidence_uq, addconst_confidence_uq

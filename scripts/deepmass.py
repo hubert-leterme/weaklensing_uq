@@ -2,6 +2,7 @@ import argparse
 import time
 
 import wlmmuq.utils as wlutils
+import wlmmuq.models.deepinv.iterativemm as wlpnp
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
@@ -82,12 +83,14 @@ def main(
         device=device, verbose=verbose, **kwargs
     )
 
+    # Instantiate RMSE metric
+    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+
     # Run DeepMass for each batch
     test_dataloader = iter(test_dataset)
-    mask = mask.to(device)
     out_deepmass = _commons.run_deepmass_batch(
         deepmass, deepmass_uq, test_dataloader,
-        mask=mask, device=device, verbose=verbose,
+        rmse_fn=rmse_fn, device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
     kappa_pred = out_deepmass["kappa_pred"]
@@ -102,6 +105,8 @@ def main(
         _commons.convert_into_param_lists(
             multfact_confidence_uq, addconst_confidence_uq
         )
+
+    mask = mask.to(device)
 
     for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         out_dict = _commons.apply_calibration_and_get_metrics(

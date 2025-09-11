@@ -105,25 +105,27 @@ def main(
     if not isinstance(step_size, list):
         step_size = len(multfact_step_size) * [step_size]
 
-    # Instantiate physics (forward model)
+    # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
 
     multfact_confidence_uq, addconst_confidence_uq = \
         _commons.convert_into_param_lists(
             multfact_confidence_uq, addconst_confidence_uq
         )
 
+    mask = mask.to(device)
+
     for tau, alpha in zip(step_size, multfact_step_size):
         # Initialize iterator
         test_dataloader = iter(test_dataset)
-        mask = mask.to(device)
 
         # Instantiate the PnP model
         pnpmass, pnpmass_uq, gaussian_extractor, \
                 tau, callback_gaussian_extractor = \
                     _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
-            std_noise=std_noise, mask=mask, physics=physics,
+            std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
             step_size=tau, multfact_step_size=alpha,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode=mode,
@@ -149,6 +151,7 @@ def main(
         # Run PnPMass for each batch
         out_pnpmass = _commons.run_pnpmass_batch(
             pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
+            rmse_fn=rmse_fn,
             gaussian_extractor=gaussian_extractor,
             callbacks=callbacks,
             device=device, verbose=verbose,
@@ -157,7 +160,7 @@ def main(
         kappa_pred = out_pnpmass["kappa_pred"]
         var = out_pnpmass["var"]
         rmse = out_pnpmass["rmse"]
-        nrmse = out_pnpmass["nrmse"]
+        rl2norm = out_pnpmass["rl2norm"]
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -183,7 +186,7 @@ def main(
                 "imgsize": imgsize,
                 "confidence_uq": confidence_uq,
                 "rmse": rmse.cpu(),
-                "nrmse": nrmse.cpu(),
+                "rl2norm": rl2norm.cpu(),
             })
             if save_tensors:
                 out_dict.update({
