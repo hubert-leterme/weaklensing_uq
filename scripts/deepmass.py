@@ -106,8 +106,6 @@ def main(
             multfact_confidence_uq, addconst_confidence_uq
         )
 
-    mask = mask.to(device)
-
     for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
         out_dict = _commons.apply_calibration_and_get_metrics(
             kappa_pred, var, kappa_true,

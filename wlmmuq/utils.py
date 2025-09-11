@@ -402,72 +402,6 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
     return list_of_arr_calib, list_of_arr_test
 
 
-def _get_stats(func, *args, mask=None):
-
-    # TODO: replace by a decorator
-    width1, width2 = test_array_shape(args)[-2:]
-    if mask is not None:
-        assert mask.shape[-2:] == (width1, width2)
-
-    vals = func(*args) # shape = (nimgs, [npatches], nx, ny)
-    if mask is not None:
-        vals *= mask # shape = (nimgs, [npatches], nx, ny)
-        npixels = mask.sum(axis=(-2, -1)) # int or shape = (npatches,)
-    else:
-        npixels = width1 * width2
-
-    return vals.sum(axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
-
-
-def miscoverage_rate(kappa_lo, kappa_hi, kappa, mask=None):
-    """
-    Empirical miscoverage rate of the prediction intervals.
-
-    Parameters
-    ----------
-    kappa_lo, kappa_hi (numpy.ndarray)
-        Arrays of shape (nimgs, nx, ny), lower- and upper-bounds of the
-        prediction intervals.
-    kappa (numpy.ndarray)
-        Array of shape (nimgs, nx, ny), ground-truth convergence map.
-    mask (numpy.ndarray, default=None)
-        Array of shape (nx, ny) or (nimgs, nx, ny), boundaries of the shape catalog.
-
-    Returns
-    -------
-    out (numpy.ndarray)
-        Array of shape (nimgs,)
-    
-    """
-    def func(kappa_lo, kappa_hi, kappa):
-        return (kappa < kappa_lo) | (kappa > kappa_hi)
-    return _get_stats(func, kappa_lo, kappa_hi, kappa, mask=mask)
-
-
-def mean_predinterv(kappa_lo, kappa_hi, mask=None):
-    def func(kappa_lo, kappa_hi):
-        return kappa_hi - kappa_lo
-    return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
-
-
-def normalized_mse(kappa_pred, kappa, mask=None, meancentering=True):
-    if meancentering:
-        kappa_pred = meancenter(kappa_pred, mask=mask)
-        kappa = meancenter(kappa, mask=mask)
-    def func(kappa_pred, kappa):
-        return (kappa_pred - kappa)**2
-    return _get_stats(func, kappa_pred, kappa, mask=mask)
-
-
-def rmse(kappa_pred, kappa, **kwargs):
-    return normalized_mse(kappa_pred, kappa, **kwargs)**0.5
-
-
-def mean_val(kappa_pred, mask=None):
-    func = lambda kappa_pred: kappa_pred # identity
-    return _get_stats(func, kappa_pred, mask=mask)
-
-
 def get_emp_variance(func, nreal_noise, *args, **kwargs):
     """
     Get the empirical variance of an estimator by propagating noise multiple times.
@@ -670,28 +604,6 @@ def meancenter(
         mean = unsqueeze(mean)
 
     return arr - mean
-
-
-def get_metrics(pred, res, truth, **kwargs):
-
-    kappa_lo = pred - res
-    kappa_hi = pred + res
-
-    # Error rate per image (over pixels)
-    err = miscoverage_rate(
-        kappa_lo, kappa_hi, truth, **kwargs
-    )
-
-    # Mean length of prediction intervals
-    predinterv = mean_predinterv(
-        kappa_lo, kappa_hi, **kwargs
-    )
-
-    # Mean value for the lower and upper bounds
-    lower = mean_val(kappa_lo, **kwargs)
-    upper = mean_val(kappa_hi, **kwargs)
-
-    return err, predinterv, lower, upper
 
 
 def plot_means_errs(

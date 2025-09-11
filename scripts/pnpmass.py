@@ -114,8 +114,6 @@ def main(
             multfact_confidence_uq, addconst_confidence_uq
         )
 
-    mask = mask.to(device)
-
     for tau, alpha in zip(step_size, multfact_step_size):
         # Initialize iterator
         test_dataloader = iter(test_dataset)

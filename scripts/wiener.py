@@ -94,7 +94,6 @@ def main(
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     # Calibrate with CQR, if available
-    mask = mask.to(device)
     multfact_confidence_uq, addconst_confidence_uq = \
         _commons.convert_into_param_lists(
             multfact_confidence_uq, addconst_confidence_uq

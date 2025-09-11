@@ -175,10 +175,16 @@ class MeancenterMaskMixin:
     def metric(self, x_net, x, *args, **kwargs):
         if self.meancentering:
             x_net = utils.meancenter(x_net, mask=self.mask)
-            x = utils.meancenter(x, mask=self.mask)
+            try:
+                x = utils.meancenter(x, mask=self.mask)
+            except (RuntimeError, AttributeError):
+                x = 0.
         if self.mask is not None:
             x_net = x_net[..., self.mask]
-            x = x[..., self.mask]
+            try:
+                x = x[..., self.mask]
+            except TypeError:
+                pass
         return super().metric(x_net, x, *args, **kwargs)
 
 
@@ -199,6 +205,29 @@ class RMSE(SquareRootMixin, MSE):
 
 class NRMSE(SquareRootMixin, NMSE):
     """Normalized Root Mean Squared Error metric."""
+
+
+class BaseMetricOnLowerUpperBounds(dinv.metric.Metric):
+
+    def metric(self, x_net, x, *args, **kwargs):
+        x_lo = x_net[:, 0]
+        x_hi = x_net[:, 1]
+        out = self._unreduced_metric(x_lo, x_hi, x, *args, **kwargs)
+        return out.mean(dim=tuple(range(1, x.ndim)), keepdim=False)
+
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        raise NotImplementedError
+
+class MetricOnLowerUpperBounds(MeancenterMaskMixin, BaseMetricOnLowerUpperBounds):
+    pass
+
+class MiscoverageRate(MetricOnLowerUpperBounds):
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        return ((x < x_lo) | (x > x_hi)).to(torch.float32)
+
+class PredInterv(MetricOnLowerUpperBounds):
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        return x_hi - x_lo
 
 
 #########################################################################

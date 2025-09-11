@@ -1042,13 +1042,16 @@ def apply_calibration_and_get_metrics(
 
     # Compute miscoverage rate and size of prediction intervals
     beg_time = time.time()
-    err, predinterv, _, _ = wlutils.get_metrics(
-        kappa_pred, res, kappa_true, mask=mask
-    )
+    err_metric = wlpnp.MiscoverageRate(mask=mask).to(device)
+    predinterv_metric = wlpnp.PredInterv(mask=mask).to(device)
+
+    bounds = _get_bounds(kappa_pred, res)
+    err = err_metric(bounds, kappa_true)
+    predinterv = predinterv_metric(bounds, kappa_true)
     if res_cqr is not None:
-        err_cqr, predinterv_cqr, _, _ = wlutils.get_metrics(
-            kappa_pred, res_cqr, kappa_true, mask=mask
-        )
+        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
+        err_cqr = err_metric(bounds_cqr, kappa_true)
+        predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
     else:
         err_cqr = None
         predinterv_cqr = None
@@ -1075,26 +1078,11 @@ def apply_calibration_and_get_metrics(
     return out
 
 
-def get_metrics(
-        kappa_pred, res, kappa_true, res_cqr=None,
-        mask=None, verbose=False
-):
-    beg_time = time.time()
-    err, predinterv, _, _ = wlutils.get_metrics(
-        kappa_pred, res, kappa_true, mask=mask
-    )
-    if res_cqr is not None:
-        err_cqr, predinterv_cqr, _, _ = wlutils.get_metrics(
-            kappa_pred, res_cqr, kappa_true, mask=mask
-        )
-    else:
-        err_cqr = None
-        predinterv_cqr = None
-    metrics_time = time.time() - beg_time
-    if verbose:
-        print(f"Metrics computation time: {metrics_time:.2f} seconds")
-
-    return err, predinterv, err_cqr, predinterv_cqr, metrics_time
+def _get_bounds(kappa_pred, res):
+    kappa_lo = kappa_pred - res
+    kappa_hi = kappa_pred + res
+    out = torch.stack([kappa_lo, kappa_hi], dim=1) # Shape = (nimgs, 2, 1, nx, ny)
+    return out
 
 
 def save_results(
