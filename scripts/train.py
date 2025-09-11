@@ -252,7 +252,7 @@ if __name__ == "__main__":
         "path_to_augmented_dataset", type=str,
         help="Path to the augmented dataset (HDF5 file)"
     )
-    _commons.add_arguments_model(parser)
+    _commons.add_arguments_model(parser, uq=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,

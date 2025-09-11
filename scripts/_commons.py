@@ -19,7 +19,8 @@ from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 from wlmmuq.models.deepinv import callbacks as wlcallbacks
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
+from wlmmuq import CHECKPOINT_DIR, PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, \
+    PATH_TO_TEST_DATASET, PATH_TO_CALIB_DATASET, KEY_REPLACEMENT_DICT
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
@@ -29,6 +30,7 @@ from wlmmuq.models.deepinv.pnpmcalens import \
 NINPIMGS = 100 # Number of input images before cropping
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
 NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augmented dataset)
+MIN_IDX_FILENAME_ORI_CALIB = 58 # To avoid overlaps with the test set
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
@@ -187,6 +189,26 @@ def get_output_type(order2=False, additional_outlayer=None):
     return output_type
 
 
+def get_checkpoint_dirs(
+        checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
+):
+    checkpoint_dir0 = checkpoint_dir
+    if checkpoint_subdir is not None:
+        checkpoint_dir = os.path.join(checkpoint_dir0, checkpoint_subdir)
+    else:
+        raise ValueError("Argument `checkpoint_subdir` must be provided.")
+    if checkpoint_subdir_uq is not None:
+        checkpoint_dir_uq = os.path.join(checkpoint_dir0, checkpoint_subdir_uq)
+        warnings.warn(
+            f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
+            f"the one used for the point estimate ({checkpoint_dir})"
+        )
+    else:
+        checkpoint_dir_uq = checkpoint_dir
+
+    return checkpoint_dir, checkpoint_dir_uq
+
+
 def get_path_to_checkpoint(save_path, timestamp, epoch):
     path_to_checkpoint = os.path.join(
         save_path, timestamp, f"ckp_{epoch}.pth.tar"
@@ -317,13 +339,6 @@ def load_trained_models(
         **kwargs_model
     )
     if load_model_uq:
-        if checkpoint_dir_uq is None:
-            checkpoint_dir_uq = checkpoint_dir
-        else:
-            warnings.warn(
-                f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
-                f"the one used for the point estimate ({checkpoint_dir})"
-            )
         if arch_uq is None:
             arch_uq = arch
             kwargs_model_uq = kwargs_model.copy()
@@ -961,13 +976,13 @@ def instantiate_cqr(
             "Supported modes are 'addcqr' and 'multcqr'."
         )
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-    cqr = cqr_class(alpha, map_size=imgsize).to(device)
+    cqr = cqr_class(alpha, map_size=imgsize).eval().to(device)
 
     return cqr
 
 
 def get_cqr(
-        kappa_pred, var, kappa_true,
+        kappa_pred_calib, var_calib, kappa_true_calib,
         confidence_uq=CONFIDENCE_UQ,
         imgsize=IMGSIZE, mode=MODE_CQR,
         multfact_confidence_uq=None,
@@ -976,8 +991,8 @@ def get_cqr(
 ):
     if verbose:
         print("Instantiate CQR model and compute the calibration parameters")
-    res = get_error_bars(
-        var, confidence_uq=confidence_uq,
+    res_calib = get_error_bars(
+        var_calib, confidence_uq=confidence_uq,
         multfact_confidence_uq=multfact_confidence_uq,
         addconst_confidence_uq=addconst_confidence_uq
     )
@@ -985,22 +1000,31 @@ def get_cqr(
         confidence_uq=confidence_uq, imgsize=imgsize,
         mode=mode, device=device
     )
-    cqr.calibrate(kappa_pred, res, kappa_true)
+    cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
 
     return cqr
 
 
 def apply_calibration_and_get_metrics(
         kappa_pred, var, kappa_true,
-        path_to_cqr, timestamp_cqr,
+        kappa_pred_calib, var_calib, kappa_true_calib,
         confidence_uq=CONFIDENCE_UQ,
         imgsize=IMGSIZE, mode=MODE_CQR,
-        step_size=None,
         multfact_confidence_uq=None,
         addconst_confidence_uq=None,
         mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
         device="cpu", verbose=False
 ):
+    # Compute the calibration parameters on the calibration set
+    cqr = get_cqr(
+        kappa_pred_calib, var_calib, kappa_true_calib,
+        confidence_uq=confidence_uq,
+        imgsize=imgsize, mode=mode,
+        multfact_confidence_uq=multfact_confidence_uq,
+        addconst_confidence_uq=addconst_confidence_uq,
+        device=device, verbose=verbose
+    )
+
     # Compute pre-calibration residuals
     res = get_error_bars(
         var, confidence_uq=confidence_uq,
@@ -1008,74 +1032,38 @@ def apply_calibration_and_get_metrics(
         addconst_confidence_uq=addconst_confidence_uq
     )
 
-    if path_to_cqr is not None:
-        # Load the file containing the calibration parameters
-        beg_time = time.time()
-        cqr = instantiate_cqr(
-            confidence_uq=confidence_uq, imgsize=imgsize,
-            mode=mode, device=device
-        )
-        path_to_cqr = _complete_path_to_torch_saved_objects(
-            path_to_cqr, timestamp_cqr, step_size=step_size,
-            multfact_confidence_uq=multfact_confidence_uq,
-            addconst_confidence_uq=addconst_confidence_uq
-        )
-        if verbose:
-            print(f"Load calibration parameters from {path_to_cqr}")
-        checkpoint_cqr = torch.load(path_to_cqr)
-        nimgs_calib = checkpoint_cqr["nimgs_calib"]
-        cqr.load_state_dict(checkpoint_cqr["state_dict"])
-        cqr.eval().to(device)
-
-        # Apply calibration
-        if verbose:
-            print("Calibrate residuals with CQR")
-        res_cqr = cqr(res)
-        cqr_time = time.time() - beg_time
-        if verbose:
-            print(f"Calibration time: {cqr_time:.2f} seconds")
-
-    else:
-        nimgs_calib = None
-        res_cqr = None
-        cqr_time = None
+    # Apply calibration
+    if verbose:
+        print("Calibrate residuals with CQR")
+    res_cqr = cqr(res)
 
     # Compute miscoverage rate and size of prediction intervals
-    beg_time = time.time()
     err_metric = wlpnp.MiscoverageRate(mask=mask).to(device)
     predinterv_metric = wlpnp.PredInterv(mask=mask).to(device)
 
     bounds = _get_bounds(kappa_pred, res)
     err = err_metric(bounds, kappa_true)
     predinterv = predinterv_metric(bounds, kappa_true)
-    if res_cqr is not None:
-        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-        err_cqr = err_metric(bounds_cqr, kappa_true)
-        predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
-    else:
-        err_cqr = None
-        predinterv_cqr = None
-    metrics_time = time.time() - beg_time
-    if verbose:
-        print(f"Metrics computation time: {metrics_time:.2f} seconds")
 
-    out = {
-        "cqr_time": cqr_time,
-        "metrics_time": metrics_time,
-        "nimgs_calib": nimgs_calib,
+    bounds_cqr = _get_bounds(kappa_pred, res_cqr)
+    err_cqr = err_metric(bounds_cqr, kappa_true)
+    predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
+
+    out_dict = {
+        "state_dict_cqr": cqr.state_dict(),
         "err": err.cpu(),
         "predinterv": predinterv.cpu(),
         "err_cqr": err_cqr.cpu(),
         "predinterv_cqr": predinterv_cqr.cpu(),
     }
     if save_tensors:
-        out.update({
+        out_dict.update({
             "res": res[:nimgs_save].cpu(),
             "res_cqr": res_cqr[:nimgs_save].cpu() \
                 if res_cqr is not None else None,
         })
 
-    return out
+    return out_dict
 
 
 def _get_bounds(kappa_pred, res):
@@ -1087,15 +1075,10 @@ def _get_bounds(kappa_pred, res):
 
 def save_results(
         out_dict, path_to_output, now,
-        step_size=None,
-        multfact_confidence_uq=None,
-        addconst_confidence_uq=None,
-        verbose=False
+        verbose=False, **kwargs
 ):
     path_to_output = _complete_path_to_torch_saved_objects(
-        path_to_output, now, step_size=step_size,
-        multfact_confidence_uq=multfact_confidence_uq,
-        addconst_confidence_uq=addconst_confidence_uq
+        path_to_output, now, **kwargs
     )
     if verbose:
         print(f"Save results to {path_to_output}")
@@ -1104,16 +1087,10 @@ def save_results(
 
 
 def _complete_path_to_torch_saved_objects(
-        path, timestamp, step_size=None,
-        multfact_confidence_uq=None,
-        addconst_confidence_uq=None
+        path, timestamp, step_size=None
 ):
     if step_size is not None:
         path = f"{path}_step-size_{step_size:.3f}"
-    if multfact_confidence_uq is not None:
-        path = f"{path}_rho_{multfact_confidence_uq:.3f}"
-    if addconst_confidence_uq is not None:
-        path = f"{path}_const_{addconst_confidence_uq:.3f}"
     path = f"{path}_{timestamp}.pt"
 
     return path
@@ -1152,61 +1129,7 @@ def add_arguments_create_dataset(parser):
     )
 
 
-def add_arguments_uq(parser):
-
-    parser.add_argument(
-        "--mode-cqr", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
-            f"Default = {MODE_CQR}"
-        )
-    )
-    parser.add_argument(
-        "--confidence-uq", type=float,
-        default=argparse.SUPPRESS,
-        help=f"Level of confidence for UQ. Default = {CONFIDENCE_UQ:.1f}-sigma"
-    )
-    parser.add_argument(
-        "-rho", "--multfact-confidence-uq", type=float, nargs='+',
-        default=argparse.SUPPRESS,
-        help=(
-            "Multiplicative factor for the level of confidence for UQ. "
-            "Several values can be provided. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "-const", "--addconst-confidence-uq", type=float, nargs='+',
-        default=argparse.SUPPRESS,
-        help=(
-            "Additive constant for the level of confidence for UQ. "
-            "Several values can be provided. "
-            "Default = None"
-        )
-    )
-
-
-def add_arguments_cqr(parser):
-
-    parser.add_argument(
-        "-cqr", "--cqr-filename", type=str, default=None,
-        help=(
-            "Filename for the calibration parameters (without '_rho_...', without timestamp, "
-            "without extension). If provided, the residuals will be calibrated with CQR."
-        )
-    )
-    parser.add_argument(
-        "-tcqr", "--timestamp-cqr", type=str, default=None,
-        help=(
-            "Timestamp of the calibration parameters to load. "
-            "Must be provided if `-cqr` is provided. "
-            "Default = None"
-        )
-    )
-
-
-def add_arguments_model(parser):
+def add_arguments_model(parser, uq=False):
 
     parser.add_argument(
         "-a", "--arch", type=str,
@@ -1240,17 +1163,18 @@ def add_arguments_model(parser):
             "Default = None"
         )
     )
-    parser.add_argument(
-        "--additional-outlayer", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Type of additional output layer. "
-            "Only used for training order-2 models. "
-            "Possible values are: 'meancentering' | 'leakyrelu'. "
-            "In any case, ReLU is applied at the output in evaluation mode. "
-            "Default = None"
+    if uq:
+        parser.add_argument(
+            "--additional-outlayer", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Type of additional output layer. "
+                "Only used for training order-2 models. "
+                "Possible values are: 'meancentering' | 'leakyrelu'. "
+                "In any case, ReLU is applied at the output in evaluation mode. "
+                "Default = None"
+            )
         )
-    )
 
 
 def add_arguments_model_order1(parser):
@@ -1339,6 +1263,20 @@ def add_arguments_model_uq(parser):
 def add_arguments_checkpoint(parser):
 
     parser.add_argument(
+        "--checkpoint-dir", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            f"Checkpoint parent directory. Default = {CHECKPOINT_DIR}"
+        )
+    )
+    parser.add_argument(
+        "-c", "--checkpoint-subdir", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Subdirectory containing the save checkpoints. Default is None."
+        )
+    )
+    parser.add_argument(
         "-t", "--timestamp", type=str,
         default=argparse.SUPPRESS,
         help=(
@@ -1362,11 +1300,11 @@ def add_arguments_checkpoint(parser):
         )
     )
     parser.add_argument(
-        "--checkpoint-dir-uq", type=str,
+        "-c0", "--checkpoint-subdir-uq", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Checkpoint directory for the order-2 moment network, "
-            "if different from `checkpoint_dir`."
+            "Checkpoint subdirectory for the order-2 moment network, "
+            "if different from `--checkpoint-subdir`."
         )
     )
     parser.add_argument(
@@ -1406,14 +1344,6 @@ def add_arguments_dataset(parser, batch_size):
         )
     )
     parser.add_argument(
-        "-f", "--min-idx-filename-ori",
-        type=int, default=argparse.SUPPRESS,
-        help=(
-            "Filter images by filenames with indices equal or larger than this value. "
-            "Default is None."
-        )
-    )
-    parser.add_argument(
         "-w", "--num-workers", type=int,
         default=argparse.SUPPRESS,
         help=(
@@ -1423,8 +1353,24 @@ def add_arguments_dataset(parser, batch_size):
     )
 
 
-def add_arguments_test_dataset(parser, batch_size):
+def add_arguments_test_calib_dataset(parser, batch_size):
 
+    parser.add_argument(
+        "--path-to-test-dataset", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the test set (HDF5 file). "
+            f"Default = {PATH_TO_TEST_DATASET}"
+        )
+    )
+    parser.add_argument(
+        "--path-to-calib-dataset", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the calibration set (HDF5 file). "
+            f"Default = {PATH_TO_CALIB_DATASET}"
+        )
+    )
     parser.add_argument(
         "--nimgs-test", type=int,
         default=argparse.SUPPRESS,
@@ -1433,11 +1379,6 @@ def add_arguments_test_dataset(parser, batch_size):
             f"Default = {NIMGS_TEST}"
         )
     )
-    add_arguments_dataset(parser, batch_size)
-
-
-def add_arguments_calib_dataset(parser, batch_size):
-
     parser.add_argument(
         "--nimgs-calib", type=int,
         default=argparse.SUPPRESS,
@@ -1446,7 +1387,58 @@ def add_arguments_calib_dataset(parser, batch_size):
             f"Default = {NIMGS_CALIB}"
         )
     )
+    parser.add_argument(
+        "-f", "--min-idx-filename-ori-calib",
+        type=int, default=argparse.SUPPRESS,
+        help=(
+            "Filter images by filenames with indices equal or larger than this value. "
+            f"Default = {MIN_IDX_FILENAME_ORI_CALIB}."
+        )
+    )
     add_arguments_dataset(parser, batch_size)
+
+
+def add_arguments_cqr(parser, zero_init_bounds=False):
+
+    parser.add_argument(
+        "--cqr", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Calibrate with CQR."
+        )
+    )
+    parser.add_argument(
+        "--mode-cqr", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
+            f"Default = {MODE_CQR}"
+        )
+    )
+    parser.add_argument(
+        "--confidence-uq", type=float,
+        default=argparse.SUPPRESS,
+        help=f"Level of confidence for UQ. Default = {CONFIDENCE_UQ:.1f}-sigma"
+    )
+    if not zero_init_bounds:
+        parser.add_argument(
+            "-rho", "--multfact-confidence-uq", type=float, nargs='+',
+            default=argparse.SUPPRESS,
+            help=(
+                "Multiplicative factor for the level of confidence for UQ. "
+                "Several values can be provided. "
+                "Default = None"
+            )
+        )
+        parser.add_argument(
+            "-const", "--addconst-confidence-uq", type=float, nargs='+',
+            default=argparse.SUPPRESS,
+            help=(
+                "Additive constant for the level of confidence for UQ. "
+                "Several values can be provided. "
+                "Default = None"
+            )
+        )
 
 
 def add_arguments_wiener(parser):

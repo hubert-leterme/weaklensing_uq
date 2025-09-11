@@ -1,45 +1,39 @@
 #!/bin/bash
 
-# Set paths
-path_to_test_dataset=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped_384.hdf5
-
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <GPU_ID> <CHECKPOINT_DIR> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 checkpoint/dir/ -cqr path/to/cqr.pt -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss [-w 8]"
+  echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 -a torch.UNetPreproc -m wiener -t yyyymmdd_hhmmss -e20 -uq -auq torch.UNetPreproc -muq ks -t0 yyyymmdd_hhmmss --cqr -w 8"
   exit 1
 fi
 
-checkpoint_dir="$2"
-optional_args="${@:3}"
+optional_args="${@:2}"
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
-  | sed 's|--checkpoint-dir-uq [^ ]\+|alternativemn|g' \
-  | sed 's/-auq [^ ]\+//g' \
-  | sed 's/-suq /--model-size-uq /g' \
-  | sed 's/-muq /--mode-preproc-uq /g' \
-  | sed 's/-cqr [^ ]\+//g' \
-  | sed 's/-tcqr [^ ]\+//g' \
-  | sed 's/-a [^ ]\+//g' \
-  | sed 's/-s [^ ]\+//g' \
-  | sed 's/-m [^ ]\+//g' \
-  | sed 's/-t [^ ]\+//g' \
-  | sed 's/-t0 [^ ]\+//g' \
-  | sed 's/-w [^ ]\+//g' \
-  | sed 's/-b [^ ]\+//g' \
-  | sed 's/-f [^ ]\+//g' \
-  | sed 's/-e0 [^ ]\+//g' \
-  | sed 's/-e /--epoch /g' \
-  | sed -E 's/(^| )-uq($| )/\1\2/g' \
-  | sed 's/-ps [^ ]\+//g' \
-  | sed 's/--//g' \
+  | xargs -n1 \
+  | awk '
+    /^-/ {
+      if (NR > 1) printf "\n";
+      printf "%s", $0;
+      next
+    }
+    { printf " %s", $0 }
+    END { printf "\n" }
+  ' \
+  | grep -E '^(-e|-c0|-e0|--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|--niter-wiener|-nw)' \
+  | sed -E 's/^-e($| )/--epoch\1/' \
+  | sed 's/-c0 [^ ]\+/alternativemn/g' \
+  | sed -E 's/^-e0($| )/--epoch-uq\1/' \
+  | sed -E 's/^-b($| )/--batch-size\1/' \
+  | sed -E 's/^-nw($| )/--noise-whitening-wiener\1/' \
   | xargs \
+  | sed 's/--//g' \
   | sed 's/ /_/g')
 output_filename=$(echo "results_deepmass_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
 # Command to execute
-cmd=$(echo "python scripts/deepmass.py ${path_to_test_dataset} ${checkpoint_dir} ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/deepmass.py ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

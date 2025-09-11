@@ -1,23 +1,36 @@
 #!/bin/bash
 
-# Set paths
-path_to_test_dataset=/ceph/chercheurs/leterme231/kappaTNG_cropped/LP001_cropped_384.hdf5
-
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <GPU_ID> <OUTPUT_DIR> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 output/dir/ -cqr path/to/cqr.pt [-w 8]"
+  echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
+  echo "Example: $0 0 --cqr -w 8"
   exit 1
 fi
 
-output_dir="$2"
-optional_args="${@:3}"
+optional_args="${@:2}"
 
-# Create output directory if needed
-mkdir -p ${output_dir}
+# Set output filename
+optional_args_cleaned=$(echo "$optional_args" \
+  | xargs -n1 \
+  | awk '
+    /^-/ {
+      if (NR > 1) printf "\n";
+      printf "%s", $0;
+      next
+    }
+    { printf " %s", $0 }
+    END { printf "\n" }
+  ' \
+  | grep -E '^(--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|--niter-wiener|-nw)' \
+  | sed -E 's/^-b($| )/--batch-size\1/' \
+  | sed -E 's/^-nw($| )/--noise-whitening-wiener\1/' \
+  | xargs \
+  | sed 's/--//g' \
+  | sed 's/ /_/g')
+output_filename=$(echo "results_wiener_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
 # Command to execute
-cmd=$(echo "python scripts/wiener.py ${path_to_test_dataset} ${output_dir} ${optional_args} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/wiener.py ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"

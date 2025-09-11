@@ -41,6 +41,9 @@ if COSMOS_DIR is not None:
 KTNG_DIR = CONFIG_DATA.get('ktng_dir', None)
 if KTNG_DIR is not None:
     KTNG_DIR = os.path.expanduser(KTNG_DIR)
+CHECKPOINT_DIR = CONFIG_DATA.get('checkpoint_dir', None)
+if CHECKPOINT_DIR is not None:
+    CHECKPOINT_DIR = os.path.expanduser(CHECKPOINT_DIR)
 
 PATH_TO_STD_NOISE = CONFIG_DATA.get('path_to_std_noise', None)
 if PATH_TO_STD_NOISE is not None:
@@ -51,6 +54,13 @@ if PATH_TO_MASK is not None:
 PATH_TO_PS = CONFIG_DATA.get('path_to_ps', None)
 if PATH_TO_PS is not None:
     PATH_TO_PS = os.path.expanduser(PATH_TO_PS)
+
+PATH_TO_TEST_DATASET = CONFIG_DATA.get('path_to_test_dataset', None)
+if PATH_TO_TEST_DATASET is not None:
+    PATH_TO_TEST_DATASET = os.path.expanduser(PATH_TO_TEST_DATASET)
+PATH_TO_CALIB_DATASET = CONFIG_DATA.get('path_to_calib_dataset', None)
+if PATH_TO_CALIB_DATASET is not None:
+    PATH_TO_CALIB_DATASET = os.path.expanduser(PATH_TO_CALIB_DATASET)
 
 LEARNLETS_PRETRAINED_WEIGHTS_DIR = CONFIG_DATA.get('learnlets_pretrained_weights_dir', None)
 if LEARNLETS_PRETRAINED_WEIGHTS_DIR is not None:

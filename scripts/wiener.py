@@ -1,55 +1,49 @@
+import os
 import argparse
 import time
 
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 
+OUTPUT_DIR = os.path.join(_commons.CHECKPOINT_DIR, "wiener")
 OUTPUT_FILENAME = "results_wiener"
 
 def main(
-        path_to_test_dataset: str, output_dir: str,
-        path_to_std_noise: str=PATH_TO_STD_NOISE,
-        path_to_mask: str=PATH_TO_MASK,
-        path_to_ps: str=PATH_TO_PS,
+        path_to_test_dataset: str=_commons.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str=_commons.PATH_TO_CALIB_DATASET,
+        path_to_std_noise: str=_commons.PATH_TO_STD_NOISE,
+        path_to_mask: str=_commons.PATH_TO_MASK,
+        path_to_ps: str=_commons.PATH_TO_PS,
         niter_wiener: int=NITER_WIENER,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_WIENER,
         nimgs_test: int=_commons.NIMGS_TEST,
+        cqr: bool=False,
+        nimgs_calib: int=_commons.NIMGS_CALIB,
+        min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
-        multfact_confidence_uq: float=None,
-        addconst_confidence_uq: float=None,
-        cqr_filename: str=None, timestamp_cqr: str=None,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
-        output_filename: str=OUTPUT_FILENAME,
+        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
 ):
     _commons.set_seed(seed)
 
-    if cqr_filename is not None:
-        path_to_cqr = _commons.get_path_to_output(
-            output_dir, cqr_filename
-        ) # E.g., "checkpoint/dir/cqr_wiener"
-    else:
-        path_to_cqr = None
     path_to_output = _commons.get_path_to_output(
         output_dir, output_filename
-    ) # E.g., "output/dir/results_wiener"
+    ) # E.g., "checkpoint/dir/wiener/results_wiener"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
     if verbose:
         print(f"Number of workers: {num_workers}")
-
-    beg_time = time.time()
 
     # Load noise standard deviation and mask
     std_noise, mask = _commons.get_stdnoise_mask(
@@ -65,9 +59,21 @@ def main(
         num_workers, std_noise, mask, shuffle=False
     )
 
+    # Load calibration set, if provided
+    if cqr:
+        calib_dataset = _commons.get_dataloader_massmapping(
+            path_to_calib_dataset, nimgs_calib, imgsize, batch_size,
+            num_workers, std_noise, mask,
+            shuffle=True, min_idx_filename_ori=min_idx_filename_ori_calib
+        )
+    else:
+        calib_dataset = None
+
     # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+
+    beg_time = time.time()
 
     # Instantiate the Wiener model
     wiener = _commons.get_wiener(
@@ -80,7 +86,9 @@ def main(
 
     # Run iterative Wiener for each batch
     test_dataloader = iter(test_dataset)
-    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+    if verbose:
+        print(f"Compute Wiener on the test set ({nimgs_test} images)")
+
     out_wiener = _commons.run_wiener_batch(
         wiener, physics, test_dataloader,
         rmse_fn=rmse_fn, device=device, verbose=verbose,
@@ -89,63 +97,77 @@ def main(
     kappa_pred = out_wiener["kappa_pred"]
     var = out_wiener["var"]
     rmse = out_wiener["rmse"]
-    nrmse = out_wiener["nrmse"]
+    rl2norm = out_wiener["rl2norm"]
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
-    # Calibrate with CQR, if available
-    multfact_confidence_uq, addconst_confidence_uq = \
-        _commons.convert_into_param_lists(
-            multfact_confidence_uq, addconst_confidence_uq
-        )
+    out_dict = {
+        "inference_time": inference_time,
+        "niter": niter_wiener,
+        "nimgs_test": nimgs_test,
+        "imgsize": imgsize,
+        "confidence_uq": confidence_uq,
+        "rmse": rmse.cpu(),
+        "rl2norm": rl2norm.cpu(),
+    }
+    if save_tensors:
+        out_dict.update({
+            "kappa_true": kappa_true[:nimgs_save].cpu(),
+            "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+            "var": var[:nimgs_save].cpu(),
+        })
 
-    for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
-        out_dict = _commons.apply_calibration_and_get_metrics(
+    # Calibrate with CQR, if available
+    if calib_dataset is not None:
+        beg_time = time.time()
+
+        calib_dataloader = iter(calib_dataset)
+        if verbose:
+            print(f"Compute Wiener on the calibration set ({nimgs_calib} images)")
+        out_wiener_calib = _commons.run_wiener_batch(
+            wiener, physics, calib_dataloader,
+            rmse_fn=rmse_fn, device=device, verbose=verbose,
+        )
+        kappa_true_calib = out_wiener_calib["kappa_true"]
+        kappa_pred_calib = out_wiener_calib["kappa_pred"]
+        var_calib = out_wiener_calib["var"]
+
+        uq_dict = _commons.apply_calibration_and_get_metrics(
             kappa_pred, var, kappa_true,
-            path_to_cqr, timestamp_cqr,
+            kappa_pred_calib, var_calib, kappa_true_calib,
             confidence_uq=confidence_uq,
             imgsize=imgsize, mode=mode_cqr,
-            multfact_confidence_uq=rho,
-            addconst_confidence_uq=const,
             mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
             device=device, verbose=verbose
         )
-        out_dict.update({
-            "inference_time": inference_time,
-            "niter": niter_wiener,
-            "nimgs_test": nimgs_test,
-            "imgsize": imgsize,
-            "confidence_uq": confidence_uq,
-            "rmse": rmse.cpu(),
-            "nrmse": nrmse.cpu(),
-        })
-        if save_tensors:
-            out_dict.update({
-                "kappa_true": kappa_true[:nimgs_save].cpu(),
-                "kappa_pred": kappa_pred[:nimgs_save].cpu(),
-                "var": var[:nimgs_save].cpu(),
-            })
-        _commons.save_results(
-            out_dict, path_to_output, now,
-            multfact_confidence_uq=rho,
-            addconst_confidence_uq=const,
-            verbose=verbose
+        out_dict.update({"uq": uq_dict})
+
+        calibration_time = _commons.get_inference_time(
+            beg_time, which="calibration", verbose=verbose
         )
+        out_dict.update({
+            "calibration_time": calibration_time,
+            "nimgs_calib": nimgs_calib,
+        })
+
+    _commons.save_results(
+        out_dict, path_to_output, now, verbose=verbose
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
-        "path_to_test_dataset", type=str,
-        help="Path to the test set (HDF5 file)"
+        "--output-dir", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Output directory (where the results will be saved). "
+            f"Default = {OUTPUT_DIR}"
+        )
     )
-    parser.add_argument(
-        "output_dir", type=str,
-        help="Output directory (where the results will be saved)"
-    )
-    _commons.add_arguments_uq(parser)
-    _commons.add_arguments_cqr(parser)
-    _commons.add_arguments_test_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _commons.add_arguments_cqr(parser, zero_init_bounds=True)
     _commons.add_arguments_wiener(parser)
     _commons.add_arguments_output(parser, OUTPUT_FILENAME)
     _commons.add_arguments_seed_verbose(parser)
