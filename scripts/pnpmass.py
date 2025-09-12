@@ -221,8 +221,13 @@ def main(
                     mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                     device=device, verbose=verbose
                 )
+                uq_key = "uq"
+                if rho is not None:
+                    uq_key = f"{uq_key}_rho_{rho:.3f}"
+                if const is not None:
+                    uq_key = f"{uq_key}_const_{const:.3f}"
                 out_dict.update({
-                    ("uq", rho, const): uq_dict
+                    uq_key: uq_dict
                 })
 
             calibration_time = _commons.get_inference_time(
