@@ -779,6 +779,7 @@ def run_pnpmass_batch(
 
             if gaussian_extractor is not None:
                 kappa_pred = kappa_pred + kappa_g
+                kappa_true = kappa_true + kappa_g
 
             if rmse_fn is not None:
                 rl2norm = rmse_fn(kappa_true, 0)
