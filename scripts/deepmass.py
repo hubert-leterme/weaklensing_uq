@@ -160,8 +160,9 @@ def main(
                 mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                 device=device, verbose=verbose
             )
+            uq_key = _commons.get_uq_keys(rho=rho, const=const)
             out_dict.update({
-                ("uq", rho, const): uq_dict
+                uq_key: uq_dict
             })
 
         calibration_time = _commons.get_inference_time(

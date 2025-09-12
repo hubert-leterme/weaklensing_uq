@@ -1067,6 +1067,15 @@ def apply_calibration_and_get_metrics(
     return out_dict
 
 
+def get_uq_keys(rho=None, const=None):
+    uq_key = "uq"
+    if rho is not None:
+        uq_key = f"{uq_key}_rho_{rho:.3f}"
+    if const is not None:
+        uq_key = f"{uq_key}_const_{const:.3f}"
+    return uq_key
+
+
 def _get_bounds(kappa_pred, res):
     kappa_lo = kappa_pred - res
     kappa_hi = kappa_pred + res

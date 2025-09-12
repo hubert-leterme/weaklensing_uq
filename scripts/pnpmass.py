@@ -221,11 +221,7 @@ def main(
                     mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                     device=device, verbose=verbose
                 )
-                uq_key = "uq"
-                if rho is not None:
-                    uq_key = f"{uq_key}_rho_{rho:.3f}"
-                if const is not None:
-                    uq_key = f"{uq_key}_const_{const:.3f}"
+                uq_key = _commons.get_uq_keys(rho=rho, const=const)
                 out_dict.update({
                     uq_key: uq_dict
                 })
