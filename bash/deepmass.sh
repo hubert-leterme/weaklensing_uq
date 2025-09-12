@@ -3,7 +3,7 @@
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 -a torch.UNetPreproc -m wiener -t yyyymmdd_hhmmss -e20 -uq -auq torch.UNetPreproc -muq ks -t0 yyyymmdd_hhmmss --cqr -w 8"
+  echo "Example: $0 0 -c subdir -a torch.UNetPreproc -m wiener -t yyyymmdd_hhmmss -e20 -uq -auq torch.UNetPreproc -muq ks -t0 yyyymmdd_hhmmss -e 20 --cqr -w 8 --save-tensors"
   exit 1
 fi
 
