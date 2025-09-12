@@ -444,7 +444,7 @@ class Meancentering(nn.Module):
     Module for meancentering the input tensor.
     """
     def forward(self, x):
-        return utils.meancenter(x)
+        return utils.meancenter(x, axis=tuple(range(1, x.ndim)))
 
 
 class Concatenate(nn.Module):

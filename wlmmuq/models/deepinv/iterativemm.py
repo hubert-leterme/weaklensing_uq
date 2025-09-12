@@ -149,7 +149,7 @@ class ProximalWiener(nn.Module):
         out /= (1 + g_param / self.powerspectrum)
         out = torch.fft.ifft2(out)
         if self.meancentering:
-            out = utils.meancenter(out)
+            out = utils.meancenter(out, axis=tuple(range(1, out.ndim)))
 
         return out.real
 
@@ -174,9 +174,15 @@ class MeancenterMaskMixin:
 
     def metric(self, x_net, x, *args, **kwargs):
         if self.meancentering:
-            x_net = utils.meancenter(x_net, mask=self.mask)
+            x_net = utils.meancenter(
+                x_net, mask=self.mask,
+                axis=tuple(range(1, x_net.ndim))
+            )
             try:
-                x = utils.meancenter(x, mask=self.mask)
+                x = utils.meancenter(
+                    x, mask=self.mask,
+                    axis=tuple(range(1, x.ndim))
+                )
             except (RuntimeError, AttributeError):
                 x = 0.
         if self.mask is not None:
