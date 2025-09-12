@@ -1039,8 +1039,8 @@ def apply_calibration_and_get_metrics(
     res_cqr = cqr(res)
 
     # Compute miscoverage rate and size of prediction intervals
-    err_metric = wlpnp.MiscoverageRate(mask=mask).to(device)
-    predinterv_metric = wlpnp.PredInterv(mask=mask).to(device)
+    err_metric = wlpnp.MiscoverageRate(meancentering=False, mask=mask).to(device)
+    predinterv_metric = wlpnp.PredInterv(meancentering=False, mask=mask).to(device)
 
     bounds = _get_bounds(kappa_pred, res)
     err = err_metric(bounds, kappa_true)
