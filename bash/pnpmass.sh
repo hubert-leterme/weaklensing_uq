@@ -3,7 +3,7 @@
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 -c subdir -a torch.SUNetNoiseAware -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss --cqr -i 8 -w 8 --save-tensors"
+  echo "Example: $0 0 -c subdir -a torch.SUNetNoiseAware -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss -i 8 --cqr -w 8 --save-tensors"
   exit 1
 fi
 
