@@ -170,7 +170,7 @@ def main(
         kappa_pred = out_pnpmass["kappa_pred"]
         var = out_pnpmass["var"]
         rmse = out_pnpmass["rmse"]
-        rl2norm = out_pnpmass["rl2norm"]
+        l2norm = out_pnpmass["l2norm"]
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -183,7 +183,7 @@ def main(
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
             "rmse": rmse.cpu(),
-            "rl2norm": rl2norm.cpu(),
+            "l2norm": l2norm.cpu(),
         }
         if save_tensors:
             out_dict.update({

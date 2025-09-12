@@ -692,7 +692,7 @@ def run_wiener_batch(
     listof_kappa_pred = []
     listof_var = [] # Zero-valued tensors
     listof_rmse = []
-    listof_rl2norm = []
+    listof_l2norm = []
 
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     for kappa_true, gamma_noisy in pbar:
@@ -703,33 +703,33 @@ def run_wiener_batch(
             var = torch.zeros(kappa_true.shape, device=device)
             if rmse_fn is not None:
                 rmse = rmse_fn(kappa_pred, kappa_true)
-                rl2norm = rmse_fn(kappa_true, 0)
+                l2norm = rmse_fn(kappa_true, 0)
             else:
                 rmse = None
-                rl2norm = None
+                l2norm = None
 
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_rl2norm.append(rl2norm) # Shape = (batch_size,)
+            listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
-        rl2norm = torch.cat(listof_rl2norm, dim=0) # Shape = (nimgs,)
+        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
     except TypeError:
         rmse = None
-        rl2norm = None
+        l2norm = None
 
     out = {
         "kappa_true": kappa_true,
         "kappa_pred": kappa_pred,
         "var": var,
         "rmse": rmse,
-        "rl2norm": rl2norm,
+        "l2norm": l2norm,
     }
     return out
 
@@ -747,7 +747,7 @@ def run_pnpmass_batch(
     listof_kappa_pred = []
     listof_var = []
     listof_rmse = []
-    listof_rl2norm = []
+    listof_l2norm = []
 
     if callbacks is None:
         callbacks = wlcallbacks.BaseCallback()
@@ -782,32 +782,32 @@ def run_pnpmass_batch(
                 kappa_true = kappa_true + kappa_g
 
             if rmse_fn is not None:
-                rl2norm = rmse_fn(kappa_true, 0)
+                l2norm = rmse_fn(kappa_true, 0)
             else:
-                rl2norm = None
+                l2norm = None
 
         listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_rmse.append(metrics["rmse"]) # Shape = (batch_size, niter)
-        listof_rl2norm.append(rl2norm) # Shape = (batch_size, niter)
+        listof_l2norm.append(l2norm) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
-        rl2norm = torch.cat(listof_rl2norm, dim=0) # Shape = (nimgs, niter)
+        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs, niter)
     except TypeError:
         rmse = None
-        rl2norm = None
+        l2norm = None
 
     out = {
         "kappa_true": kappa_true,
         "kappa_pred": kappa_pred,
         "var": var,
         "rmse": rmse,
-        "rl2norm": rl2norm,
+        "l2norm": l2norm,
     }
     return out
 
@@ -822,7 +822,7 @@ def run_deepmass_batch(
     listof_kappa_pred = []
     listof_var = []
     listof_rmse = []
-    listof_rl2norm = []
+    listof_l2norm = []
 
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     for kappa_true, gamma_noisy in pbar:
@@ -836,33 +836,33 @@ def run_deepmass_batch(
                 var = torch.zeros(kappa_true.shape, device=device)
             if rmse_fn is not None:
                 rmse = rmse_fn(kappa_pred, kappa_true)
-                rl2norm = rmse_fn(kappa_true, 0)
+                l2norm = rmse_fn(kappa_true, 0)
             else:
                 rmse = None
-                rl2norm = None
+                l2norm = None
 
             listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
             listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_rl2norm.append(rl2norm) # Shape = (batch_size,)
+            listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
-        rl2norm = torch.cat(listof_rl2norm, dim=0) # Shape = (nimgs,)
+        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
     except TypeError:
         rmse = None
-        rl2norm = None
+        l2norm = None
 
     out = {
         "kappa_true": kappa_true,
         "kappa_pred": kappa_pred,
         "var": var,
         "rmse": rmse,
-        "rl2norm": rl2norm,
+        "l2norm": l2norm,
     }
     return out
 
