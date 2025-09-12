@@ -124,7 +124,7 @@ def main(
             multfact_confidence_uq, addconst_confidence_uq
         )
 
-    for tau, alpha in zip(step_size, multfact_step_size):
+    for tau, alph in zip(step_size, multfact_step_size):
         beg_time = time.time()
 
         # Instantiate the PnP model
@@ -133,7 +133,7 @@ def main(
                     _commons.get_pnpmass(
             denoiser, denoiser_uq, imgsize=imgsize,
             std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
-            step_size=tau, multfact_step_size=alpha,
+            step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode=mode,
             which_gaussian_extractor=which_gaussian_extractor,
