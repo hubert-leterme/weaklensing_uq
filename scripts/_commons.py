@@ -5,6 +5,7 @@ import random
 import argparse
 import tqdm
 import numpy as np
+from scipy.optimize import minimize
 import torch
 import astropy.table as aptable
 import deepinv as dinv
@@ -51,6 +52,8 @@ INPAINTING_PNPMASS = False
 INPAINTING_DEEPMASS = True
 
 MODE_CQR = "addcqr"
+BOUNDS_MULTFACT_CONFIDENCE_UQ = (0., 2.)
+BOUNDS_ADDCONST_CONFIDENCE_UQ = (-0.005, 0.005)
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -947,8 +950,9 @@ def get_step_size_param_mahalanobis(
     return step_size, param_mahalanobis
 
 
-def convert_into_param_lists(params1, params2):
-
+def convert_into_param_lists(
+        params1, params2, find_optimal_hyperparam=False
+):
     if isinstance(params1, list) and isinstance(params2, list):
         assert len(params1) == len(params2)
     else:
@@ -959,6 +963,10 @@ def convert_into_param_lists(params1, params2):
         else:
             params1 = [params1]
             params2 = [params2]
+
+    if find_optimal_hyperparam and (None, None) not in zip(params1, params2):
+        params1.append(None)
+        params2.append(None)
 
     return params1, params2
 
@@ -982,30 +990,6 @@ def instantiate_cqr(
     return cqr
 
 
-def get_cqr(
-        kappa_pred_calib, var_calib, kappa_true_calib,
-        confidence_uq=CONFIDENCE_UQ,
-        imgsize=IMGSIZE, mode=MODE_CQR,
-        multfact_confidence_uq=None,
-        addconst_confidence_uq=None,
-        device="cpu", verbose=False
-):
-    if verbose:
-        print("Instantiate CQR model and compute the calibration parameters")
-    res_calib = get_error_bars(
-        var_calib, confidence_uq=confidence_uq,
-        multfact_confidence_uq=multfact_confidence_uq,
-        addconst_confidence_uq=addconst_confidence_uq
-    )
-    cqr = instantiate_cqr(
-        confidence_uq=confidence_uq, imgsize=imgsize,
-        mode=mode, device=device
-    )
-    cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
-
-    return cqr
-
-
 def apply_calibration_and_get_metrics(
         kappa_pred, var, kappa_true,
         kappa_pred_calib, var_calib, kappa_true_calib,
@@ -1013,34 +997,44 @@ def apply_calibration_and_get_metrics(
         imgsize=IMGSIZE, mode=MODE_CQR,
         multfact_confidence_uq=None,
         addconst_confidence_uq=None,
+        find_optimal_hyperparam=False,
         mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
         device="cpu", verbose=False
 ):
-    # Compute the calibration parameters on the calibration set
-    cqr = get_cqr(
-        kappa_pred_calib, var_calib, kappa_true_calib,
-        confidence_uq=confidence_uq,
-        imgsize=imgsize, mode=mode,
-        multfact_confidence_uq=multfact_confidence_uq,
-        addconst_confidence_uq=addconst_confidence_uq,
-        device=device, verbose=verbose
-    )
-
-    # Compute pre-calibration residuals
-    res = get_error_bars(
-        var, confidence_uq=confidence_uq,
-        multfact_confidence_uq=multfact_confidence_uq,
-        addconst_confidence_uq=addconst_confidence_uq
-    )
-
-    # Apply calibration
-    if verbose:
-        print("Calibrate residuals with CQR")
-    res_cqr = cqr(res)
-
-    # Compute miscoverage rate and size of prediction intervals
     err_metric = wlpnp.MiscoverageRate(meancentering=False, mask=mask).to(device)
     predinterv_metric = wlpnp.PredInterv(meancentering=False, mask=mask).to(device)
+
+    # Compute the calibration parameters on the calibration set
+    if verbose:
+        print("Instantiate CQR model and compute the calibration parameters")
+    cqr = instantiate_cqr(
+        confidence_uq=confidence_uq, imgsize=imgsize,
+        mode=mode, device=device
+    )
+    if find_optimal_hyperparam \
+            and multfact_confidence_uq is None \
+            and addconst_confidence_uq is None:
+        kwargs = get_optimal_hyperparams_uq(
+            cqr,
+            kappa_pred, var,
+            kappa_pred_calib, var_calib, kappa_true_calib,
+            predinterv_metric, confidence_uq=confidence_uq,
+            verbose=verbose
+        )
+    else:
+        kwargs = dict(
+            multfact_confidence_uq=multfact_confidence_uq,
+            addconst_confidence_uq=addconst_confidence_uq
+        )
+
+    # Compute pre- and post-calibration residuals
+    if verbose:
+        print("Calibrate residuals with CQR")
+    res, res_cqr = _get_residuals_cqr(
+        cqr, var, kappa_pred_calib, var_calib,
+        kappa_true_calib, confidence_uq=confidence_uq,
+        **kwargs
+    )
 
     bounds = _get_bounds(kappa_pred, res)
     err = err_metric(bounds, kappa_true)
@@ -1067,6 +1061,62 @@ def apply_calibration_and_get_metrics(
     return out_dict
 
 
+def get_optimal_hyperparams_uq(
+        cqr: wlcqr.AddCQR | wlcqr.MultCQR,
+        kappa_pred: torch.Tensor,
+        var: torch.Tensor,
+        kappa_pred_calib: torch.Tensor,
+        var_calib: torch.Tensor,
+        kappa_true_calib: torch.Tensor,
+        predinterv_metric: wlpnp.PredInterv,
+        confidence_uq: int | float=CONFIDENCE_UQ,
+        verbose=False
+):
+    if verbose:
+        print("Find optimal hyperparameters for CQR")
+    if isinstance(cqr, wlcqr.AddCQR):
+        active_param_key = "multfact_confidence_uq"
+        other_param_key = "addconst_confidence_uq"
+        bounds_hyperparam = BOUNDS_MULTFACT_CONFIDENCE_UQ
+        init_hyperparam = 1.0
+    else:
+        active_param_key = "addconst_confidence_uq"
+        other_param_key = "multfact_confidence_uq"
+        bounds_hyperparam = BOUNDS_ADDCONST_CONFIDENCE_UQ
+        init_hyperparam = 0.0
+
+    def mean_predinterv(params: np.ndarray):
+
+        kwargs = {active_param_key: params[0]}
+        _, res_cqr = _get_residuals_cqr(
+            cqr, var, kappa_pred_calib, var_calib,
+            kappa_true_calib, confidence_uq=confidence_uq,
+            **kwargs
+        )
+        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
+        fake_kappa_true = torch.empty_like(
+            kappa_pred
+        ) # No need to have access to the ground truth to compute the error bar size
+        predinterv_cqr = predinterv_metric(
+            bounds_cqr, fake_kappa_true
+        ) # Shape = (nimgs,)
+
+        return predinterv_cqr.mean().item()
+
+    results_optim = minimize(
+        mean_predinterv, x0=init_hyperparam,
+        method="Nelder-Mead",
+        bounds=(bounds_hyperparam,)
+    )
+    if verbose:
+        print(results_optim)
+    out_dict = {
+        active_param_key: results_optim.x[0],
+        other_param_key: None
+    }
+    return out_dict
+
+
 def get_uq_keys(rho=None, const=None):
     uq_key = "uq"
     if rho is not None:
@@ -1081,6 +1131,27 @@ def _get_bounds(kappa_pred, res):
     kappa_hi = kappa_pred + res
     out = torch.stack([kappa_lo, kappa_hi], dim=1) # Shape = (nimgs, 2, 1, nx, ny)
     return out
+
+
+def _get_residuals_cqr(
+        cqr: wlcqr.AddCQR | wlcqr.MultCQR,
+        var: torch.Tensor,
+        kappa_pred_calib: torch.Tensor,
+        var_calib:torch.Tensor,
+        kappa_true_calib: torch.Tensor,
+        confidence_uq: int | float=CONFIDENCE_UQ,
+        **kwargs
+):
+    res = get_error_bars(
+        var, confidence_uq=confidence_uq, **kwargs
+    )
+    res_calib = get_error_bars(
+        var_calib, confidence_uq=confidence_uq, **kwargs
+    )
+    cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
+    res_cqr = cqr(res)
+
+    return res, res_cqr
 
 
 def save_results(
@@ -1448,6 +1519,10 @@ def add_arguments_cqr(parser, zero_init_bounds=False):
                 "Several values can be provided. "
                 "Default = None"
             )
+        )
+        parser.add_argument(
+            "--find-optimal-hyperparam-cqr", action='store_true',
+            default=argparse.SUPPRESS
         )
 
 

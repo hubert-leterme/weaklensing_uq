@@ -47,6 +47,7 @@ def main(
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         multfact_confidence_uq: float=None,
         addconst_confidence_uq: float=None,
+        find_optimal_hyperparam_cqr: bool=False,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
@@ -121,7 +122,8 @@ def main(
 
     multfact_confidence_uq, addconst_confidence_uq = \
         _commons.convert_into_param_lists(
-            multfact_confidence_uq, addconst_confidence_uq
+            multfact_confidence_uq, addconst_confidence_uq,
+            find_optimal_hyperparam=find_optimal_hyperparam_cqr
         )
 
     for tau, alph in zip(step_size, multfact_step_size):
@@ -218,6 +220,7 @@ def main(
                     imgsize=imgsize, mode=mode_cqr,
                     multfact_confidence_uq=rho,
                     addconst_confidence_uq=const,
+                    find_optimal_hyperparam=find_optimal_hyperparam_cqr,
                     mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                     device=device, verbose=verbose
                 )
