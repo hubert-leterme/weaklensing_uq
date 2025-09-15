@@ -31,6 +31,13 @@ class BaseCQR(nn.Module):
         self.nimgs_calib = 0
 
 
+    def reset(self):
+        self.calib_param.copy_(
+            torch.zeros_like(self.calib_param)
+        )
+        self.nimgs_calib = 0
+
+
     def _calibration_fun(self, res):
         raise NotImplementedError
 

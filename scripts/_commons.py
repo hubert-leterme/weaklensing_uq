@@ -1142,6 +1142,7 @@ def _get_residuals_cqr(
         confidence_uq: int | float=CONFIDENCE_UQ,
         **kwargs
 ):
+    cqr.reset()
     res = get_error_bars(
         var, confidence_uq=confidence_uq, **kwargs
     )
