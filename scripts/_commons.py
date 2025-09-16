@@ -871,19 +871,9 @@ def run_deepmass_batch(
 
 
 def get_error_bars(
-        var, confidence_uq=CONFIDENCE_UQ,
-        multfact_confidence_uq=None,
-        addconst_confidence_uq=None
+        var, confidence_uq=CONFIDENCE_UQ
 ):  
-    if multfact_confidence_uq is None:
-        multfact_confidence_uq = 1.
-    if addconst_confidence_uq is None:
-        addconst_confidence_uq = 0.
-    out = multfact_confidence_uq * var**0.5 + addconst_confidence_uq
-    out = torch.relu(out)
-    out = confidence_uq * out
-
-    return out
+    return confidence_uq * var**0.5
 
 
 def get_inference_time(beg_time, which="inference", verbose=False):
@@ -950,25 +940,15 @@ def get_step_size_param_mahalanobis(
     return step_size, param_mahalanobis
 
 
-def convert_into_param_lists(
-        params1, params2, find_optimal_hyperparam=False
+def convert_into_hyperparam_list(
+        hyperparam, find_optimal_hyperparam_precalib=False
 ):
-    if isinstance(params1, list) and isinstance(params2, list):
-        assert len(params1) == len(params2)
-    else:
-        if isinstance(params1, list) and not isinstance(params2, list):
-            params2 = len(params1) * [params2]
-        elif not isinstance(params1, list) and isinstance(params2, list):
-            params1 = len(params2) * [params1]
-        else:
-            params1 = [params1]
-            params2 = [params2]
+    if not isinstance(hyperparam, list):
+        hyperparam = [hyperparam]
+    if find_optimal_hyperparam_precalib and None not in hyperparam:
+        hyperparam.append(None)
 
-    if find_optimal_hyperparam and (None, None) not in zip(params1, params2):
-        params1.append(None)
-        params2.append(None)
-
-    return params1, params2
+    return hyperparam
 
 
 def instantiate_cqr(
@@ -995,9 +975,8 @@ def apply_calibration_and_get_metrics(
         kappa_pred_calib, var_calib, kappa_true_calib,
         confidence_uq=CONFIDENCE_UQ,
         imgsize=IMGSIZE, mode=MODE_CQR,
-        multfact_confidence_uq=None,
-        addconst_confidence_uq=None,
-        find_optimal_hyperparam=False,
+        hyperparam_precalib=None,
+        find_optimal_hyperparam_precalib=False,
         mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
         device="cpu", verbose=False
 ):
@@ -1011,20 +990,13 @@ def apply_calibration_and_get_metrics(
         confidence_uq=confidence_uq, imgsize=imgsize,
         mode=mode, device=device
     )
-    if find_optimal_hyperparam \
-            and multfact_confidence_uq is None \
-            and addconst_confidence_uq is None:
-        kwargs = get_optimal_hyperparams_uq(
+    if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
+        hyperparam_precalib = get_optimal_hyperparam_precalib(
             cqr,
             kappa_pred, var,
             kappa_pred_calib, var_calib, kappa_true_calib,
             predinterv_metric, confidence_uq=confidence_uq,
             verbose=verbose
-        )
-    else:
-        kwargs = dict(
-            multfact_confidence_uq=multfact_confidence_uq,
-            addconst_confidence_uq=addconst_confidence_uq
         )
 
     # Compute pre- and post-calibration residuals
@@ -1033,7 +1005,7 @@ def apply_calibration_and_get_metrics(
     res, res_cqr = _get_residuals_cqr(
         cqr, var, kappa_pred_calib, var_calib,
         kappa_true_calib, confidence_uq=confidence_uq,
-        **kwargs
+        hyperparam_precalib=hyperparam_precalib
     )
 
     bounds = _get_bounds(kappa_pred, res)
@@ -1050,7 +1022,7 @@ def apply_calibration_and_get_metrics(
         "predinterv": predinterv.cpu(),
         "err_cqr": err_cqr.cpu(),
         "predinterv_cqr": predinterv_cqr.cpu(),
-        **kwargs
+        "hyperparam_precalib": hyperparam_precalib
     }
     if save_tensors:
         out_dict.update({
@@ -1062,7 +1034,7 @@ def apply_calibration_and_get_metrics(
     return out_dict
 
 
-def get_optimal_hyperparams_uq(
+def get_optimal_hyperparam_precalib(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
         kappa_pred: torch.Tensor,
         var: torch.Tensor,
@@ -1076,23 +1048,18 @@ def get_optimal_hyperparams_uq(
     if verbose:
         print("Find optimal hyperparameters for CQR")
     if isinstance(cqr, wlcqr.AddCQR):
-        active_param_key = "multfact_confidence_uq"
-        other_param_key = "addconst_confidence_uq"
         bounds_hyperparam = BOUNDS_MULTFACT_CONFIDENCE_UQ
         init_hyperparam = 1.0
     else:
-        active_param_key = "addconst_confidence_uq"
-        other_param_key = "multfact_confidence_uq"
         bounds_hyperparam = BOUNDS_ADDCONST_CONFIDENCE_UQ
         init_hyperparam = 0.0
 
     def mean_predinterv(params: np.ndarray):
 
-        kwargs = {active_param_key: params[0]}
         _, res_cqr = _get_residuals_cqr(
             cqr, var, kappa_pred_calib, var_calib,
             kappa_true_calib, confidence_uq=confidence_uq,
-            **kwargs
+            hyperparam_precalib=params[0]
         )
         bounds_cqr = _get_bounds(kappa_pred, res_cqr)
         fake_kappa_true = torch.empty_like(
@@ -1111,11 +1078,8 @@ def get_optimal_hyperparams_uq(
     )
     if verbose:
         print(results_optim)
-    out_dict = {
-        active_param_key: results_optim.x[0],
-        other_param_key: None
-    }
-    return out_dict
+
+    return results_optim.x[0]
 
 
 def get_uq_keys(rho=None, const=None):
@@ -1141,14 +1105,15 @@ def _get_residuals_cqr(
         var_calib:torch.Tensor,
         kappa_true_calib: torch.Tensor,
         confidence_uq: int | float=CONFIDENCE_UQ,
-        **kwargs
+        hyperparam_precalib: float | None=None
 ):
     cqr.reset()
+    cqr.hyperparam_precalib = hyperparam_precalib
     res = get_error_bars(
-        var, confidence_uq=confidence_uq, **kwargs
+        var, confidence_uq=confidence_uq
     )
     res_calib = get_error_bars(
-        var_calib, confidence_uq=confidence_uq, **kwargs
+        var_calib, confidence_uq=confidence_uq
     )
     cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
     res_cqr = cqr(res)
@@ -1505,25 +1470,17 @@ def add_arguments_cqr(parser, zero_init_bounds=False):
     )
     if not zero_init_bounds:
         parser.add_argument(
-            "-rho", "--multfact-confidence-uq", type=float, nargs='+',
+            "-rho", "--hyperparam-precalib", type=float, nargs='+',
             default=argparse.SUPPRESS,
             help=(
-                "Multiplicative factor for the level of confidence for UQ. "
-                "Several values can be provided. "
-                "Default = None"
+                "Pre-calibration hyperparameter for CQR "
+                "(multiplicative factor if `--mode-cqr` is set to 'addcqr', "
+                "additive constant if `--mode-cqr` is set to 'multcqr'). "
+                "Several value can be provided. Default = None"
             )
         )
         parser.add_argument(
-            "-const", "--addconst-confidence-uq", type=float, nargs='+',
-            default=argparse.SUPPRESS,
-            help=(
-                "Additive constant for the level of confidence for UQ. "
-                "Several values can be provided. "
-                "Default = None"
-            )
-        )
-        parser.add_argument(
-            "--find-optimal-hyperparam-cqr", action='store_true',
+            "--find-optimal-hyperparam-precalib", action='store_true',
             default=argparse.SUPPRESS
         )
 

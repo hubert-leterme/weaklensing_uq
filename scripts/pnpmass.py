@@ -45,9 +45,8 @@ def main(
         niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
-        multfact_confidence_uq: float=None,
-        addconst_confidence_uq: float=None,
-        find_optimal_hyperparam_cqr: bool=False,
+        hyperparam_precalib: list[float] | None=None,
+        find_optimal_hyperparam_precalib: bool=False,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False, **kwargs
@@ -120,10 +119,10 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     rmse_fn = wlpnp.RMSE(mask=mask).to(device)
 
-    multfact_confidence_uq, addconst_confidence_uq = \
-        _commons.convert_into_param_lists(
-            multfact_confidence_uq, addconst_confidence_uq,
-            find_optimal_hyperparam=find_optimal_hyperparam_cqr
+    hyperparam_precalib = \
+        _commons.convert_into_hyperparam_list(
+            hyperparam_precalib,
+            find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib
         )
 
     for tau, alph in zip(step_size, multfact_step_size):
@@ -212,19 +211,18 @@ def main(
             kappa_pred_calib = out_pnpmass_calib["kappa_pred"]
             var_calib = out_pnpmass_calib["var"]
 
-            for rho, const in zip(multfact_confidence_uq, addconst_confidence_uq):
+            for rho in hyperparam_precalib:
                 uq_dict = _commons.apply_calibration_and_get_metrics(
                     kappa_pred, var, kappa_true,
                     kappa_pred_calib, var_calib, kappa_true_calib,
                     confidence_uq=confidence_uq,
                     imgsize=imgsize, mode=mode_cqr,
-                    multfact_confidence_uq=rho,
-                    addconst_confidence_uq=const,
-                    find_optimal_hyperparam=find_optimal_hyperparam_cqr,
+                    hyperparam_precalib=rho,
+                    find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
                     mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
                     device=device, verbose=verbose
                 )
-                uq_key = _commons.get_uq_keys(rho=rho, const=const)
+                uq_key = _commons.get_uq_keys(rho=rho)
                 out_dict.update({
                     uq_key: uq_dict
                 })

@@ -29,6 +29,7 @@ class BaseCQR(nn.Module):
             requires_grad=False
         )
         self.nimgs_calib = 0
+        self.hyperparam_precalib = None # Float
 
 
     def reset(self):
@@ -36,6 +37,7 @@ class BaseCQR(nn.Module):
             torch.zeros_like(self.calib_param)
         )
         self.nimgs_calib = 0
+        self.hyperparam_precalib = None
 
 
     def _calibration_fun(self, res):
@@ -76,7 +78,8 @@ class BaseCQR(nn.Module):
         assert nx == ny == self.map_size
 
         with torch.no_grad():
-
+            if self.hyperparam_precalib is not None:
+                res_calib = self._get_precalibrated_residuals(res_calib)
             conformity_scores = self._conformity_scores(pred_calib, res_calib, kappa_calib)
             adjusted_quantile = (1 - self.alpha) * (1 + 1/nimgs) # For finite-sample correction
             quantile_vals = utils.quantile(conformity_scores, adjusted_quantile, axis=0)
@@ -106,6 +109,8 @@ class BaseCQR(nn.Module):
 
         """
         with torch.no_grad():
+            if self.hyperparam_precalib is not None:
+                res = self._get_precalibrated_residuals(res)
             res_cqr = self._calibration_fun(res)
             res_cqr = res_cqr.reshape(
                 -1, self.in_channels, self.map_size, self.map_size
@@ -117,6 +122,10 @@ class BaseCQR(nn.Module):
         lower_bound_proba = self.alpha - 1 / (nimgs_calib + 1)
         upper_bound_proba = self.alpha
         return lower_bound_proba, upper_bound_proba
+
+
+    def _get_precalibrated_residuals(self, res):
+        raise NotImplementedError
 
 
 class AddCQR(BaseCQR):
@@ -139,6 +148,9 @@ class AddCQR(BaseCQR):
 
     def _conformity_scores(self, pred_calib, res_calib, kappa_calib):
         return utils.absolute(pred_calib - kappa_calib) - res_calib
+
+    def _get_precalibrated_residuals(self, res):
+        return self.hyperparam_precalib * res
 
 
 class MultCQR(BaseCQR):
@@ -177,6 +189,11 @@ class MultCQR(BaseCQR):
         else:
             res_calib[res_calib <= self.eps] = self.eps
         return utils.absolute(kappa_calib - pred_calib) / res_calib
+    
+    def _get_precalibrated_residuals(self, res):
+        out = res + self.hyperparam_precalib
+        out = torch.relu(out)
+        return out
 
 
 class GenCQR(BaseCQR):
