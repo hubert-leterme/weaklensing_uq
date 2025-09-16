@@ -21,7 +21,7 @@ optional_args_cleaned=$(echo "$optional_args" \
     { printf " %s", $0 }
     END { printf "\n" }
   ' \
-  | grep -E '^(-e|-c0|-e0|--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|--mode|--which-gaussian-extractor|--update-ng-first|--starlet|-thresh|-ig|-ing|--niter-wiener|-nw)' \
+  | grep -E '^(-e|-c0|-e0|--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|--mode|--which-gaussian-extractor|--update-ng-first|--starlet|-thresh|-ig|-ing|--niter-wiener|-nw|--multfact-step-size-gaussian)' \
   | sed -E 's/^-e($| )/--epoch\1/' \
   | sed 's/-c0 [^ ]\+/alternativemn/g' \
   | sed -E 's/^-e0($| )/--epoch-uq\1/' \
