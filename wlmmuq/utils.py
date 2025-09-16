@@ -766,10 +766,11 @@ class KappamapVisualizer:
         self.plot_colorbar = plot_colorbar
 
 
-    @property
-    def bounds(self):
-        lowerbound = self.kappa_pred - self.res_pred - self.kappa_true
-        upperbound = self.kappa_pred + self.res_pred - self.kappa_true
+    def bounds(self, res_pred=None):
+        if res_pred is None:
+            res_pred = self.res_pred
+        lowerbound = self.kappa_pred - res_pred - self.kappa_true
+        upperbound = self.kappa_pred + res_pred - self.kappa_true
         if self.mask is not None:
             lowerbound *= self.mask
             upperbound *= self.mask
@@ -793,35 +794,34 @@ class KappamapVisualizer:
         return out
 
 
-    def skyshow_truth(self, title=None, **kwargs):
-        if title is not None:
-            title = f"{title} (ground truth)"
-        return self.skyshow_kappamap(self.kappa_true, title=title, **kwargs)
+    def skyshow_truth(self, **kwargs):
+        return self.skyshow_kappamap(self.kappa_true, **kwargs)
 
-    def skyshow_pointestimate(self, title=None, **kwargs):
-        if title is not None:
-            title = f"{title} (point estimate)"
-        return self.skyshow_kappamap(self.kappa_pred, title=title, **kwargs)
+    def skyshow_pointestimate(self, **kwargs):
+        return self.skyshow_kappamap(self.kappa_pred, **kwargs)
 
 
-    def skyshow_variance(self, title=None, **kwargs):
+    def skyshow_variance(self, showstd=False, **kwargs):
 
-        var = self.var
-        if torch.is_tensor(var):
-            var = var.cpu().numpy()
-        if title is not None:
-            title = f"{title} (variance estimate)"
+        img = self.var
+        vmax = self.vmax_sqdiff
+        if showstd:
+            img = img**0.5
+            vmax = vmax**0.5
+        if torch.is_tensor(img):
+            img = img.cpu().numpy()
+
         skyshow(
-            var, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
+            img, vmin=0., vmax=vmax, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
             printxticks=False, printyticks=False, printcolorbar=True,
-            imgsize=self.imgsize, title=title, **kwargs
+            imgsize=self.imgsize, **kwargs
         )
 
 
-    def skyshow_bound(self, which, title=None, **kwargs):
+    def skyshow_bound(self, which, res_pred=None, **kwargs):
 
-        lower_bound, upper_bound = self.bounds
+        lower_bound, upper_bound = self.bounds(res_pred=res_pred)
         if which == "lower":
             bound = lower_bound
         elif which == "upper":
@@ -830,15 +830,13 @@ class KappamapVisualizer:
             raise ValueError("Argument `which` must be either 'lower' or 'upper'")
         if torch.is_tensor(bound):
             bound = bound.cpu().numpy()
-        if title is not None:
-            title = f"{title} ({which} bound)"
 
         out = skyshow(
             bound,
             cmap="coolwarm", vmin=-self.vmax_bounds, vmax=self.vmax_bounds,
             extent=self.extent, boundaries=self.boundaries,
             printcolorbar=False, printxylabels=False, printxticks=False, printyticks=False,
-            imgsize=self.imgsize, title=title, **kwargs
+            imgsize=self.imgsize, **kwargs
         )
         if self.plot_colorbar:
             cbar = plt.colorbar()
@@ -853,12 +851,12 @@ class KappamapVisualizer:
 
 class KappamapVisualizerCompact(KappamapVisualizer):
 
-    def visualize(self, title: str=None, **kwargs):
+    def visualize(self, title: str=None, showstd: bool=False, **kwargs):
         plt.figure(figsize=(8, 6))
         plt.subplot(221)
         self.skyshow_pointestimate(title=title, **kwargs)
         plt.subplot(222)
-        self.skyshow_variance(title=title, **kwargs)
+        self.skyshow_variance(title=title, showstd=showstd, **kwargs)
         plt.subplot(223)
         self.skyshow_bound("lower", title=title, **kwargs)
         plt.subplot(224)
@@ -870,8 +868,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
             self, *args, savefig=False, save_dir=None, extension=None,
-            showtruth=True, showpred=True, showvar=True, showbounds=True,
-            **kwargs
+            showtruth=True, showpred=True, showbounds=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
@@ -879,12 +876,13 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
         self.extension = extension
         self.showtruth = showtruth
         self.showpred = showpred
-        self.showvar = showvar
         self.showbounds = showbounds
 
 
-    def visualize(self, title: str=None, filename: str=None, **kwargs):
-
+    def visualize(
+            self, title: str=None, filename: str=None,
+            showvar: bool=False, showstd: bool=False, **kwargs
+    ):
         if self.showtruth:
             plt.figure(figsize=(5, 3))
             self.skyshow_truth(title=title, **kwargs)
@@ -905,12 +903,16 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
                 )
             plt.show()
 
-        if self.showvar:
+        if showvar or showstd:
             plt.figure(figsize=(5, 3))
-            self.skyshow_variance(title=title, **kwargs)
+            self.skyshow_variance(title=title, showstd=showstd, **kwargs)
             if self.savefig:
+                if showstd:
+                    suffix = "std"
+                else:
+                    suffix = "var"
                 plt.savefig(
-                    os.path.join(self.save_dir, f"{filename}_var.{self.extension}"),
+                    os.path.join(self.save_dir, f"{filename}_{suffix}.{self.extension}"),
                     bbox_inches='tight'
                 )
             plt.show()
