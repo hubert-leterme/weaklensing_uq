@@ -1050,6 +1050,7 @@ def apply_calibration_and_get_metrics(
         "predinterv": predinterv.cpu(),
         "err_cqr": err_cqr.cpu(),
         "predinterv_cqr": predinterv_cqr.cpu(),
+        **kwargs
     }
     if save_tensors:
         out_dict.update({
