@@ -1625,7 +1625,7 @@ def add_arguments_pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Multiplicative factor for the step size in Gaussian extraction. "
-            "Only used if `--mode` is set to 'residual' or 'pnpmcalens'. "
+            "Only used if `--mode` is set to 'residual'. "
         )
     )
     add_arguments_wiener(parser)
