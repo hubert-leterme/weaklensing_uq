@@ -3,7 +3,7 @@
 # Check if correct number of arguments are provided
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <GPU_ID> [OPTION1 [OPTION 2 ...]]"
-  echo "Example: $0 0 -c deepmass_UNetPreproc_mode_wiener_nepochs_20 -a UNetPreproc -m wiener -t1 YYYYMMDD_hhmmss -e1 20 -w 8"
+  echo "Example: $0 0 -c deepmass_UNetPreproc_mode_wiener_nepochs_20 -a UNetPreproc -m wiener -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8"
   exit 1
 fi
 

@@ -18,7 +18,6 @@ LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
-CHECKPOINT_DIR = "."
 
 def main(
         path_to_train_val_dataset: str=_commons.PATH_TO_TRAIN_VAL_DATASET,
@@ -27,7 +26,7 @@ def main(
         path_to_ps=PATH_TO_PS,
         cosmos_include_faint=False,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
-        backend=None, arch=None, denoiser=False,
+        arch=None, denoiser=False,
         nongaussian=False,
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener=NITER_WIENER,
@@ -42,7 +41,8 @@ def main(
         nreal_per_img=NREAL_PER_IMG,
         nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, checkpoint_dir=CHECKPOINT_DIR,
+        ndecays=NDECAYS, loss=LOSS,
+        checkpoint_dir: str=_commons.CHECKPOINT_DIR, checkpoint_subdir: str=None,
         num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
@@ -53,6 +53,9 @@ def main(
     device = _commons.get_device(verbose=verbose)
     if verbose:
         print(f"Number of workers: {num_workers}")
+
+    if checkpoint_subdir is not None:
+        checkpoint_dir = os.path.join(checkpoint_dir, checkpoint_subdir)
 
     callback_list = []
 
@@ -78,12 +81,6 @@ def main(
             sigma=std_noise, mask=mask
         )
 
-    backend = arch.split(".")[0]
-    if backend == 'tensorflow':
-        raise ValueError("Deprecated TensorFlow backend. Use PyTorch instead.")
-    elif backend != 'torch':
-        raise ValueError("Unsupported backend.")
-
     # Initialize model
     if verbose:
         print("Initialize model")
@@ -108,9 +105,11 @@ def main(
         if verbose:
             print("Load trained order-1 moment network")
         if arch_order1 is None:
+            alternative_model_order2 = False
             arch_order1 = arch
             kwargs_model_order1 = kwargs_model.copy()
         else:
+            alternative_model_order2 = True
             kwargs_model_order1 = {}
             for k in _commons.KEYS_MODEL:
                 k1 = f"{k}_order1"
@@ -132,6 +131,7 @@ def main(
             order1_model=order1_model, metric=metric
         )
     else:
+        alternative_model_order2 = None
         loss_fun = dinv.loss.SupLoss(metric=metric)
 
     # Initialize data loaders
@@ -195,9 +195,14 @@ def main(
             )
         )
 
+    if alternative_model_order2:
+        kwargs_output_type = kwargs_model.copy()
+    else:
+        kwargs_output_type = {}
     output_type = _commons.get_output_type(
         order2=order2,
-        additional_outlayer=additional_outlayer
+        additional_outlayer=additional_outlayer,
+        **kwargs_output_type
     )
     save_path = os.path.join(checkpoint_dir, output_type)
     if resume:
@@ -367,11 +372,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    parser.add_argument(
-        "--checkpoint-dir", type=str,
-        default=argparse.SUPPRESS,
-        help="Path to checkpoint directory (saving model after each epoch). Default = None"
-    )
+    _commons.add_arguments_checkpoint_dir(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,
