@@ -21,17 +21,23 @@ from wlmmuq.models import cqr as wlcqr
 from wlmmuq.models.deepinv import callbacks as wlcallbacks
 
 from wlmmuq import CHECKPOINT_DIR, PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, \
-    PATH_TO_TEST_DATASET, PATH_TO_CALIB_DATASET, KEY_REPLACEMENT_DICT
+    PATH_TO_TRAIN_VAL_DATASET, PATH_TO_TEST_DATASET, PATH_TO_CALIB_DATASET, \
+        KEY_REPLACEMENT_DICT
 from wlmmuq.kappatng import OPENINGANGLE
 from wlmmuq.data import NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
 
+# The following global variables are valid for the kappaTNG dataset
 NINPIMGS = 100 # Number of input images before cropping
+NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations
+NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
 NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augmented dataset)
+MIN_IDX_FILENAME_ORI_VAL = 98 # To avoid overlaps with the training set
 MIN_IDX_FILENAME_ORI_CALIB = 58 # To avoid overlaps with the test set
+
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
@@ -1401,6 +1407,35 @@ def add_arguments_dataset(parser, batch_size):
     )
 
 
+def add_arguments_train_val_dataset(parser, batch_size):
+
+    parser.add_argument(
+        "--path-to-train-val-dataset", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the training and validation sets (HDF5 file). "
+            f"Default = {PATH_TO_TRAIN_VAL_DATASET}"
+        )
+    )
+    parser.add_argument(
+        "--nimgs-train", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of training examples. "
+            f"Default = {NIMGS_TRAIN}"
+        )
+    )
+    parser.add_argument(
+        "--nimgs-val", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of validation examples. "
+            f"Default = {NIMGS_CALIB}"
+        )
+    )
+    add_arguments_dataset(parser, batch_size)
+
+
 def add_arguments_test_calib_dataset(parser, batch_size):
 
     parser.add_argument(
@@ -1423,7 +1458,7 @@ def add_arguments_test_calib_dataset(parser, batch_size):
         "--nimgs-test", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of test images. "
+            "Number of test examples. "
             f"Default = {NIMGS_TEST}"
         )
     )
@@ -1431,7 +1466,7 @@ def add_arguments_test_calib_dataset(parser, batch_size):
         "--nimgs-calib", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of calibration images. "
+            "Number of calibration examples. "
             f"Default = {NIMGS_CALIB}"
         )
     )

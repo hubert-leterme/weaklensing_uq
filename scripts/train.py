@@ -12,12 +12,7 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
-from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, EPS_SUP_STEP_SIZE
 
-NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
-NIMGS_VAL = 1440 # Remaining 2 realizations
-NIMGS_PS = 2048
-BATCH_SIZE_PS = 256
 NREAL_PER_IMG = 1
 LOSS = 'mse'
 LEARNING_RATE = 1e-4
@@ -26,7 +21,7 @@ NDECAYS = 4 # Number of decays for the learning rate scheduler
 CHECKPOINT_DIR = "."
 
 def main(
-        path_to_augmented_dataset,
+        path_to_train_val_dataset: str=_commons.PATH_TO_TRAIN_VAL_DATASET,
         path_to_std_noise: str=PATH_TO_STD_NOISE,
         path_to_mask: str=PATH_TO_MASK,
         path_to_ps=PATH_TO_PS,
@@ -38,13 +33,14 @@ def main(
         niter_wiener=NITER_WIENER,
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
-        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
         order2=False, additional_outlayer=None,
         arch_order1=None,
         timestamp_order1=None, epoch_order1=None,
-        imgsize=IMGSIZE,
-        nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
-        nepochs=_commons.EPOCH, batch_size=BATCH_SIZE,
+        imgsize=_commons.IMGSIZE,
+        nimgs_train=_commons.NIMGS_TRAIN, nimgs_val=_commons.NIMGS_VAL,
+        nreal_per_img=NREAL_PER_IMG,
+        nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS, checkpoint_dir=CHECKPOINT_DIR,
         num_workers=NUM_WORKERS,
@@ -91,7 +87,7 @@ def main(
     # Initialize model
     if verbose:
         print("Initialize model")
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    kwargs_model = {k: kwargs.pop(k) for k in _commons.KEYS_MODEL if k in kwargs}
     _commons.update_kwargs_model(
         kwargs_model,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
@@ -116,7 +112,7 @@ def main(
             kwargs_model_order1 = kwargs_model.copy()
         else:
             kwargs_model_order1 = {}
-            for k in KEYS_MODEL:
+            for k in _commons.KEYS_MODEL:
                 k1 = f"{k}_order1"
                 if k1 in kwargs:
                     kwargs_model_order1.update({k: kwargs.pop(k1)})
@@ -143,7 +139,7 @@ def main(
         print("Initialize batch generators for training and validation")
     kwargs.update(scale_as_input=scale_as_input)
     train_dataset = dataset_class(
-        hdf5_filepath=path_to_augmented_dataset,
+        hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
         newaxis=True, nreal_per_img=nreal_per_img,
@@ -151,7 +147,7 @@ def main(
     )
     train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
-        hdf5_filepath=path_to_augmented_dataset,
+        hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, newaxis=True,
@@ -248,10 +244,6 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "path_to_augmented_dataset", type=str,
-        help="Path to the augmented dataset (HDF5 file)"
-    )
     _commons.add_arguments_model(parser, uq=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
@@ -334,23 +326,9 @@ if __name__ == "__main__":
             "Default = None"
         )
     )
-    parser.add_argument(
-        "--nimgs-train", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images in the training set. "
-            f"Default = {NIMGS_TRAIN}"
-        )
+    _commons.add_arguments_train_val_dataset(
+        parser, batch_size=_commons.BATCH_SIZE
     )
-    parser.add_argument(
-        "--nimgs-val", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images in the validation set. "
-            f"Default = {NIMGS_VAL}"
-        )
-    )
-    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
     parser.add_argument(
         "--nreal-per-img", type=int,
         default=argparse.SUPPRESS,
