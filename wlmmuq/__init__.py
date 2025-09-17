@@ -55,6 +55,9 @@ PATH_TO_PS = CONFIG_DATA.get('path_to_ps', None)
 if PATH_TO_PS is not None:
     PATH_TO_PS = os.path.expanduser(PATH_TO_PS)
 
+PATH_TO_TRAIN_VAL_DATASET = CONFIG_DATA.get('path_to_train_val_dataset', None)
+if PATH_TO_TRAIN_VAL_DATASET is not None:
+    PATH_TO_TRAIN_VAL_DATASET = os.path.expanduser(PATH_TO_TRAIN_VAL_DATASET)
 PATH_TO_TEST_DATASET = CONFIG_DATA.get('path_to_test_dataset', None)
 if PATH_TO_TEST_DATASET is not None:
     PATH_TO_TEST_DATASET = os.path.expanduser(PATH_TO_TEST_DATASET)

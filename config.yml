@@ -15,6 +15,7 @@ path_to_std_noise: path/to/std_noise.pt
 path_to_mask: path/to/mask.pt
 path_to_ps: path/to/powerspectrum.pt
 
+path_to_train_val_dataset: path/to/train/dataset.hdf5
 path_to_test_dataset: path/to/test/dataset.hdf5
 path_to_calib_dataset: path/to/calib/dataset.hdf5
 
