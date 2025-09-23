@@ -12,6 +12,7 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
+import _add_arguments
 
 NREAL_PER_IMG = 1
 LOSS = 'mse'
@@ -241,7 +242,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _commons.add_arguments_model(parser, uq=True)
+    _add_arguments.model(parser, uq=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
@@ -277,7 +278,7 @@ if __name__ == "__main__":
             f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
-    _commons.add_arguments_wiener(parser)
+    _add_arguments.wiener(parser)
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
@@ -304,7 +305,7 @@ if __name__ == "__main__":
             "`--timestamp-order1` and `--epoch-order1` must be provided."
         )
     )
-    _commons.add_arguments_model_order1(parser)
+    _add_arguments.model_order1(parser)
     parser.add_argument(
         "-t1", "--timestamp-order1", type=str,
         default=argparse.SUPPRESS,
@@ -323,7 +324,7 @@ if __name__ == "__main__":
             "Default = None"
         )
     )
-    _commons.add_arguments_train_val_dataset(
+    _add_arguments.train_val_dataset(
         parser, batch_size=_commons.BATCH_SIZE
     )
     parser.add_argument(
@@ -364,7 +365,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    _commons.add_arguments_checkpoint_dir(parser)
+    _add_arguments.checkpoint_dir(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,
@@ -425,7 +426,7 @@ if __name__ == "__main__":
             "WARNING: This will slow down the training."
         )
     )
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 

@@ -1,31 +1,31 @@
 import argparse
 
 import _commons
+import _add_arguments
 from _commons import OPENINGANGLE, NINPIMGS
 
 import wlmmuq.kappatng as wlktng
 
+IDX_LP = "001" # Lensing potential used for testing/calibration
+
 def main(
-        path_to_cropped_dataset, idx_lp=None,
+        path_to_output=_commons.PATH_TO_TEST_DATASET,
+        idx_lp=IDX_LP,
         openingangle=OPENINGANGLE, ninpimgs=NINPIMGS,
         seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
     _commons.create_dataset_from_kappatng(
         wlktng.create_cropped_dataset,
-        path_to_cropped_dataset, idx_lp, openingangle, ninpimgs,
+        path_to_output, idx_lp, openingangle, ninpimgs,
         verbose=verbose, **kwargs
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "path_to_cropped_dataset", type=str,
-        help="Path to the cropped dataset (HDF5 file)"
-    )
-    _commons.add_arguments_create_dataset(parser)
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.create_dataset(parser, _commons.PATH_TO_TEST_DATASET, IDX_LP)
+    _add_arguments.seed_verbose(parser)
 
     args = parser.parse_args()
     kwargs = vars(args).copy()

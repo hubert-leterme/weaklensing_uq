@@ -1,5 +1,7 @@
 import argparse
 import time
+import tqdm
+import torch
 
 import wlmmuq.utils as wlutils
 import wlmmuq.models.deepinv.iterativemm as wlpnp
@@ -7,6 +9,7 @@ import wlmmuq.models.deepinv.iterativemm as wlpnp
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
+import _add_arguments
 
 OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
@@ -111,7 +114,7 @@ def main(
     test_dataloader = iter(test_dataset)
     if verbose:
         print(f"Compute DeepMass on the test set ({nimgs_test} images)")
-    out_deepmass = _commons.run_deepmass_batch(
+    out_deepmass = run_deepmass_batch(
         deepmass, deepmass_uq, test_dataloader,
         rmse_fn=rmse_fn, device=device, verbose=verbose,
     )
@@ -146,7 +149,7 @@ def main(
         calib_dataloader = iter(calib_dataset)
         if verbose:
             print(f"Compute DeepMass on the calibration set ({nimgs_calib} images)")
-        out_deepmass_calib = _commons.run_deepmass_batch(
+        out_deepmass_calib = run_deepmass_batch(
             deepmass, deepmass_uq, calib_dataloader,
             rmse_fn=rmse_fn, device=device, verbose=verbose,
         )
@@ -183,16 +186,71 @@ def main(
     )
 
 
+def run_deepmass_batch(
+        deepmass: wlpnp.BaseOptim, deepmass_uq: wlpnp.BaseOptim,
+        dataloader,
+        rmse_fn: wlpnp.RMSE | None=None,
+        device="cpu", verbose=False
+):
+    listof_kappa_true = []
+    listof_kappa_pred = []
+    listof_var = []
+    listof_rmse = []
+    listof_l2norm = []
+
+    pbar = tqdm.tqdm(dataloader, disable=not verbose)
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            kappa_pred = deepmass(gamma_noisy)
+            if deepmass_uq is not None:
+                var = deepmass_uq(gamma_noisy)
+            else:
+                var = torch.zeros(kappa_true.shape, device=device)
+            if rmse_fn is not None:
+                rmse = rmse_fn(kappa_pred, kappa_true)
+                l2norm = rmse_fn(kappa_true, 0)
+            else:
+                rmse = None
+                l2norm = None
+
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_rmse.append(rmse) # Shape = (batch_size,)
+            listof_l2norm.append(l2norm) # Shape = (batch_size,)
+
+    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    try:
+        rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
+        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
+    except TypeError:
+        rmse = None
+        l2norm = None
+
+    out = {
+        "kappa_true": kappa_true,
+        "kappa_pred": kappa_pred,
+        "var": var,
+        "rmse": rmse,
+        "l2norm": l2norm,
+    }
+    return out
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _commons.add_arguments_model(parser)
-    _commons.add_arguments_model_uq(parser)
-    _commons.add_arguments_checkpoint(parser)
-    _commons.add_arguments_test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _commons.add_arguments_cqr(parser)
-    _commons.add_arguments_wiener(parser)
-    _commons.add_arguments_output(parser, OUTPUT_FILENAME)
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.model(parser)
+    _add_arguments.model_uq(parser)
+    _add_arguments.checkpoint(parser)
+    _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _add_arguments.cqr(parser)
+    _add_arguments.wiener(parser)
+    _add_arguments.output(parser, OUTPUT_FILENAME)
+    _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 

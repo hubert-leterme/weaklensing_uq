@@ -2,8 +2,6 @@ import os
 import warnings
 import time
 import random
-import argparse
-import tqdm
 import numpy as np
 from scipy.optimize import minimize
 import torch
@@ -18,7 +16,6 @@ from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
-from wlmmuq.models.deepinv import callbacks as wlcallbacks
 
 from wlmmuq import CHECKPOINT_DIR, PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, \
     PATH_TO_TRAIN_VAL_DATASET, PATH_TO_TEST_DATASET, PATH_TO_CALIB_DATASET, \
@@ -166,33 +163,6 @@ def create_dataset_from_kappatng(
     )
 
 
-def get_powerspectrum_from_dataset(
-        hdf5_filepath, nimgs, device=None, verbose=False, **kwargs
-):
-    if verbose:
-        print(f"Compute the power spectrum of {nimgs} images")
-    dataloader = wlbl.HDF5DatasetKappa(
-        hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
-    ).to_dataloader()
-    dataloader = iter(dataloader)
-
-    list_of_powerspectrum = []
-    while True:
-        try:
-            kappa_ps = next(dataloader)
-        except StopIteration:
-            break
-        if device is not None:
-            kappa_ps = kappa_ps.to(device)
-        list_of_powerspectrum.append(
-            wlutils.get_powerspectrum(kappa_ps)
-        )
-    powerspectrum = torch.stack(list_of_powerspectrum, dim=0)
-    powerspectrum = torch.mean(powerspectrum, dim=0)
-
-    return powerspectrum
-
-
 def get_checkpoint_dirs(
         checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
 ):
@@ -235,7 +205,7 @@ def update_kwargs_model(
         # Load arguments for Wiener or KS initialization
         # Only for DeepMass (denoiser = False)
         if mode_preproc == "wiener":
-            args_preproc = get_args_wienerinit(
+            args_preproc = _get_args_wienerinit(
                 std_noise, mask, path_to_ps=path_to_ps,
                 noise_whitening=noise_whitening_wiener,
                 eps_sup_step_size=eps_sup_step_size_wiener,
@@ -406,6 +376,28 @@ def get_dataloader_massmapping(
     return test_dataloader
 
 
+def _get_args_wienerinit(
+        std_noise, mask, path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        niter=NITER_WIENER, device="cpu", verbose=False
+):
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+    powerspectrum = torch.load(path_to_ps)
+    step_size, _ = _get_step_size_param_mahalanobis(
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size, eps=eps_sup_step_size,
+        device=device, verbose=verbose
+    ) # Bayesian Wiener filtering
+    args_wienerinit = dict(
+        step_size=step_size, powerspectrum=powerspectrum,
+        std_noise=std_noise, mask=mask, niter=niter,
+        noise_whitening=noise_whitening
+    )
+    return args_wienerinit
+
+
 def _get_datafidelity_params(
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
@@ -414,7 +406,7 @@ def _get_datafidelity_params(
         device="cpu", verbose=False
 ):
     step_size, param_mahalanobis = \
-            get_step_size_param_mahalanobis(
+            _get_step_size_param_mahalanobis(
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
         step_size=step_size, multfact_step_size=multfact_step_size,
@@ -433,7 +425,7 @@ def _get_datafidelity_params(
     return data_fidelity, params_algo
 
 
-def get_datafidelity_prior_params_gaussian(
+def _get_datafidelity_prior_params_gaussian(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
         std_noise=None, physics=None,
@@ -456,7 +448,7 @@ def get_datafidelity_prior_params_gaussian(
     return data_fidelity, prior, params_algo
 
 
-def get_datafidelity_prior_params_nongaussian(
+def _get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=None,
         white_noise=False, std_noise=None, physics=None,
         step_size=None, multfact_step_size=None,
@@ -479,6 +471,41 @@ def get_datafidelity_prior_params_nongaussian(
     return data_fidelity, prior, prior_uq, params_algo
 
 
+def _get_step_size_param_mahalanobis(
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        step_size=None, multfact_step_size=None,
+        eps=EPS_SUP_STEP_SIZE,
+        device="cpu", verbose=False
+):
+    if not white_noise:
+        param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
+        if step_size is None or step_size <= 0:
+            step_size = wlutils.get_sup_step_size(
+                param_mahalanobis=param_mahalanobis,
+                physics=physics, device=device
+            )
+            if verbose:
+                print(
+                    f"Step size upper bound computed using power iteration = {step_size:.2e}"
+                )
+            step_size *= (1 - eps)
+        if multfact_step_size is not None:
+            step_size *= multfact_step_size
+    else:
+        # The standard MSE is used as data fidelity
+        # The parameter `g_param` for the proximal operator must be updated accordingly
+        if step_size is not None:
+            warnings.warn(
+                "The step size is not used for white noise. "
+                "It will be set to 1."
+            )
+        step_size = 1
+        param_mahalanobis = None
+
+    return step_size, param_mahalanobis
+
+
 def get_wiener(
         path_to_ps=PATH_TO_PS,
         white_noise=False, noise_whitening=False,
@@ -488,7 +515,7 @@ def get_wiener(
 ):
     if verbose:
         print("Get optimizer for iterative Wiener filtering")
-    data_fidelity, prior, params_algo = get_datafidelity_prior_params_gaussian(
+    data_fidelity, prior, params_algo = _get_datafidelity_prior_params_gaussian(
         path_to_ps=path_to_ps,
         white_noise=white_noise, noise_whitening=noise_whitening,
         std_noise=std_noise, physics=physics,
@@ -518,7 +545,7 @@ def get_gaussian_extractor(
         mcalens_update_ng_first=False,
         device="cpu", verbose=False
 ):
-    data_fidelity_g, prior_g, params_algo_g = get_datafidelity_prior_params_gaussian(
+    data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
         path_to_ps=path_to_ps,
         white_noise=white_noise, noise_whitening=noise_whitening_wiener,
         std_noise=std_noise, physics=physics,
@@ -547,7 +574,7 @@ def get_gaussian_extractor(
             device=device, verbose=verbose
         )
         data_fidelity_ng, prior_ng, _, params_algo_ng = \
-                get_datafidelity_prior_params_nongaussian(
+                _get_datafidelity_prior_params_nongaussian(
             denoiser_ng, white_noise=white_noise,
             std_noise=std_noise, physics=physics,
             step_size=step_size_ng, eps_sup_step_size=eps_sup_step_size,
@@ -590,7 +617,7 @@ def get_pnpmass(
         device="cpu", verbose=False
 ):
     data_fidelity, prior, prior_uq, params_algo = \
-            get_datafidelity_prior_params_nongaussian(
+            _get_datafidelity_prior_params_nongaussian(
         denoiser, denoiser_uq=denoiser_uq,
         white_noise=False, std_noise=std_noise, physics=physics,
         step_size=step_size, multfact_step_size=multfact_step_size,
@@ -639,7 +666,7 @@ def get_pnpmass(
             print("Instantiate PnPMCALens")
 
         # Note: the step size for the Gaussian component is computed automatically
-        data_fidelity_g, prior_g, params_algo_g = get_datafidelity_prior_params_gaussian(
+        data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
             path_to_ps=path_to_ps,
             white_noise=False, noise_whitening=noise_whitening_wiener,
             std_noise=std_noise, physics=physics,
@@ -685,260 +712,11 @@ def get_pnpmass(
     return out
 
 
-# TODO: Merge the 3 functions below into one single function
-def run_wiener_batch(
-        wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
-        dataloader,
-        rmse_fn: wlpnp.RMSE | None=None,
-        device="cpu", verbose=False
-):
-    listof_kappa_true = []
-    listof_kappa_pred = []
-    listof_var = [] # Zero-valued tensors
-    listof_rmse = []
-    listof_l2norm = []
-
-    pbar = tqdm.tqdm(dataloader, disable=not verbose)
-    for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            kappa_pred = wiener(gamma_noisy, physics)
-            var = torch.zeros(kappa_true.shape, device=device)
-            if rmse_fn is not None:
-                rmse = rmse_fn(kappa_pred, kappa_true)
-                l2norm = rmse_fn(kappa_true, 0)
-            else:
-                rmse = None
-                l2norm = None
-
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_l2norm.append(l2norm) # Shape = (batch_size,)
-
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    try:
-        rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
-        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
-    except TypeError:
-        rmse = None
-        l2norm = None
-
-    out = {
-        "kappa_true": kappa_true,
-        "kappa_pred": kappa_pred,
-        "var": var,
-        "rmse": rmse,
-        "l2norm": l2norm,
-    }
-    return out
-
-
-def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim | None,
-        physics: wlpnp.MassMapping,
-        dataloader, step_size, niter,
-        rmse_fn: wlpnp.RMSE | None=None,
-        gaussian_extractor: wlpnp.BaseOptim | None=None,
-        callbacks: wlcallbacks.CallbackList | None=None,
-        device="cpu", verbose=False
-):
-    listof_kappa_true = []
-    listof_kappa_pred = []
-    listof_var = []
-    listof_rmse = []
-    listof_l2norm = []
-
-    if callbacks is None:
-        callbacks = wlcallbacks.BaseCallback()
-
-    pbar = tqdm.tqdm(dataloader, disable=not verbose)
-    pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
-    for i, (kappa_true, gamma_noisy) in enumerate(pbar):
-        callbacks.on_batch_begin(i)
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            if gaussian_extractor is not None:
-                kappa_g = gaussian_extractor(
-                    gamma_noisy, physics, x_gt=None, compute_metrics=False
-                )
-                gamma_noisy = gamma_noisy - physics.A(kappa_g)
-                kappa_true = kappa_true - kappa_g
-
-            kappa_pred, metrics = pnpmass(
-                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
-            )
-            if pnpmass_uq is not None:
-                pnpmass_uq.custom_init.X_init = (kappa_pred,)
-                var = pnpmass_uq(
-                    gamma_noisy, physics, compute_metrics=False
-                )
-            else:
-                var = torch.zeros(kappa_pred.shape, device=device)
-
-            if gaussian_extractor is not None:
-                kappa_pred = kappa_pred + kappa_g
-                kappa_true = kappa_true + kappa_g
-
-            if rmse_fn is not None:
-                l2norm = rmse_fn(kappa_true, 0)
-            else:
-                l2norm = None
-
-        listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_rmse.append(metrics["rmse"]) # Shape = (batch_size, niter)
-        listof_l2norm.append(l2norm) # Shape = (batch_size, niter)
-
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    try:
-        rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
-        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs, niter)
-    except TypeError:
-        rmse = None
-        l2norm = None
-
-    out = {
-        "kappa_true": kappa_true,
-        "kappa_pred": kappa_pred,
-        "var": var,
-        "rmse": rmse,
-        "l2norm": l2norm,
-    }
-    return out
-
-
-def run_deepmass_batch(
-        deepmass: wlpnp.BaseOptim, deepmass_uq: wlpnp.BaseOptim,
-        dataloader,
-        rmse_fn: wlpnp.RMSE | None=None,
-        device="cpu", verbose=False
-):
-    listof_kappa_true = []
-    listof_kappa_pred = []
-    listof_var = []
-    listof_rmse = []
-    listof_l2norm = []
-
-    pbar = tqdm.tqdm(dataloader, disable=not verbose)
-    for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            kappa_pred = deepmass(gamma_noisy)
-            if deepmass_uq is not None:
-                var = deepmass_uq(gamma_noisy)
-            else:
-                var = torch.zeros(kappa_true.shape, device=device)
-            if rmse_fn is not None:
-                rmse = rmse_fn(kappa_pred, kappa_true)
-                l2norm = rmse_fn(kappa_true, 0)
-            else:
-                rmse = None
-                l2norm = None
-
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_l2norm.append(l2norm) # Shape = (batch_size,)
-
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    try:
-        rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
-        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
-    except TypeError:
-        rmse = None
-        l2norm = None
-
-    out = {
-        "kappa_true": kappa_true,
-        "kappa_pred": kappa_pred,
-        "var": var,
-        "rmse": rmse,
-        "l2norm": l2norm,
-    }
-    return out
-
-
-def get_error_bars(
-        var, confidence_uq=CONFIDENCE_UQ
-):  
-    return confidence_uq * var**0.5
-
-
 def get_inference_time(beg_time, which="inference", verbose=False):
     inference_time = time.time() - beg_time
     if verbose:
         print(f"Total {which} time: {inference_time:.2f} seconds")
     return inference_time
-
-
-def get_args_wienerinit(
-        std_noise, mask, path_to_ps=PATH_TO_PS,
-        white_noise=False, noise_whitening=False,
-        step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
-        niter=NITER_WIENER, device="cpu", verbose=False
-):
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
-    powerspectrum = torch.load(path_to_ps)
-    step_size, _ = get_step_size_param_mahalanobis(
-        white_noise=white_noise, noise_whitening=noise_whitening,
-        std_noise=std_noise, physics=physics,
-        step_size=step_size, eps=eps_sup_step_size,
-        device=device, verbose=verbose
-    ) # Bayesian Wiener filtering
-    args_wienerinit = dict(
-        step_size=step_size, powerspectrum=powerspectrum,
-        std_noise=std_noise, mask=mask, niter=niter,
-        noise_whitening=noise_whitening
-    )
-    return args_wienerinit
-
-
-def get_step_size_param_mahalanobis(
-        white_noise=False, noise_whitening=False,
-        std_noise=None, physics=None,
-        step_size=None, multfact_step_size=None,
-        eps=EPS_SUP_STEP_SIZE,
-        device="cpu", verbose=False
-):
-    if not white_noise:
-        param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
-        if step_size is None or step_size <= 0:
-            step_size = wlutils.get_sup_step_size(
-                param_mahalanobis=param_mahalanobis,
-                physics=physics, device=device
-            )
-            if verbose:
-                print(
-                    f"Step size upper bound computed using power iteration = {step_size:.2e}"
-                )
-            step_size *= (1 - eps)
-        if multfact_step_size is not None:
-            step_size *= multfact_step_size
-    else:
-        # The standard MSE is used as data fidelity
-        # The parameter `g_param` for the proximal operator must be updated accordingly
-        if step_size is not None:
-            warnings.warn(
-                "The step size is not used for white noise. "
-                "It will be set to 1."
-            )
-        step_size = 1
-        param_mahalanobis = None
-
-    return step_size, param_mahalanobis
 
 
 def convert_into_hyperparam_list(
@@ -950,25 +728,6 @@ def convert_into_hyperparam_list(
         hyperparam.append(None)
 
     return hyperparam
-
-
-def instantiate_cqr(
-        confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
-        mode=MODE_CQR, device="cpu"
-):
-    if mode == "addcqr":
-        cqr_class = wlcqr.AddCQR
-    elif mode == "multcqr":
-        cqr_class = wlcqr.MultCQR
-    else:
-        raise ValueError(
-            f"Invalid CQR mode '{mode}'. "
-            "Supported modes are 'addcqr' and 'multcqr'."
-        )
-    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-    cqr = cqr_class(alpha, map_size=imgsize).eval().to(device)
-
-    return cqr
 
 
 def apply_calibration_and_get_metrics(
@@ -987,12 +746,12 @@ def apply_calibration_and_get_metrics(
     # Compute the calibration parameters on the calibration set
     if verbose:
         print("Instantiate CQR model and compute the calibration parameters")
-    cqr = instantiate_cqr(
+    cqr = _instantiate_cqr(
         confidence_uq=confidence_uq, imgsize=imgsize,
         mode=mode, device=device
     )
     if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
-        hyperparam_precalib = get_optimal_hyperparam_precalib(
+        hyperparam_precalib = _get_optimal_hyperparam_precalib(
             cqr,
             kappa_pred, var,
             kappa_pred_calib, var_calib, kappa_true_calib,
@@ -1035,7 +794,26 @@ def apply_calibration_and_get_metrics(
     return out_dict
 
 
-def get_optimal_hyperparam_precalib(
+def _instantiate_cqr(
+        confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
+        mode=MODE_CQR, device="cpu"
+):
+    if mode == "addcqr":
+        cqr_class = wlcqr.AddCQR
+    elif mode == "multcqr":
+        cqr_class = wlcqr.MultCQR
+    else:
+        raise ValueError(
+            f"Invalid CQR mode '{mode}'. "
+            "Supported modes are 'addcqr' and 'multcqr'."
+        )
+    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+    cqr = cqr_class(alpha, map_size=imgsize).eval().to(device)
+
+    return cqr
+
+
+def _get_optimal_hyperparam_precalib(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
         kappa_pred: torch.Tensor,
         var: torch.Tensor,
@@ -1083,15 +861,6 @@ def get_optimal_hyperparam_precalib(
     return results_optim.x[0]
 
 
-def get_uq_keys(rho=None, const=None):
-    uq_key = "uq"
-    if rho is not None:
-        uq_key = f"{uq_key}_rho_{rho:.3f}"
-    if const is not None:
-        uq_key = f"{uq_key}_const_{const:.3f}"
-    return uq_key
-
-
 def _get_bounds(kappa_pred, res):
     kappa_lo = kappa_pred - res
     kappa_hi = kappa_pred + res
@@ -1110,16 +879,31 @@ def _get_residuals_cqr(
 ):
     cqr.reset()
     cqr.hyperparam_precalib = hyperparam_precalib
-    res = get_error_bars(
+    res = _get_error_bars(
         var, confidence_uq=confidence_uq
     )
-    res_calib = get_error_bars(
+    res_calib = _get_error_bars(
         var_calib, confidence_uq=confidence_uq
     )
     cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
     res_cqr = cqr(res)
 
     return res, res_cqr
+
+
+def _get_error_bars(
+        var, confidence_uq=CONFIDENCE_UQ
+):  
+    return confidence_uq * var**0.5
+
+
+def get_uq_keys(rho=None, const=None):
+    uq_key = "uq"
+    if rho is not None:
+        uq_key = f"{uq_key}_rho_{rho:.3f}"
+    if const is not None:
+        uq_key = f"{uq_key}_const_{const:.3f}"
+    return uq_key
 
 
 def save_results(
@@ -1143,551 +927,3 @@ def _complete_path_to_torch_saved_objects(
     path = f"{path}_{timestamp}.pt"
 
     return path
-
-
-def add_arguments_create_dataset(parser):
-
-    parser.add_argument(
-        "--idx-lp", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Index of the learning potential, indicating which folder to look "
-            "into for the HDF5 files containing the dataset (`LPxxx` where `xxx` "
-            "ranges from `001` to `100`). Default = `001`"
-        )
-    )
-    parser.add_argument(
-        "--openingangle", type=float,
-        default=argparse.SUPPRESS,
-        help=f"Opening angle (deg). Default = {OPENINGANGLE}"
-    )
-    parser.add_argument(
-        "--ninpimgs", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Number of input images. Default = {NINPIMGS}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size, to avoid memory overload. "
-            "Default = 50"
-        )
-    )
-
-
-def add_arguments_model(parser, uq=False):
-
-    parser.add_argument(
-        "-a", "--arch", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Architecture of the model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-s", "--model-size", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--no-bias", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Do not use bias in convolution or batch "
-            "normalization layers."
-        )
-    )
-    parser.add_argument(
-        "-m", "--mode-preproc", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass: 'wiener' or 'ks'. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "--model-specs", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Name of the subdirectory containing the saved checkpoints. "
-            f"Default = '{MODEL_SPECS[0]}' for order-1 networks and "
-            f"'{MODEL_SPECS[1]}' for order-2 networks."
-        )
-    )
-    if uq:
-        parser.add_argument(
-            "--additional-outlayer", type=str,
-            default=argparse.SUPPRESS,
-            help=(
-                "Type of additional output layer. "
-                "Only used for training order-2 models. "
-                "Possible values are: 'meancentering' | 'leakyrelu'. "
-                "In any case, ReLU is applied at the output in evaluation mode. "
-                "Default = None"
-            )
-        )
-
-
-def add_arguments_model_order1(parser):
-
-    parser.add_argument(
-        "-a1", "--arch-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Architecture of the order-1 model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-s1", "--model-size-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the order-1 model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--no-bias-order1", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Do not use bias in convolution or batch "
-            "normalization layers (order-1 model)."
-        )
-    )
-    parser.add_argument(
-        "-m1", "--mode-preproc-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass (order-1 model): 'wiener' or 'ks'. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "--model-specs-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Name of the subdirectory containing the saved checkpoints "
-            f"for order-1 netowrks. Default = '{MODEL_SPECS[0]}'."
-        )
-    )
-
-
-def add_arguments_model_uq(parser):
-
-    parser.add_argument(
-        "-auq", "--arch-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Architecture of the order-2 model, if different from `--arch`. "
-            "Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-suq", "--model-size-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the order-2 model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "--no-bias-uq", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Do not use bias in convolution or batch "
-            "normalization layers (order-2 models)."
-        )
-    )
-    parser.add_argument(
-        "-muq", "--mode-preproc-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass (order-2 model): 'wiener' or 'ks'. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "--model-specs-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Name of the subdirectory containing the saved checkpoints "
-            f"for order-2 netowrks. Default = '{MODEL_SPECS[1]}'."
-        )
-    )
-    parser.add_argument(
-        "--additional-outlayer-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Type of additional output layer (order-2 model). "
-            "Possible values are: 'meancentering' | 'leakyrelu'. "
-            "In any case, ReLU is applied at the output in evaluation mode. "
-            "Default = None"
-        )
-    )
-
-
-def add_arguments_checkpoint_dir(parser):
-
-    parser.add_argument(
-        "--checkpoint-dir", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Checkpoint parent directory. Default = {CHECKPOINT_DIR}"
-        )
-    )
-    parser.add_argument(
-        "-c", "--checkpoint-subdir", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Subdirectory containing the save checkpoints. Default is None."
-        )
-    )
-
-
-def add_arguments_checkpoint(parser):
-
-    add_arguments_checkpoint_dir(parser)
-    parser.add_argument(
-        "-t", "--timestamp", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Timestamp of the model to load. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "-e", "--epoch", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Epoch of the model to load. "
-            f"Default = {EPOCH}"
-        )
-    )
-    parser.add_argument(
-        "-uq", "--load-model-uq", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Load the order-2 moment network, for UQ."
-        )
-    )
-    parser.add_argument(
-        "-c0", "--checkpoint-subdir-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Checkpoint subdirectory for the order-2 moment network, "
-            "if different from `--checkpoint-subdir`."
-        )
-    )
-    parser.add_argument(
-        "-t0", "--timestamp_uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Timestamp of the order-1 model to load. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "-e0", "--epoch_uq", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Epoch of the model to load. "
-            f"Default is the same value as `--epoch` ({EPOCH} if not provided)."
-        )
-    )
-
-
-def add_arguments_dataset(parser, batch_size):
-
-    parser.add_argument(
-        "--imgsize", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of pixels (width) in input images. "
-            f"Default = {IMGSIZE}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size. "
-            f"Default = {batch_size}"
-        )
-    )
-    parser.add_argument(
-        "-w", "--num-workers", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of workers for parallel processing. Only work for PyTorch datasets. "
-            f"Default = {NUM_WORKERS}"
-        )
-    )
-
-
-def add_arguments_train_val_dataset(parser, batch_size):
-
-    parser.add_argument(
-        "--path-to-train-val-dataset", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the training and validation sets (HDF5 file). "
-            f"Default = {PATH_TO_TRAIN_VAL_DATASET}"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-train", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of training examples. "
-            f"Default = {NIMGS_TRAIN}"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-val", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of validation examples. "
-            f"Default = {NIMGS_CALIB}"
-        )
-    )
-    add_arguments_dataset(parser, batch_size)
-
-
-def add_arguments_test_calib_dataset(parser, batch_size):
-
-    parser.add_argument(
-        "--path-to-test-dataset", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the test set (HDF5 file). "
-            f"Default = {PATH_TO_TEST_DATASET}"
-        )
-    )
-    parser.add_argument(
-        "--path-to-calib-dataset", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the calibration set (HDF5 file). "
-            f"Default = {PATH_TO_CALIB_DATASET}"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-test", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of test examples. "
-            f"Default = {NIMGS_TEST}"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-calib", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of calibration examples. "
-            f"Default = {NIMGS_CALIB}"
-        )
-    )
-    parser.add_argument(
-        "-f", "--min-idx-filename-ori-calib",
-        type=int, default=argparse.SUPPRESS,
-        help=(
-            "Filter images by filenames with indices equal or larger than this value. "
-            f"Default = {MIN_IDX_FILENAME_ORI_CALIB}."
-        )
-    )
-    add_arguments_dataset(parser, batch_size)
-
-
-def add_arguments_cqr(parser, zero_init_bounds=False):
-
-    parser.add_argument(
-        "--cqr", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Calibrate with CQR."
-        )
-    )
-    parser.add_argument(
-        "--mode-cqr", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
-            f"Default = {MODE_CQR}"
-        )
-    )
-    parser.add_argument(
-        "--confidence-uq", type=float,
-        default=argparse.SUPPRESS,
-        help=f"Level of confidence for UQ. Default = {CONFIDENCE_UQ:.1f}-sigma"
-    )
-    if not zero_init_bounds:
-        parser.add_argument(
-            "-rho", "--hyperparam-precalib", type=float, nargs='+',
-            default=argparse.SUPPRESS,
-            help=(
-                "Pre-calibration hyperparameter for CQR "
-                "(multiplicative factor if `--mode-cqr` is set to 'addcqr', "
-                "additive constant if `--mode-cqr` is set to 'multcqr'). "
-                "Several value can be provided. Default = None"
-            )
-        )
-        parser.add_argument(
-            "--find-optimal-hyperparam-precalib", action='store_true',
-            default=argparse.SUPPRESS
-        )
-
-
-def add_arguments_wiener(parser):
-
-    parser.add_argument(
-        "-ps", "--path-to-ps", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the power spectrum file used for Wiener initialization. "
-            f"Default = '{PATH_TO_PS}'"
-        )
-    )
-    parser.add_argument(
-        "--niter-wiener", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for Wiener initialization. "
-            f"Default = {NITER_WIENER}"
-        )
-    )
-    parser.add_argument(
-        "-nw", "--noise-whitening-wiener", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Iterative Wiener filtering with noise-whitening data fidelity."
-        )
-    )
-
-
-def add_arguments_pnpmode(parser):
-
-    parser.add_argument(
-        "--mode", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Mode for PnPMass. Possible values are: "
-            "'regular', 'residual', 'pnpmcalens'. "
-            "Default = 'regular'"
-        )
-    )
-    parser.add_argument(
-        "--which-gaussian-extractor", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
-            "Only used if `--mode` is set to 'residual'. "
-            f"Default = '{WHICH_GAUSSIAN_EXTRACTOR}'"
-        )
-    )
-    parser.add_argument(
-        "--update-ng-first", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Update the non-Gaussian component before the Gaussian component ."
-            "Works with `--mode residual --which-gaussian-extractor mcalens` "
-            "or `--mode pnpmcalens`."
-        )
-    )
-    parser.add_argument(
-        "--starlet", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use a starlet denoiser instead of a trained model. "
-            "Only used if `--mode` is set to 'pnpmcalens'. "
-            "This option should be activated for standard MCALens."
-        )
-    )
-    parser.add_argument(
-        "-thresh", "--starlet-detection-threshold", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Detection threshold for computing the support of active "
-            "starlet coefficients. "
-            "Works with `--mode residual --which-gaussian-extractor mcalens` "
-            "or `--mode pnpmcalens --starlet`. "
-            f"Default = {int(STARLET_DETECTION_THRESHOLD)}-sigma"
-        )
-    )
-    parser.add_argument(
-        "-ig", "--niter-per-step-g", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for one Gaussian step in PnPMCALens. "
-            f"Default = {NITER_PER_STEP_G}"
-        )
-    )
-    parser.add_argument(
-        "-ing", "--niter-per-step-ng", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for one non-Gaussian step in PnPMCALens. "
-            f"Default = {NITER_PER_STEP_NG}"
-        )
-    )
-    parser.add_argument(
-        "--multfact-step-size-gaussian", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Multiplicative factor for the step size in Gaussian extraction. "
-            "Only used if `--mode` is set to 'residual'. "
-        )
-    )
-    add_arguments_wiener(parser)
-
-
-def add_arguments_output(parser, output_filename):
-
-    parser.add_argument(
-        "-o", "--output-filename", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Output filename (without extension). "
-            f"Default = '{output_filename}'"
-        )
-    )
-    parser.add_argument(
-        "--save-tensors", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "If set, the tensors of the true convergence, "
-            "the kappa map estimate, the variance, and the residuals "
-            "will be saved in the output file. WARNING: this will increase "
-            "the size of the output file significantly!"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-save", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images to save. "
-            f"Default = {NIMGS_SAVE}"
-        )
-    )
-
-
-def add_arguments_seed_verbose(parser):
-
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    ) 
