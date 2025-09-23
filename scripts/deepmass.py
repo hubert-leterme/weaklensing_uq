@@ -20,8 +20,10 @@ def main(
         path_to_mask: str=_commons.PATH_TO_MASK,
         path_to_ps: str=_commons.PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
+        model_specs: str | None=None,
         load_model_uq: bool=False,
         arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
+        model_specs_uq: str | None=None,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_DEEPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
         cqr: bool=False,
@@ -83,8 +85,10 @@ def main(
     # Load trained models
     deepmass, deepmass_uq = _commons.load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=epoch,
+        model_specs=model_specs,
         load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
         arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+        model_specs_uq=model_specs_uq,
         imgsize=imgsize,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size,

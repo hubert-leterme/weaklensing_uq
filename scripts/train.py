@@ -33,9 +33,11 @@ def main(
         noise_whitening_wiener=False,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
+        model_specs: str | None=None,
         order2=False, additional_outlayer=None,
         arch_order1=None,
         timestamp_order1=None, epoch_order1=None,
+        model_specs_order1: str | None=None,
         imgsize=_commons.IMGSIZE,
         nimgs_train=_commons.NIMGS_TRAIN, nimgs_val=_commons.NIMGS_VAL,
         nreal_per_img=NREAL_PER_IMG,
@@ -105,11 +107,9 @@ def main(
         if verbose:
             print("Load trained order-1 moment network")
         if arch_order1 is None:
-            alternative_model_order2 = False
             arch_order1 = arch
             kwargs_model_order1 = kwargs_model.copy()
         else:
-            alternative_model_order2 = True
             kwargs_model_order1 = {}
             for k in _commons.KEYS_MODEL:
                 k1 = f"{k}_order1"
@@ -124,14 +124,13 @@ def main(
             )
         order1_model = _commons.load_trained_model(
             checkpoint_dir, arch_order1, timestamp_order1, epoch_order1,
-            imgsize=imgsize, order2=False,
+            model_specs=model_specs_order1, imgsize=imgsize, order2=False,
             device=device, verbose=verbose, **kwargs_model_order1
         )
         loss_fun = wlnn.torch.Order2SupLoss(
             order1_model=order1_model, metric=metric
         )
     else:
-        alternative_model_order2 = None
         loss_fun = dinv.loss.SupLoss(metric=metric)
 
     # Initialize data loaders
@@ -195,15 +194,8 @@ def main(
             )
         )
 
-    if alternative_model_order2:
-        kwargs_model_specs = kwargs_model.copy()
-    else:
-        kwargs_model_specs = {}
-    model_specs = _commons.get_model_specs(
-        order2=order2,
-        additional_outlayer=additional_outlayer,
-        **kwargs_model_specs
-    )
+    if model_specs is None:
+        model_specs = _commons.MODEL_SPECS[order2]
     save_path = os.path.join(checkpoint_dir, model_specs)
     if resume:
         path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(

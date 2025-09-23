@@ -22,8 +22,10 @@ def main(
         path_to_ps: str=_commons.PATH_TO_PS,
         starlet: bool=False,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
+        model_specs: str | None=None,
         load_model_uq: bool=False,
         arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
+        model_specs_uq: str | None=None,
         step_size: float | list[float]=None,
         multfact_step_size: float | list[float]=None,
         niter: int=_commons.NITER_PNPMASS,
@@ -96,8 +98,10 @@ def main(
     if not starlet:
         denoiser, denoiser_uq = _commons.load_trained_models(
             checkpoint_dir, arch, timestamp, epoch=epoch,
+            model_specs=model_specs,
             load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
             arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+            model_specs_uq=model_specs_uq,
             imgsize=imgsize, device=device, verbose=verbose, **kwargs
         )
         callback_starlet_denoiser = None

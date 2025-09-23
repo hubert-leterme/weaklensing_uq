@@ -61,6 +61,11 @@ MODE_CQR = "addcqr"
 BOUNDS_MULTFACT_CONFIDENCE_UQ = (0., 2.)
 BOUNDS_ADDCONST_CONFIDENCE_UQ = (-0.005, 0.005)
 
+MODEL_SPECS = [
+    "pe", # Point estimate (order-1 models)
+    "var" # Variance estimate (order-2 models)
+]
+
 def set_seed(seed):
     """Set the random seed for reproducibility."""
     if seed is not None:
@@ -188,17 +193,6 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_model_specs(order2=False, **kwargs):
-    if not order2:
-        model_specs = "pe" # Point estimate
-    else:
-        model_specs = "var" # Variance
-        for key, val in kwargs.items():
-            if isinstance(val, str):
-                model_specs = f"{model_specs}_{key}_{val}"
-    return model_specs
-
-
 def get_checkpoint_dirs(
         checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
 ):
@@ -303,7 +297,7 @@ def load_trained_model(
         path_to_checkpoint = checkpoint_dir
     else:
         if model_specs is None:
-            model_specs = get_model_specs(order2=order2)
+            model_specs = MODEL_SPECS[order2]
         save_path = os.path.join(checkpoint_dir, model_specs)
         path_to_checkpoint = get_path_to_checkpoint(
             save_path, timestamp, epoch
@@ -324,8 +318,10 @@ def load_trained_model(
 
 def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=EPOCH,
+        model_specs=None,
         load_model_uq=False, checkpoint_dir_uq=None,
         arch_uq=None, timestamp_uq=None, epoch_uq=None,
+        model_specs_uq=None,
         imgsize=IMGSIZE,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
@@ -342,7 +338,7 @@ def load_trained_models(
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         noise_whitening_wiener=noise_whitening_wiener,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener,
+        niter_wiener=niter_wiener, model_specs=model_specs,
         device=device, verbose=verbose,
         **kwargs_model
     )
@@ -367,7 +363,7 @@ def load_trained_models(
             std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
             noise_whitening_wiener=noise_whitening_wiener,
             eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-            niter_wiener=niter_wiener,
+            niter_wiener=niter_wiener, model_specs=model_specs_uq,
             device=device, verbose=verbose,
             **kwargs_model_uq
         )
@@ -1216,6 +1212,15 @@ def add_arguments_model(parser, uq=False):
             "Default = None"
         )
     )
+    parser.add_argument(
+        "--model-specs", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Name of the subdirectory containing the saved checkpoints. "
+            f"Default = '{MODEL_SPECS[0]}' for order-1 networks and "
+            f"'{MODEL_SPECS[1]}' for order-2 networks."
+        )
+    )
     if uq:
         parser.add_argument(
             "--additional-outlayer", type=str,
@@ -1264,6 +1269,14 @@ def add_arguments_model_order1(parser):
             "Default = None"
         )
     )
+    parser.add_argument(
+        "--model-specs-order1", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Name of the subdirectory containing the saved checkpoints "
+            f"for order-1 netowrks. Default = '{MODEL_SPECS[0]}'."
+        )
+    )
 
 
 def add_arguments_model_uq(parser):
@@ -1299,6 +1312,14 @@ def add_arguments_model_uq(parser):
         help=(
             "Preprocessing mode for DeepMass (order-2 model): 'wiener' or 'ks'. "
             "Default = None"
+        )
+    )
+    parser.add_argument(
+        "--model-specs-uq", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Name of the subdirectory containing the saved checkpoints "
+            f"for order-2 netowrks. Default = '{MODEL_SPECS[1]}'."
         )
     )
     parser.add_argument(
