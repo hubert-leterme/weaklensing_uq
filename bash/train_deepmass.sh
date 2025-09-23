@@ -21,7 +21,7 @@ optional_args_cleaned=$(echo "$optional_args" \
     { printf " %s", $0 }
     END { printf "\n" }
   ' \
-  | grep -E '^(-a|-s|--no-bias|-m|--additional-outlayer|-ng|--which-gaussian-extractor|-thresh|--niter-wiener|-nw|--scale|--scale-min|--nimgs-train|--nimgs-val|--imgsize|-b|--nreal-per-img|-e|-lr|--loss)' \
+  | grep -E '^(-a|-s|--no-bias|-m|--additional-outlayer|-ng|--which-gaussian-extractor|-thresh|--niter-wiener|-nw|--scale|--scale-min|--nimgs-train|--nimgs-val|--imgsize|-b|--nreal-per-img|-e|-lr)' \
   | sed -E 's/^-a($| )/--arch\1/' \
   | sed -E 's/^-s($| )/--model-size\1/' \
   | sed -E 's/^-m($| )/--mode-preproc\1/' \
@@ -36,8 +36,26 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed 's/ /_/g')
 model_name=$(echo "deepmass_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
+# Set model specifications
+optional_args_model_specs=$(echo "$optional_args" \
+  | xargs -n1 \
+  | awk '
+    /^-/ {
+      if (NR > 1) printf "\n";
+      printf "%s", $0;
+      next
+    }
+    { printf " %s", $0 }
+    END { printf "\n" }
+  ' \
+  | grep -E '^(--loss)' \
+  | xargs \
+  | sed 's/--//g' \
+  | sed 's/ /_/g')
+model_specs=$(echo "pe_${optional_args_model_specs}" | sed 's/__/_/g' | sed 's/_\+$//')
+
 # Command to execute
-cmd=$(echo "python scripts/train.py ${optional_args} --lr-scheduler -c ${model_name} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/train.py ${optional_args} --lr-scheduler -c ${model_name} --model-specs ${model_specs} --cprofiler --cprofiler-max-nbatches 50 --cprofiler-wait 5 --cprofiler-cuda-synchronize --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
