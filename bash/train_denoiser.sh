@@ -29,7 +29,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed -E 's/^-thresh($| )/--starlet-detection-threshold\1/' \
   | sed -E 's/^-nw($| )/--noise-whitening-wiener\1/' \
   | sed -E 's/^-b($| )/--batch-size\1/' \
-  | sed -E 's/^-e($| )/--nepoch\1/' \
+  | sed -E 's/^-e($| )/--nepochs\1/' \
   | sed -E 's/^-lr($| )/--learning-rate\1/' \
   | xargs \
   | sed 's/--//g' \
