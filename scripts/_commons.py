@@ -188,15 +188,15 @@ def get_powerspectrum_from_dataset(
     return powerspectrum
 
 
-def get_output_type(order2=False, **kwargs):
+def get_model_specs(order2=False, **kwargs):
     if not order2:
-        output_type = "pe" # Point estimate
+        model_specs = "pe" # Point estimate
     else:
-        output_type = "var" # Variance
+        model_specs = "var" # Variance
         for key, val in kwargs.items():
             if isinstance(val, str):
-                output_type = f"{output_type}_{key}_{val}"
-    return output_type
+                model_specs = f"{model_specs}_{key}_{val}"
+    return model_specs
 
 
 def get_checkpoint_dirs(
@@ -282,7 +282,7 @@ def load_trained_model(
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
         noise_whitening_wiener=False,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, output_type=None,
+        niter_wiener=NITER_WIENER, model_specs=None,
         device="cpu", verbose=False, **kwargs
 ):
     update_kwargs_model(
@@ -302,9 +302,9 @@ def load_trained_model(
     if timestamp is None:
         path_to_checkpoint = checkpoint_dir
     else:
-        if output_type is None:
-            output_type = get_output_type(order2=order2)
-        save_path = os.path.join(checkpoint_dir, output_type)
+        if model_specs is None:
+            model_specs = get_model_specs(order2=order2)
+        save_path = os.path.join(checkpoint_dir, model_specs)
         path_to_checkpoint = get_path_to_checkpoint(
             save_path, timestamp, epoch
         )

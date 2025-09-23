@@ -196,15 +196,15 @@ def main(
         )
 
     if alternative_model_order2:
-        kwargs_output_type = kwargs_model.copy()
+        kwargs_model_specs = kwargs_model.copy()
     else:
-        kwargs_output_type = {}
-    output_type = _commons.get_output_type(
+        kwargs_model_specs = {}
+    model_specs = _commons.get_model_specs(
         order2=order2,
         additional_outlayer=additional_outlayer,
-        **kwargs_output_type
+        **kwargs_model_specs
     )
-    save_path = os.path.join(checkpoint_dir, output_type)
+    save_path = os.path.join(checkpoint_dir, model_specs)
     if resume:
         path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(
             save_path, timestamp_resume, epoch_resume
