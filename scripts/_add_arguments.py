@@ -7,7 +7,7 @@ import _commons
 def create_dataset(parser, path_to_output, idx_lp):
 
     parser.add_argument(
-        "--path-to-output", type=str,
+        "-o", "--path-to-output", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Path to the output HDF5 file. "
