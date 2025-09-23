@@ -11,7 +11,7 @@ optional_args="${@:2}"
 
 # Set output filename
 optional_args_cleaned=$(echo "$optional_args" \
-  | xargs -n1 \
+  | xargs -n1 printf '%s\n' \
   | awk '
     /^-/ {
       if (NR > 1) printf "\n";
