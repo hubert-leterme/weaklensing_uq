@@ -33,8 +33,6 @@ else:
     if CONFIG_DATA['verbose']:
         print(f"Configuration file found in {configdir}")
 
-USE_PYCS = CONFIG_DATA.get('use_pycs', False)
-
 COSMOS_DIR = CONFIG_DATA.get('cosmos_dir', None)
 if COSMOS_DIR is not None:
     COSMOS_DIR = os.path.expanduser(COSMOS_DIR)
