@@ -2,7 +2,7 @@ import numpy as np
 from scipy import ndimage
 from skimage.util.shape import view_as_windows
 
-from . import utils
+from .. import utils
 
 class Rotation:
 

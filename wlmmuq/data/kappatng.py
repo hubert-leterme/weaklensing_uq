@@ -5,8 +5,9 @@ import h5py
 import tqdm
 import torch
 
-from . import utils, cosmos, dataaugm
-from . import KTNG_DIR
+from . import cosmos, dataaugm
+from .. import utils
+from .. import KTNG_DIR
 
 LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
 MAX_Z = 2.6
