@@ -4,6 +4,7 @@ import time
 import tqdm
 import torch
 
+import wlmmuq
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
@@ -13,15 +14,15 @@ from wlmmuq.models.torch import NITER_WIENER
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = os.path.join(_commons.CHECKPOINT_DIR, "wiener")
+OUTPUT_DIR = os.path.join(wlmmuq.CHECKPOINT_DIR, "wiener")
 OUTPUT_FILENAME = "results_wiener"
 
 def main(
-        path_to_test_dataset: str=_commons.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=_commons.PATH_TO_CALIB_DATASET,
-        path_to_std_noise: str=_commons.PATH_TO_STD_NOISE,
-        path_to_mask: str=_commons.PATH_TO_MASK,
-        path_to_ps: str=_commons.PATH_TO_PS,
+        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps: str=wlmmuq.PATH_TO_PS,
         niter_wiener: int=NITER_WIENER,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_WIENER,
         nimgs_test: int=_commons.NIMGS_TEST,

@@ -3,16 +3,17 @@ import argparse
 import _commons
 import _add_arguments
 
-from _commons import OPENINGANGLE, NINPIMGS
+from _commons import NINPIMGS
 
-import wlmmuq.kappatng as wlktng
+import wlmmuq
+import wlmmuq.data.kappatng as wlktng
 
 IDX_LP = "002" # Lensing potential used for training/validation
 
 def main(
-        path_to_output=_commons.PATH_TO_TRAIN_VAL_DATASET,
+        path_to_output=wlmmuq.PATH_TO_TRAIN_VAL_DATASET,
         idx_lp=IDX_LP,
-        openingangle=OPENINGANGLE, ninpimgs=NINPIMGS,
+        openingangle=wlktng.OPENINGANGLE, ninpimgs=NINPIMGS,
         seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -25,7 +26,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _add_arguments.create_dataset(parser, _commons.PATH_TO_TRAIN_VAL_DATASET, IDX_LP)
+    _add_arguments.create_dataset(parser, wlmmuq.PATH_TO_TRAIN_VAL_DATASET, IDX_LP)
     parser.add_argument(
         "--angle-batch-size", type=int,
         default=argparse.SUPPRESS,

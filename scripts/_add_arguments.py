@@ -1,6 +1,10 @@
 import argparse
 
+import wlmmuq
 import wlmmuq.models as wlnn
+import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
+
+from wlmmuq.data import NUM_WORKERS, OPENINGANGLE
 
 import _commons
 
@@ -26,7 +30,7 @@ def create_dataset(parser, path_to_output, idx_lp):
     parser.add_argument(
         "--openingangle", type=float,
         default=argparse.SUPPRESS,
-        help=f"Opening angle (deg). Default = {_commons.OPENINGANGLE}"
+        help=f"Opening angle (deg). Default = {OPENINGANGLE}"
     )
     parser.add_argument(
         "--ninpimgs", type=int,
@@ -207,7 +211,7 @@ def checkpoint_dir(parser):
         "--checkpoint-dir", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Checkpoint parent directory. Default = {_commons.CHECKPOINT_DIR}"
+            f"Checkpoint parent directory. Default = {wlmmuq.CHECKPOINT_DIR}"
         )
     )
     parser.add_argument(
@@ -294,7 +298,7 @@ def dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Number of workers for parallel processing. Only work for PyTorch datasets. "
-            f"Default = {_commons.NUM_WORKERS}"
+            f"Default = {NUM_WORKERS}"
         )
     )
 
@@ -306,7 +310,7 @@ def train_val_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the training and validation sets (HDF5 file). "
-            f"Default = {_commons.PATH_TO_TRAIN_VAL_DATASET}"
+            f"Default = {wlmmuq.PATH_TO_TRAIN_VAL_DATASET}"
         )
     )
     parser.add_argument(
@@ -335,7 +339,7 @@ def test_calib_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the test set (HDF5 file). "
-            f"Default = {_commons.PATH_TO_TEST_DATASET}"
+            f"Default = {wlmmuq.PATH_TO_TEST_DATASET}"
         )
     )
     parser.add_argument(
@@ -343,7 +347,7 @@ def test_calib_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the calibration set (HDF5 file). "
-            f"Default = {_commons.PATH_TO_CALIB_DATASET}"
+            f"Default = {wlmmuq.PATH_TO_CALIB_DATASET}"
         )
     )
     parser.add_argument(
@@ -419,7 +423,7 @@ def wiener(parser):
         default=argparse.SUPPRESS,
         help=(
             "Path to the power spectrum file used for Wiener initialization. "
-            f"Default = '{_commons.PATH_TO_PS}'"
+            f"Default = '{wlmmuq.PATH_TO_PS}'"
         )
     )
     parser.add_argument(
@@ -427,7 +431,7 @@ def wiener(parser):
         default=argparse.SUPPRESS,
         help=(
             "Number of iterations for Wiener initialization. "
-            f"Default = {_commons.NITER_WIENER}"
+            f"Default = {wlnn.torch.NITER_WIENER}"
         )
     )
     parser.add_argument(
@@ -485,7 +489,7 @@ def pnpmode(parser):
             "starlet coefficients. "
             "Works with `--mode residual --which-gaussian-extractor mcalens` "
             "or `--mode pnpmcalens --starlet`. "
-            f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
+            f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
     parser.add_argument(
@@ -493,7 +497,7 @@ def pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Number of iterations for one Gaussian step in PnPMCALens. "
-            f"Default = {_commons.NITER_PER_STEP_G}"
+            f"Default = {wlmcalens.NITER_PER_STEP_G}"
         )
     )
     parser.add_argument(
@@ -501,7 +505,7 @@ def pnpmode(parser):
         default=argparse.SUPPRESS,
         help=(
             "Number of iterations for one non-Gaussian step in PnPMCALens. "
-            f"Default = {_commons.NITER_PER_STEP_NG}"
+            f"Default = {wlmcalens.NITER_PER_STEP_NG}"
         )
     )
     parser.add_argument(

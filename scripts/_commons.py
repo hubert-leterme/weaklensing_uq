@@ -8,20 +8,16 @@ import torch
 import astropy.table as aptable
 import deepinv as dinv
 
-from wlmmuq import cosmos as wlcosmos
-from wlmmuq import kappatng as wlktng
 from wlmmuq import utils as wlutils
+from wlmmuq.data import cosmos as wlcosmos
+from wlmmuq.data import kappatng as wlktng
 from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 
-from wlmmuq import CHECKPOINT_DIR, PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, \
-    PATH_TO_TRAIN_VAL_DATASET, PATH_TO_TEST_DATASET, PATH_TO_CALIB_DATASET, \
-        KEY_REPLACEMENT_DICT
-from wlmmuq.kappatng import OPENINGANGLE
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
 from wlmmuq.models.torch import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
@@ -143,7 +139,12 @@ def create_dataset_from_kappatng(
         Index of the learning potential. It indicates which folder to look
         into for the HDF5 files containing the dataset (`LPxxx` where `xxx`
         ranges from `001` to `100`).
-    openingangle : floatfrom wlmmuq.kappatng import OPENINGANGLE
+    openingangle : float
+        Opening angle of the input images in degrees.
+    ninpimgs : int
+        Number of input images before cropping/augmentation.
+    verbose : bool, optional
+    **kwargs
         Additional arguments to pass to the function `func`.
     """
     # Get redshift weights from the COSMOS catalog

@@ -3,8 +3,11 @@ import time
 import tqdm
 import torch
 
+import wlmmuq
+import wlmmuq.models.torch as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
-from wlmmuq.models.deepinv import callbacks as wlcallbacks
+import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
+import wlmmuq.models.deepinv.callbacks as wlcallbacks
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
@@ -16,13 +19,13 @@ OUTPUT_DIR = "results_pnpmass"
 OUTPUT_FILENAME = "results_pnpmass"
 
 def main(
-        path_to_test_dataset: str=_commons.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=_commons.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=_commons.CHECKPOINT_DIR,
+        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
+        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR,
         checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
-        path_to_std_noise: str=_commons.PATH_TO_STD_NOISE,
-        path_to_mask: str=_commons.PATH_TO_MASK,
-        path_to_ps: str=_commons.PATH_TO_PS,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps: str=wlmmuq.PATH_TO_PS,
         starlet: bool=False,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         model_specs: str | None=None,
@@ -43,11 +46,11 @@ def main(
         which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first: bool=False,
         multfact_step_size_gaussian: float=None,
-        niter_wiener: int=_commons.NITER_WIENER, noise_whitening_wiener: bool=False,
-        starlet_detection_threshold: float=_commons.STARLET_DETECTION_THRESHOLD,
+        niter_wiener: int=wlnn.NITER_WIENER, noise_whitening_wiener: bool=False,
+        starlet_detection_threshold: float=wlmcalens.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
-        niter_per_step_g: int=_commons.NITER_PER_STEP_G,
-        niter_per_step_ng: int=_commons.NITER_PER_STEP_NG,
+        niter_per_step_g: int=wlmcalens.NITER_PER_STEP_G,
+        niter_per_step_ng: int=wlmcalens.NITER_PER_STEP_NG,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         hyperparam_precalib: list[float] | None=None,

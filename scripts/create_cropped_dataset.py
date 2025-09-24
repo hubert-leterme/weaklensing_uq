@@ -2,16 +2,18 @@ import argparse
 
 import _commons
 import _add_arguments
-from _commons import OPENINGANGLE, NINPIMGS
 
-import wlmmuq.kappatng as wlktng
+from _commons import NINPIMGS
+
+import wlmmuq
+import wlmmuq.data.kappatng as wlktng
 
 IDX_LP = "001" # Lensing potential used for testing/calibration
 
 def main(
-        path_to_output=_commons.PATH_TO_TEST_DATASET,
+        path_to_output=wlmmuq.PATH_TO_TEST_DATASET,
         idx_lp=IDX_LP,
-        openingangle=OPENINGANGLE, ninpimgs=NINPIMGS,
+        openingangle=wlktng.OPENINGANGLE, ninpimgs=NINPIMGS,
         seed=None, verbose=False, **kwargs
 ):
     _commons.set_seed(seed)
@@ -24,7 +26,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _add_arguments.create_dataset(parser, _commons.PATH_TO_TEST_DATASET, IDX_LP)
+    _add_arguments.create_dataset(parser, wlmmuq.PATH_TO_TEST_DATASET, IDX_LP)
     _add_arguments.seed_verbose(parser)
 
     args = parser.parse_args()

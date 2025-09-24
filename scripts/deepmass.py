@@ -3,7 +3,9 @@ import time
 import tqdm
 import torch
 
+import wlmmuq
 import wlmmuq.utils as wlutils
+import wlmmuq.models.torch as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 
 from wlmmuq.data import NUM_WORKERS
@@ -15,13 +17,13 @@ OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
 
 def main(
-        path_to_test_dataset: str=_commons.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=_commons.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=_commons.CHECKPOINT_DIR,
+        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
+        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR,
         checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
-        path_to_std_noise: str=_commons.PATH_TO_STD_NOISE,
-        path_to_mask: str=_commons.PATH_TO_MASK,
-        path_to_ps: str=_commons.PATH_TO_PS,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps: str=wlmmuq.PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         model_specs: str | None=None,
         load_model_uq: bool=False,
@@ -34,7 +36,7 @@ def main(
         min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        niter_wiener: int=_commons.NITER_WIENER,
+        niter_wiener: int=wlnn.NITER_WIENER,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,

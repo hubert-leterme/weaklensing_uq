@@ -1,8 +1,9 @@
 import argparse
 import torch
 
-from wlmmuq import utils as wlutils
-from wlmmuq.data import torch as wlbl
+import wlmmuq
+import wlmmuq.utils as wlutils
+import wlmmuq.data.torch as wlbl
 
 from wlmmuq.data import NUM_WORKERS
 
@@ -14,8 +15,8 @@ from _commons import IMGSIZE, BATCH_SIZE
 NIMGS = 2048
 
 def main(
-        path_to_train_dataset=_commons.PATH_TO_TRAIN_VAL_DATASET,
-        path_to_output=_commons.PATH_TO_PS,
+        path_to_train_dataset=wlmmuq.PATH_TO_TRAIN_VAL_DATASET,
+        path_to_output=wlmmuq.PATH_TO_PS,
         imgsize=IMGSIZE, nimgs=NIMGS,
         batch_size=BATCH_SIZE, num_workers=NUM_WORKERS,
         seed=None, verbose=False
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Path to the training set (HDF5 file) "
-            f"Default = {_commons.PATH_TO_TRAIN_VAL_DATASET}"
+            f"Default = {wlmmuq.PATH_TO_TRAIN_VAL_DATASET}"
         )
     )
     parser.add_argument(
@@ -72,7 +73,7 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Path to the output file (.pt) "
-            f"Default = {_commons.PATH_TO_PS}"
+            f"Default = {wlmmuq.PATH_TO_PS}"
         )
     )
     parser.add_argument(
