@@ -1,24 +1,29 @@
 import argparse
 import time
+import tqdm
+import torch
 
+import wlmmuq
 import wlmmuq.utils as wlutils
+import wlmmuq.models.torch as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 
 from wlmmuq.data import NUM_WORKERS
 
 import _commons
+import _add_arguments
 
 OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
 
 def main(
-        path_to_test_dataset: str=_commons.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=_commons.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=_commons.CHECKPOINT_DIR,
+        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
+        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR,
         checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
-        path_to_std_noise: str=_commons.PATH_TO_STD_NOISE,
-        path_to_mask: str=_commons.PATH_TO_MASK,
-        path_to_ps: str=_commons.PATH_TO_PS,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps: str=wlmmuq.PATH_TO_PS,
         arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
         model_specs: str | None=None,
         load_model_uq: bool=False,
@@ -31,7 +36,7 @@ def main(
         min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        niter_wiener: int=_commons.NITER_WIENER,
+        niter_wiener: int=wlnn.NITER_WIENER,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
@@ -111,7 +116,7 @@ def main(
     test_dataloader = iter(test_dataset)
     if verbose:
         print(f"Compute DeepMass on the test set ({nimgs_test} images)")
-    out_deepmass = _commons.run_deepmass_batch(
+    out_deepmass = run_deepmass_batch(
         deepmass, deepmass_uq, test_dataloader,
         rmse_fn=rmse_fn, device=device, verbose=verbose,
     )
@@ -146,7 +151,7 @@ def main(
         calib_dataloader = iter(calib_dataset)
         if verbose:
             print(f"Compute DeepMass on the calibration set ({nimgs_calib} images)")
-        out_deepmass_calib = _commons.run_deepmass_batch(
+        out_deepmass_calib = run_deepmass_batch(
             deepmass, deepmass_uq, calib_dataloader,
             rmse_fn=rmse_fn, device=device, verbose=verbose,
         )
@@ -183,16 +188,71 @@ def main(
     )
 
 
+def run_deepmass_batch(
+        deepmass: wlpnp.BaseOptim, deepmass_uq: wlpnp.BaseOptim,
+        dataloader,
+        rmse_fn: wlpnp.RMSE | None=None,
+        device="cpu", verbose=False
+):
+    listof_kappa_true = []
+    listof_kappa_pred = []
+    listof_var = []
+    listof_rmse = []
+    listof_l2norm = []
+
+    pbar = tqdm.tqdm(dataloader, disable=not verbose)
+    for kappa_true, gamma_noisy in pbar:
+        kappa_true = kappa_true.to(device)
+        gamma_noisy = gamma_noisy.to(device)
+        with torch.no_grad():
+            kappa_pred = deepmass(gamma_noisy)
+            if deepmass_uq is not None:
+                var = deepmass_uq(gamma_noisy)
+            else:
+                var = torch.zeros(kappa_true.shape, device=device)
+            if rmse_fn is not None:
+                rmse = rmse_fn(kappa_pred, kappa_true)
+                l2norm = rmse_fn(kappa_true, 0)
+            else:
+                rmse = None
+                l2norm = None
+
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
+            listof_rmse.append(rmse) # Shape = (batch_size,)
+            listof_l2norm.append(l2norm) # Shape = (batch_size,)
+
+    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    try:
+        rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
+        l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
+    except TypeError:
+        rmse = None
+        l2norm = None
+
+    out = {
+        "kappa_true": kappa_true,
+        "kappa_pred": kappa_pred,
+        "var": var,
+        "rmse": rmse,
+        "l2norm": l2norm,
+    }
+    return out
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _commons.add_arguments_model(parser)
-    _commons.add_arguments_model_uq(parser)
-    _commons.add_arguments_checkpoint(parser)
-    _commons.add_arguments_test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _commons.add_arguments_cqr(parser)
-    _commons.add_arguments_wiener(parser)
-    _commons.add_arguments_output(parser, OUTPUT_FILENAME)
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.model(parser)
+    _add_arguments.model_uq(parser)
+    _add_arguments.checkpoint(parser)
+    _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
+    _add_arguments.cqr(parser)
+    _add_arguments.wiener(parser)
+    _add_arguments.output(parser, OUTPUT_FILENAME)
+    _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 

@@ -7,3 +7,6 @@
 **/.ipynb_checkpoints/*
 **/.old/*
 **/csv/.~lock.*
+*.egg-info/
+dist/
+build/

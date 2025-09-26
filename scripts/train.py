@@ -4,14 +4,14 @@ import argparse
 import torch
 import deepinv as dinv
 
+import wlmmuq
 import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.data import SCALE, NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
+import _add_arguments
 
 NREAL_PER_IMG = 1
 LOSS = 'mse'
@@ -20,18 +20,18 @@ DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
 
 def main(
-        path_to_train_val_dataset: str=_commons.PATH_TO_TRAIN_VAL_DATASET,
-        path_to_std_noise: str=PATH_TO_STD_NOISE,
-        path_to_mask: str=PATH_TO_MASK,
-        path_to_ps=PATH_TO_PS,
+        path_to_train_val_dataset: str=wlmmuq.PATH_TO_TRAIN_VAL_DATASET,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps=wlmmuq.PATH_TO_PS,
         cosmos_include_faint=False,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
-        niter_wiener=NITER_WIENER,
+        niter_wiener=wlnn.torch.NITER_WIENER,
         noise_whitening_wiener=False,
-        starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
+        starlet_detection_threshold=wlnn.deepinv.pnpmcalens.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
         model_specs: str | None=None,
         order2=False, additional_outlayer=None,
@@ -44,7 +44,7 @@ def main(
         nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS,
-        checkpoint_dir: str=_commons.CHECKPOINT_DIR, checkpoint_subdir: str=None,
+        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR, checkpoint_subdir: str=None,
         num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
@@ -241,7 +241,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _commons.add_arguments_model(parser, uq=True)
+    _add_arguments.model(parser, uq=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
@@ -277,7 +277,7 @@ if __name__ == "__main__":
             f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
-    _commons.add_arguments_wiener(parser)
+    _add_arguments.wiener(parser)
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
@@ -304,7 +304,7 @@ if __name__ == "__main__":
             "`--timestamp-order1` and `--epoch-order1` must be provided."
         )
     )
-    _commons.add_arguments_model_order1(parser)
+    _add_arguments.model_order1(parser)
     parser.add_argument(
         "-t1", "--timestamp-order1", type=str,
         default=argparse.SUPPRESS,
@@ -323,7 +323,7 @@ if __name__ == "__main__":
             "Default = None"
         )
     )
-    _commons.add_arguments_train_val_dataset(
+    _add_arguments.train_val_dataset(
         parser, batch_size=_commons.BATCH_SIZE
     )
     parser.add_argument(
@@ -364,7 +364,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    _commons.add_arguments_checkpoint_dir(parser)
+    _add_arguments.checkpoint_dir(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,
@@ -425,7 +425,7 @@ if __name__ == "__main__":
             "WARNING: This will slow down the training."
         )
     )
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 
