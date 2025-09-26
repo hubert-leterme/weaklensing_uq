@@ -9,7 +9,10 @@ from . import cosmos, dataaugm
 from .. import utils
 from .. import KTNG_DIR
 
-LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
+try:
+    LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
+except TypeError:
+    LIST_OF_Z = None
 MAX_Z = 2.6
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
 LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
