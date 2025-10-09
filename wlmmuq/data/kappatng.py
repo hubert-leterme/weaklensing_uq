@@ -11,7 +11,7 @@ from .. import KTNG_DIR
 
 try:
     LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
-except TypeError:
+except (TypeError, FileNotFoundError):
     LIST_OF_Z = None
 MAX_Z = 2.6
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
