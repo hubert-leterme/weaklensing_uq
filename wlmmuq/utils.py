@@ -260,6 +260,7 @@ def get_masked_and_noisy_shear(
     check_mask(mask)
     gamma_masked = mask * gamma
 
+    # TODO: use physics = iterativemm.MassMapping(...)
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
         noise = randn(*shape) + 1j * randn(*shape)
         if device is not None:

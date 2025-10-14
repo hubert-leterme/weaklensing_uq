@@ -99,13 +99,28 @@ class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
         )
 
 
+class ComplexGaussianNoise(dinv.physics.GaussianNoise):
+    """
+    Proper complex Gaussian noise model.
+    """
+    # TODO: check whether __add__ and __mul__ must be redefined
+    def __init__(self, sigma_real: float | torch.Tensor=0., **kwargs):
+        super().__init__(sigma=sigma_real, **kwargs)
+
+    def forward(self, x, sigma_real=None, seed=None, **kwargs):
+        out_real = super().forward(x.real, sigma=sigma_real, seed=seed, **kwargs)
+        seed = seed + 1 if seed is not None else None
+        out_imag = super().forward(x.imag, sigma=sigma_real, seed=seed, **kwargs)
+        return out_real + 1j * out_imag
+
+
 class MassMapping(dinv.physics.LinearPhysics):
 
     def __init__(
             self, sigma: float | torch.Tensor=0.,
             mask: torch.Tensor=None, **kwargs
     ):
-        noise_model = dinv.physics.GaussianNoise(sigma=sigma)
+        noise_model = ComplexGaussianNoise(sigma_real=sigma)
         super().__init__(
             A=self.get_shear_from_convergence,
             A_adjoint=self.get_convergence_from_shear,

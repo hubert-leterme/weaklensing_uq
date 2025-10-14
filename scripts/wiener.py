@@ -9,7 +9,6 @@ import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
 from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
 import _add_arguments
@@ -23,7 +22,7 @@ def main(
         path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str=wlmmuq.PATH_TO_MASK,
         path_to_ps: str=wlmmuq.PATH_TO_PS,
-        niter_wiener: int=NITER_WIENER,
+        niter_wiener: int=_commons.NITER_WIENER,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_WIENER,
         nimgs_test: int=_commons.NIMGS_TEST,
         cqr: bool=False,
@@ -34,6 +33,8 @@ def main(
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        get_initial_bounds: bool=False,
+        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
         output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
         seed: int=None, verbose: bool=False
@@ -95,7 +96,10 @@ def main(
 
     out_wiener = run_wiener_batch(
         wiener, physics, test_dataloader,
-        rmse_fn=rmse_fn, device=device, verbose=verbose,
+        rmse_fn=rmse_fn,
+        get_initial_bounds=get_initial_bounds,
+        n_noise_reals_per_img=n_noise_reals_per_img,
+        device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
     kappa_pred = out_wiener["kappa_pred"]
@@ -130,7 +134,10 @@ def main(
             print(f"Compute Wiener on the calibration set ({nimgs_calib} images)")
         out_wiener_calib = run_wiener_batch(
             wiener, physics, calib_dataloader,
-            rmse_fn=rmse_fn, device=device, verbose=verbose,
+            rmse_fn=rmse_fn,
+            get_initial_bounds=get_initial_bounds,
+            n_noise_reals_per_img=n_noise_reals_per_img,
+            device=device, verbose=verbose,
         )
         kappa_true_calib = out_wiener_calib["kappa_true"]
         kappa_pred_calib = out_wiener_calib["kappa_pred"]
@@ -163,11 +170,12 @@ def run_wiener_batch(
         wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
         dataloader,
         rmse_fn: wlpnp.RMSE | None=None,
+        get_initial_bounds: bool=False,
+        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
     listof_kappa_pred = []
-    listof_var = [] # Zero-valued tensors
     listof_rmse = []
     listof_l2norm = []
 
@@ -177,7 +185,6 @@ def run_wiener_batch(
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             kappa_pred = wiener(gamma_noisy, physics)
-            var = torch.zeros(kappa_true.shape, device=device)
             if rmse_fn is not None:
                 rmse = rmse_fn(kappa_pred, kappa_true)
                 l2norm = rmse_fn(kappa_true, 0)
@@ -185,15 +192,29 @@ def run_wiener_batch(
                 rmse = None
                 l2norm = None
 
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_l2norm.append(l2norm) # Shape = (batch_size,)
+        listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_rmse.append(rmse) # Shape = (batch_size,)
+        listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    
+    if get_initial_bounds:
+        nimgs, nchannels, nx, ny = kappa_true.shape
+        with torch.no_grad():
+            var = _commons.variance_estimation_through_noise_propagation(
+                wiener, physics,
+                output_shape=(1, nchannels, nx, ny),
+                n_noise_reals=n_noise_reals_per_img,
+                device=device, verbose=verbose
+            ) # Shape = (1, 1, imgsize, imgsize)
+        var = var.repeat(
+            nimgs, 1, 1, 1
+        ) # Shape = (nimgs, 1, imgsize, imgsize)
+    else:
+        var = torch.zeros(kappa_true.shape, device=device) # Shape = (nimgs, 1, imgsize, imgsize)
+
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
@@ -222,9 +243,9 @@ if __name__ == "__main__":
             f"Default = {OUTPUT_DIR}"
         )
     )
+    _add_arguments.gaussian_extractor(parser, wiener=True)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _add_arguments.cqr(parser, zero_init_bounds=True)
-    _add_arguments.wiener(parser)
+    _add_arguments.cqr(parser, prompt_init_bounds=True, montecarlo=True, zero_init_bounds=True)
     _add_arguments.output(parser, OUTPUT_FILENAME)
     _add_arguments.seed_verbose(parser)
     args = parser.parse_args()

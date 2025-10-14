@@ -1,9 +1,11 @@
+import os
 import argparse
 import time
 import tqdm
 import torch
 
 import wlmmuq
+import wlmmuq.models.torch as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
 import wlmmuq.models.deepinv.callbacks as wlcallbacks
@@ -14,25 +16,18 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = "results_pnpmass"
-OUTPUT_FILENAME = "results_pnpmass"
+OUTPUT_DIR = os.path.join(wlmmuq.CHECKPOINT_DIR, "mcalens")
+OUTPUT_FILENAME = "results_mcalens"
 
 def main(
         path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
         path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR,
-        checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
         path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str=wlmmuq.PATH_TO_MASK,
         path_to_ps: str=wlmmuq.PATH_TO_PS,
-        arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        model_specs: str | None=None,
-        load_model_uq: bool=False,
-        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
-        model_specs_uq: str | None=None,
         step_size: float | list[float]=None,
         multfact_step_size: float | list[float]=None,
-        niter: int=_commons.NITER_PNPMASS,
+        niter: int=_commons.NITER_MCALENS,
         cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_PNPMASS,
         nimgs_test: int=_commons.NIMGS_TEST,
         cqr: bool=False,
@@ -40,16 +35,14 @@ def main(
         min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
-        mode: str=_commons.MODE_PNPMASS,
-        which_gaussian_extractor: str=_commons.WHICH_GAUSSIAN_EXTRACTOR,
-        update_ng_first: bool=False,
-        niter_wiener: int=_commons.NITER_WIENER,
         starlet_detection_threshold: float=wlmcalens.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         niter_per_step_g: int=wlmcalens.NITER_PER_STEP_G,
         niter_per_step_ng: int=wlmcalens.NITER_PER_STEP_NG,
         mode_cqr: str=_commons.MODE_CQR,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
+        get_initial_bounds: bool=False,
+        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
         hyperparam_precalib: list[float] | None=None,
         find_optimal_hyperparam_precalib: bool=False,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
@@ -58,15 +51,9 @@ def main(
 ):
     _commons.set_seed(seed)
 
-    checkpoint_dir, checkpoint_dir_uq = _commons.get_checkpoint_dirs(
-        checkpoint_dir,
-        checkpoint_subdir=checkpoint_subdir,
-        checkpoint_subdir_uq=checkpoint_subdir_uq
-    )
-
     path_to_output = _commons.get_path_to_output(
-        output_dir, output_filename, checkpoint_dir=checkpoint_dir
-    ) # E.g., "checkpoint/dir/results_pnpmass/results_pnpmass"
+        output_dir, output_filename
+    ) # E.g., "checkpoint/dir/mcalens/results_mcalens"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -97,14 +84,12 @@ def main(
     else:
         calib_dataset = None
 
-    # Load trained denoisers
-    denoiser, denoiser_uq = _commons.load_trained_models(
-        checkpoint_dir, arch, timestamp, epoch=epoch,
-        model_specs=model_specs,
-        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
-        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        model_specs_uq=model_specs_uq,
-        imgsize=imgsize, device=device, verbose=verbose, **kwargs
+    # Load starlet denoiser
+    starlet, callback_starlet_denoiser = \
+            _commons.instantiate_starlet_denoiser(
+        imgsize=imgsize,
+        starlet_detection_threshold=starlet_detection_threshold,
+        device=device, verbose=verbose, **kwargs
     )
 
     # Get step size
@@ -127,18 +112,15 @@ def main(
         beg_time = time.time()
 
         # Instantiate the PnP model
-        pnpmass, pnpmass_uq, gaussian_extractor, \
-                tau, callback_gaussian_extractor = \
-                    _commons.get_pnpmass(
-            denoiser, denoiser_uq, imgsize=imgsize,
+        mcalens, _, _, tau, _ = _commons.get_pnpmass(
+            starlet, denoiser_uq=None, imgsize=imgsize,
             std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
             step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
-            niter=niter, mode=mode,
-            which_gaussian_extractor=which_gaussian_extractor,
-            update_ng_first=update_ng_first,
+            niter=niter, mode="mcalens",
+            which_gaussian_extractor="wiener",
+            update_ng_first=True,
             path_to_ps=path_to_ps,
-            niter_wiener=niter_wiener,
             starlet_detection_threshold=starlet_detection_threshold,
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose
@@ -146,33 +128,33 @@ def main(
 
         # Set callback list
         callback_list = []
-        if callback_gaussian_extractor is not None:
-            callback_list.append(callback_gaussian_extractor)
+        if callback_starlet_denoiser is not None:
+            callback_list.append(callback_starlet_denoiser)
         callbacks = wlcallbacks.CallbackList(callback_list)
 
         # Run PnPMass for each batch
         test_dataloader = iter(test_dataset)
         if verbose:
             print(f"Compute PnPMass on the test set ({nimgs_test} images)")
-        out_pnpmass = run_pnpmass_batch(
-            pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
+        out_mcalens = run_mcalens_batch(
+            mcalens, physics, test_dataloader, tau, niter,
             rmse_fn=rmse_fn,
-            gaussian_extractor=gaussian_extractor,
             callbacks=callbacks,
+            get_initial_bounds=get_initial_bounds,
+            n_noise_reals_per_img=n_noise_reals_per_img,
             device=device, verbose=verbose,
         )
-        kappa_true = out_pnpmass["kappa_true"]
-        kappa_pred = out_pnpmass["kappa_pred"]
-        var = out_pnpmass["var"]
-        rmse = out_pnpmass["rmse"]
-        l2norm = out_pnpmass["l2norm"]
+        kappa_true = out_mcalens["kappa_true"]
+        kappa_pred = out_mcalens["kappa_pred"]
+        var = out_mcalens["var"]
+        rmse = out_mcalens["rmse"]
+        l2norm = out_mcalens["l2norm"]
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
         out_dict = {
             "inference_time": inference_time,
             "step_size": tau,
-            "arch": arch,
             "niter": niter,
             "nimgs_test": nimgs_test,
             "imgsize": imgsize,
@@ -194,11 +176,11 @@ def main(
             calib_dataloader = iter(calib_dataset)
             if verbose:
                 print(f"Compute PnPMass on the calibration set ({nimgs_calib} images)")
-            out_pnpmass_calib = run_pnpmass_batch(
-                pnpmass, pnpmass_uq, physics, calib_dataloader, tau, niter,
+            out_pnpmass_calib = run_mcalens_batch(
+                mcalens, physics, calib_dataloader, tau, niter,
                 rmse_fn=rmse_fn,
-                gaussian_extractor=gaussian_extractor,
                 callbacks=callbacks,
+                get_initial_bounds=get_initial_bounds,
                 device=device, verbose=verbose,
             )
             kappa_true_calib = out_pnpmass_calib["kappa_true"]
@@ -235,13 +217,14 @@ def main(
         )
 
 
-def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim | None,
+def run_mcalens_batch(
+        mcalens: wlpnp.BaseOptim,
         physics: wlpnp.MassMapping,
         dataloader, step_size, niter,
         rmse_fn: wlpnp.RMSE | None=None,
-        gaussian_extractor: wlpnp.BaseOptim | None=None,
         callbacks: wlcallbacks.BaseCallback | None=None,
+        get_initial_bounds: bool=False,
+        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -260,27 +243,18 @@ def run_pnpmass_batch(
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            if gaussian_extractor is not None:
-                kappa_g = gaussian_extractor(
-                    gamma_noisy, physics, x_gt=None, compute_metrics=False
-                )
-                gamma_noisy = gamma_noisy - physics.A(kappa_g)
-                kappa_true = kappa_true - kappa_g
-
-            kappa_pred, metrics = pnpmass(
+            kappa_pred, metrics = mcalens(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
-            if pnpmass_uq is not None:
-                pnpmass_uq.custom_init.X_init = (kappa_pred,)
-                var = pnpmass_uq(
-                    gamma_noisy, physics, compute_metrics=False
+            if get_initial_bounds:
+                var = _commons.variance_estimation_through_noise_propagation(
+                    mcalens, physics,
+                    output_shape=kappa_pred.shape,
+                    n_noise_reals=n_noise_reals_per_img,
+                    device=device, verbose=verbose
                 )
             else:
                 var = torch.zeros(kappa_pred.shape, device=device)
-
-            if gaussian_extractor is not None:
-                kappa_pred = kappa_pred + kappa_g
-                kappa_true = kappa_true + kappa_g
 
             if rmse_fn is not None:
                 l2norm = rmse_fn(kappa_true, 0)
@@ -316,31 +290,10 @@ def run_pnpmass_batch(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    _add_arguments.model(parser)
-    _add_arguments.model_uq(parser)
-    _add_arguments.checkpoint(parser)
-    _add_arguments.step_size_niter(parser, default_niter=_commons.NITER_PNPMASS)
-    parser.add_argument(
-        "--mode", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Mode for PnPMass. Possible values are: "
-            "'regular', 'residual', or 'pnpmcalens'. "
-            "Default = 'regular'"
-        )
-    )
-    parser.add_argument(
-        "--which-gaussian-extractor", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
-            "Only used if `--mode` is set to 'residual'. "
-            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
-        )
-    )
-    _add_arguments.gaussian_extractor(parser, wiener=True, mcalens=True, verbose=True)
+    _add_arguments.step_size_niter(parser, default_niter=_commons.NITER_MCALENS)
+    _add_arguments.gaussian_extractor(parser, wiener=False, mcalens=True)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
-    _add_arguments.cqr(parser)
+    _add_arguments.cqr(parser, prompt_init_bounds=True, montecarlo=True, zero_init_bounds=False)
     _add_arguments.output(parser, OUTPUT_FILENAME)
     _add_arguments.seed_verbose(parser)
     args = parser.parse_args()

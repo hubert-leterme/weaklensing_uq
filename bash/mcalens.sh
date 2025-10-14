@@ -21,13 +21,12 @@ optional_args_cleaned=$(echo "$optional_args" \
     { printf " %s", $0 }
     END { printf "\n" }
   ' \
-  | grep -E '^(--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|-thresh|-ig|-ing|--niter-wiener|-nw)' \
+  | grep -E '^(--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|-thresh|-ig|-ing|--niter-wiener)' \
   | sed -E 's/^-b($| )/--batch-size\1/' \
   | sed -E 's/^-i($| )/--niter\1/' \
   | sed -E 's/^-thresh($| )/--starlet-detection-threshold\1/' \
   | sed -E 's/^-ig($| )/--niter-per-step-g\1/' \
   | sed -E 's/^-ing($| )/--niter-per-step-ng\1/' \
-  | sed -E 's/^-nw($| )/--noise-whitening-wiener\1/' \
   | xargs \
   | sed 's/--//g' \
   | sed 's/ /_/g')

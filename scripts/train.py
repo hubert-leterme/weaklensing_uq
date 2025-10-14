@@ -29,8 +29,7 @@ def main(
         arch=None, denoiser=False,
         nongaussian=False,
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
-        niter_wiener=wlnn.torch.NITER_WIENER,
-        noise_whitening_wiener=False,
+        niter_wiener=_commons.NITER_WIENER,
         starlet_detection_threshold=wlnn.deepinv.pnpmcalens.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
         model_specs: str | None=None,
@@ -90,7 +89,6 @@ def main(
     _commons.update_kwargs_model(
         kwargs_model,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        noise_whitening_wiener=noise_whitening_wiener,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
         niter_wiener=niter_wiener, device=device, verbose=verbose
     )
@@ -118,7 +116,6 @@ def main(
             _commons.update_kwargs_model(
                 kwargs_model_order1,
                 std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-                noise_whitening_wiener=noise_whitening_wiener,
                 eps_sup_step_size_wiener=eps_sup_step_size_wiener,
                 niter_wiener=niter_wiener, device=device, verbose=verbose
             )
@@ -177,7 +174,7 @@ def main(
                 _commons.get_gaussian_extractor(
             which=which_gaussian_extractor,
             path_to_ps=path_to_ps,
-            white_noise=True, noise_whitening_wiener=noise_whitening_wiener,
+            white_noise=True,
             imgsize=imgsize, physics=physics,
             niter=1, # Convergence in one iteration (white noise)
             starlet_detection_threshold=starlet_detection_threshold,
@@ -189,8 +186,7 @@ def main(
             callback_list.append(callback_gaussian_extractor)
         callback_list.append(
             wlnn.deepinv.pnpmcalens.ParamsAlgoUpdater(
-                optim=gaussian_extractor,
-                noise_whitening_wiener=noise_whitening_wiener
+                optim=gaussian_extractor
             )
         )
 
@@ -241,7 +237,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _add_arguments.model(parser, uq=True)
+    _add_arguments.model(parser, uq=True, deepmass=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
@@ -277,7 +273,7 @@ if __name__ == "__main__":
             f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
-    _add_arguments.wiener(parser)
+    _add_arguments.gaussian_extractor(parser, wiener=True)
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
@@ -304,7 +300,7 @@ if __name__ == "__main__":
             "`--timestamp-order1` and `--epoch-order1` must be provided."
         )
     )
-    _add_arguments.model_order1(parser)
+    _add_arguments.model_order1(parser, deepmass=True)
     parser.add_argument(
         "-t1", "--timestamp-order1", type=str,
         default=argparse.SUPPRESS,

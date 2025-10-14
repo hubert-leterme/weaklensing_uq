@@ -21,13 +21,12 @@ optional_args_cleaned=$(echo "$optional_args" \
     { printf " %s", $0 }
     END { printf "\n" }
   ' \
-  | grep -E '^(-a|-s|--no-bias|-m|--additional-outlayer|-ng|--which-gaussian-extractor|-thresh|--niter-wiener|-nw|--scale|--scale-min|--nimgs-train|--nimgs-val|--imgsize|-b|--nreal-per-img|-e|-lr|--loss)' \
+  | grep -E '^(-a|-s|--no-bias|-m|--additional-outlayer|-ng|--which-gaussian-extractor|-thresh|--niter-wiener|--scale|--scale-min|--nimgs-train|--nimgs-val|--imgsize|-b|--nreal-per-img|-e|-lr|--loss)' \
   | sed -E 's/^-a($| )/--arch\1/' \
   | sed -E 's/^-s($| )/--model-size\1/' \
   | sed -E 's/^-m($| )/--mode-preproc\1/' \
   | sed -E 's/^-ng($| )/--nongaussian\1/' \
   | sed -E 's/^-thresh($| )/--starlet-detection-threshold\1/' \
-  | sed -E 's/^-nw($| )/--noise-whitening-wiener\1/' \
   | sed -E 's/^-b($| )/--batch-size\1/' \
   | sed -E 's/^-e($| )/--nepochs\1/' \
   | sed -E 's/^-lr($| )/--learning-rate\1/' \

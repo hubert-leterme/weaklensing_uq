@@ -413,17 +413,15 @@ class ParamsAlgoUpdater(callbacks.BaseCallback):
 
     def __init__(
             self,
-            optim: BaseMCALens | iterativemm.BaseOptim,
-            noise_whitening_wiener: bool=False
+            optim: BaseMCALens | iterativemm.BaseOptim
     ):
         self.optim = optim
-        self.noise_whitening_wiener = noise_whitening_wiener
 
     def on_get_samples_end(self, physics):
         # Get white noise standard deviation
         # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
         sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
-        g_param_g = utils.get_g_param(sigma, self.noise_whitening_wiener)
+        g_param_g = utils.get_g_param(sigma, noise_whitening=False)
         if isinstance(self.optim, BaseMCALens):
             g_param_ng = utils.get_g_param(sigma, noise_whitening=True)
 

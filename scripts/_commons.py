@@ -18,7 +18,7 @@ from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 
 from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
-from wlmmuq.models.torch import NITER_WIENER
+from wlmmuq.models.deepinv.preproc_models import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
 
@@ -44,11 +44,14 @@ EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
+NITER_MCALENS = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
 INPAINTING_WIENER = False
 INPAINTING_PNPMASS = False
 INPAINTING_DEEPMASS = True
+
+N_NOISE_REALS_UQ = 32
 
 MODE_CQR = "addcqr"
 BOUNDS_MULTFACT_CONFIDENCE_UQ = (0., 2.)
@@ -194,7 +197,6 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
 def update_kwargs_model(
         kwargs_model,
         std_noise=None, mask=None, path_to_ps=None,
-        noise_whitening_wiener=None,
         eps_sup_step_size_wiener=None,
         niter_wiener=None, device="cpu", verbose=False
 ):
@@ -208,7 +210,6 @@ def update_kwargs_model(
         if mode_preproc == "wiener":
             args_preproc = _get_args_wienerinit(
                 std_noise, mask, path_to_ps=path_to_ps,
-                noise_whitening=noise_whitening_wiener,
                 eps_sup_step_size=eps_sup_step_size_wiener,
                 niter=niter_wiener, device=device, verbose=verbose
             )
@@ -245,7 +246,6 @@ def load_trained_model(
         additional_outlayer=None,
         key_replacement_dict=KEY_REPLACEMENT_DICT,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
-        noise_whitening_wiener=False,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
         niter_wiener=NITER_WIENER, model_specs=None,
         device="cpu", verbose=False, **kwargs
@@ -253,7 +253,6 @@ def load_trained_model(
     update_kwargs_model(
         kwargs,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        noise_whitening_wiener=noise_whitening_wiener,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
         niter_wiener=niter_wiener,
         device=device, verbose=verbose
@@ -295,7 +294,6 @@ def load_trained_models(
         model_specs_uq=None,
         imgsize=IMGSIZE,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
-        noise_whitening_wiener=False,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
         niter_wiener=NITER_WIENER,
         device="cpu", verbose=False, **kwargs
@@ -307,7 +305,6 @@ def load_trained_models(
         checkpoint_dir, arch, timestamp, epoch=epoch,
         imgsize=imgsize, order2=False,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        noise_whitening_wiener=noise_whitening_wiener,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
         niter_wiener=niter_wiener, model_specs=model_specs,
         device=device, verbose=verbose,
@@ -332,7 +329,6 @@ def load_trained_models(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
             std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-            noise_whitening_wiener=noise_whitening_wiener,
             eps_sup_step_size_wiener=eps_sup_step_size_wiener,
             niter_wiener=niter_wiener, model_specs=model_specs_uq,
             device=device, verbose=verbose,
@@ -358,10 +354,9 @@ def instantiate_starlet_denoiser(
             f"Starlet denoiser instantiated with {denoiser.ns} scales and "
             f"a {int(starlet_detection_threshold)}-sigma detection threshold."
         )
-    denoiser_uq = None # Conformal prediction computed from zero-valued error bars
     callback = wlpnpmcalens.StarletResetter(denoiser)
 
-    return denoiser, denoiser_uq, callback
+    return denoiser, callback
 
 
 def get_dataloader_massmapping(
@@ -379,22 +374,21 @@ def get_dataloader_massmapping(
 
 def _get_args_wienerinit(
         std_noise, mask, path_to_ps=PATH_TO_PS,
-        white_noise=False, noise_whitening=False,
+        white_noise=False,
         step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
         niter=NITER_WIENER, device="cpu", verbose=False
 ):
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     powerspectrum = torch.load(path_to_ps)
     step_size, _ = _get_step_size_param_mahalanobis(
-        white_noise=white_noise, noise_whitening=noise_whitening,
+        white_noise=white_noise,
         std_noise=std_noise, physics=physics,
         step_size=step_size, eps=eps_sup_step_size,
         device=device, verbose=verbose
     ) # Bayesian Wiener filtering
     args_wienerinit = dict(
         step_size=step_size, powerspectrum=powerspectrum,
-        std_noise=std_noise, mask=mask, niter=niter,
-        noise_whitening=noise_whitening
+        std_noise=std_noise, mask=mask, niter=niter
     )
     return args_wienerinit
 
@@ -536,7 +530,7 @@ def get_wiener(
 def get_gaussian_extractor(
         which=WHICH_GAUSSIAN_EXTRACTOR,
         path_to_ps=PATH_TO_PS,
-        white_noise=False, noise_whitening_wiener=False,
+        white_noise=False,
         imgsize=IMGSIZE, std_noise=None, physics=None,
         step_size=None, step_size_ng=None,
         multfact_step_size=None,
@@ -548,7 +542,7 @@ def get_gaussian_extractor(
 ):
     data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
         path_to_ps=path_to_ps,
-        white_noise=white_noise, noise_whitening=noise_whitening_wiener,
+        white_noise=white_noise,
         std_noise=std_noise, physics=physics,
         step_size=step_size,
         multfact_step_size=multfact_step_size,
@@ -609,8 +603,6 @@ def get_pnpmass(
         which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
         update_ng_first=False,
         path_to_ps=PATH_TO_PS,
-        noise_whitening_wiener=False,
-        multfact_step_size_gaussian=None,
         niter_wiener=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
         niter_per_step_g=NITER_PER_STEP_G,
@@ -640,10 +632,9 @@ def get_pnpmass(
                     get_gaussian_extractor(
                 which=which_gaussian_extractor,
                 path_to_ps=path_to_ps,
-                white_noise=False, noise_whitening_wiener=noise_whitening_wiener,
+                white_noise=False,
                 imgsize=imgsize, std_noise=std_noise, physics=physics,
                 step_size=None, step_size_ng=None,
-                multfact_step_size=multfact_step_size_gaussian,
                 eps_sup_step_size=eps_sup_step_size,
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
@@ -669,10 +660,9 @@ def get_pnpmass(
         # Note: the step size for the Gaussian component is computed automatically
         data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
             path_to_ps=path_to_ps,
-            white_noise=False, noise_whitening=noise_whitening_wiener,
+            white_noise=False,
             std_noise=std_noise, physics=physics,
             step_size=None,
-            multfact_step_size=multfact_step_size,
             eps_sup_step_size=eps_sup_step_size,
             device=device, verbose=verbose
         )
@@ -711,6 +701,31 @@ def get_pnpmass(
     )
 
     return out
+
+
+def variance_estimation_through_noise_propagation(
+        method: wlpnp.BaseOptim,
+        physics: wlpnp.MassMapping,
+        output_shape: tuple | torch.Size,
+        n_noise_reals: int=N_NOISE_REALS_UQ,
+        device="cpu", verbose=False, **kwargs
+):
+    noise_outputs = torch.zeros(
+        n_noise_reals, *output_shape, device=device
+    ) # Shape = (nreals, batch_size, 1, imgsize, imgsize), dtype = float32
+    zeros = torch.zeros(
+        *output_shape, dtype=torch.complex64, device=device
+    ) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
+    if verbose:
+        print(f"Propagate {n_noise_reals} noise realisations through the pipeline")
+    for i in range(n_noise_reals):
+        # Generate noise realisations
+        noise = physics.noise_model(zeros) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
+        # Propagate noise realisations through the pipeline
+        # For MCALens, the support of active wavelet coefficients is assumed to be already initialized.
+        noise_outputs[i] = method(noise, physics, **kwargs)
+
+    return torch.std(noise_outputs, dim=0)**2 # Shape = (batch_size, 1, imgsize, imgsize)
 
 
 def get_inference_time(beg_time, which="inference", verbose=False):

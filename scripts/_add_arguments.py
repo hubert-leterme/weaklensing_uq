@@ -49,38 +49,53 @@ def create_dataset(parser, path_to_output, idx_lp):
     )
 
 
-def model(parser, uq=False):
+def _get_model_classes(denoiser=False, deepmass=False):
+    
+    if not deepmass:
+        model_classes = wlnn.MODEL_CLASSES_DENOISER
+    elif not denoiser:
+        model_classes = wlnn.MODEL_CLASSES_DEEPMASS
+    else:
+        model_classes = wlnn.MODEL_CLASSES
 
+    return model_classes
+
+
+def model(parser, uq=False, denoiser=False, deepmass=False):
+
+    model_classes = _get_model_classes(denoiser=denoiser, deepmass=deepmass)
     parser.add_argument(
         "-a", "--arch", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Architecture of the model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+            f"{' | '.join(model_classes.keys())}. Default = None"
         )
     )
-    parser.add_argument(
-        "-s", "--model-size", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+    if deepmass:
+        parser.add_argument(
+            "-m", "--mode-preproc", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Preprocessing mode for DeepMass: 'wiener' or 'ks'. "
+                "Default = None"
+            )
         )
-    )
+    else:
+        parser.add_argument(
+            "-s", "--model-size", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Size of the model (DRUNet only). Possible values are: "
+                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+            )
+        )
     parser.add_argument(
         "--no-bias", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers."
-        )
-    )
-    parser.add_argument(
-        "-m", "--mode-preproc", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass: 'wiener' or 'ks'. "
-            "Default = None"
         )
     )
     parser.add_argument(
@@ -106,38 +121,41 @@ def model(parser, uq=False):
         )
 
 
-def model_order1(parser):
+def model_order1(parser, denoiser=False, deepmass=False):
 
+    model_classes = _get_model_classes(denoiser=denoiser, deepmass=deepmass)
     parser.add_argument(
         "-a1", "--arch-order1", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Architecture of the order-1 model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+            f"{' | '.join(model_classes.keys())}. Default = None"
         )
     )
-    parser.add_argument(
-        "-s1", "--model-size-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the order-1 model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+    if deepmass:
+        parser.add_argument(
+            "-m1", "--mode-preproc-order1", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Preprocessing mode for DeepMass (order-1 model): 'wiener' or 'ks'. "
+                "Default = None"
+            )
         )
-    )
+    else:
+        parser.add_argument(
+            "-s1", "--model-size-order1", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Size of the order-1 model (DRUNet only). Possible values are: "
+                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+            )
+        )
     parser.add_argument(
         "--no-bias-order1", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers (order-1 model)."
-        )
-    )
-    parser.add_argument(
-        "-m1", "--mode-preproc-order1", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass (order-1 model): 'wiener' or 'ks'. "
-            "Default = None"
         )
     )
     parser.add_argument(
@@ -150,39 +168,42 @@ def model_order1(parser):
     )
 
 
-def model_uq(parser):
+def model_uq(parser, denoiser=False, deepmass=False):
 
+    model_classes = _get_model_classes(denoiser=denoiser, deepmass=deepmass)
     parser.add_argument(
         "-auq", "--arch-uq", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Architecture of the order-2 model, if different from `--arch`. "
             "Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
+            f"{' | '.join(model_classes.keys())}. Default = None"
         )
     )
-    parser.add_argument(
-        "-suq", "--model-size-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the order-2 model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+    if deepmass:
+        parser.add_argument(
+            "-muq", "--mode-preproc-uq", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Preprocessing mode for DeepMass (order-2 model): 'wiener' or 'ks'. "
+                "Default = None"
+            )
         )
-    )
+    else:
+        parser.add_argument(
+            "-suq", "--model-size-uq", type=str,
+            default=argparse.SUPPRESS,
+            help=(
+                "Size of the order-2 model (DRUNet only). Possible values are: "
+                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+            )
+        )
     parser.add_argument(
         "--no-bias-uq", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Do not use bias in convolution or batch "
             "normalization layers (order-2 models)."
-        )
-    )
-    parser.add_argument(
-        "-muq", "--mode-preproc-uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Preprocessing mode for DeepMass (order-2 model): 'wiener' or 'ks'. "
-            "Default = None"
         )
     )
     parser.add_argument(
@@ -377,7 +398,7 @@ def test_calib_dataset(parser, batch_size):
     dataset(parser, batch_size)
 
 
-def cqr(parser, zero_init_bounds=False):
+def cqr(parser, prompt_init_bounds=False, montecarlo=False, zero_init_bounds=False):
 
     parser.add_argument(
         "--cqr", action='store_true',
@@ -399,6 +420,18 @@ def cqr(parser, zero_init_bounds=False):
         default=argparse.SUPPRESS,
         help=f"Level of confidence for UQ. Default = {_commons.CONFIDENCE_UQ:.1f}-sigma"
     )
+    if prompt_init_bounds:
+        if not montecarlo:
+            uq_method = "using an analytical method"
+        else:
+            uq_method = "by propagating noise realisations through the model"
+        parser.add_argument(
+            "--get-initial-bounds", action='store_true',
+            default=argparse.SUPPRESS,
+            help=(
+                f"Get pre-calibration bounds {uq_method}."
+            )
+        )
     if not zero_init_bounds:
         parser.add_argument(
             "-rho", "--hyperparam-precalib", type=float, nargs='+',
@@ -416,107 +449,104 @@ def cqr(parser, zero_init_bounds=False):
         )
 
 
-def wiener(parser):
+def step_size_niter(parser, default_niter):
 
+    parser.add_argument(
+        "-tau", "--step-size", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Step size for the PnPMass algorithm. Several values can be provided. "
+            "If not provided or set to 0, the step size will be computed as "
+            f"Default = (1 - {_commons.EPS_SUP_STEP_SIZE:.1e}) * upper_bound, "
+            "where upper_bound is estimated from the noise standard deviation "
+            "and the mask, using the power iteration method."
+        )
+    )
+    parser.add_argument(
+        "-alph", "--multfact-step-size", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Multiplicative factor for the step size. Several values can be provided."
+        )
+    )
+    parser.add_argument(
+        "-i", "--niter", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for MCALens. "
+            f"Default = {default_niter}"
+        )
+    )
+
+
+def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
+
+    additional_msg = (
+        "Works with `--mode residual` or `--mode pnpmcalens`. "
+    ) if verbose else ""
     parser.add_argument(
         "-ps", "--path-to-ps", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Path to the power spectrum file used for Wiener initialization. "
+            "Path to the power spectrum file. "
+            f"{additional_msg}"
             f"Default = '{wlmmuq.PATH_TO_PS}'"
         )
     )
-    parser.add_argument(
-        "--niter-wiener", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for Wiener initialization. "
-            f"Default = {wlnn.torch.NITER_WIENER}"
+    if wiener:
+        parser.add_argument(
+            "--niter-wiener", type=int,
+            default=argparse.SUPPRESS,
+            help=(
+                "Number of iterations for the Wiener filter. "
+                f"{additional_msg}"
+                f"Default = {wlnn.deepinv.preproc_models.NITER_WIENER}"
+            )
         )
-    )
-    parser.add_argument(
-        "-nw", "--noise-whitening-wiener", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Iterative Wiener filtering with noise-whitening data fidelity."
-        )
-    )
-
-
-def pnpmode(parser):
-
-    parser.add_argument(
-        "--mode", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Mode for PnPMass. Possible values are: "
-            "'regular', 'residual', 'pnpmcalens'. "
-            "Default = 'regular'"
-        )
-    )
-    parser.add_argument(
-        "--which-gaussian-extractor", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
-            "Only used if `--mode` is set to 'residual'. "
-            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
-        )
-    )
-    parser.add_argument(
-        "--update-ng-first", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Update the non-Gaussian component before the Gaussian component ."
+    if mcalens:
+        additional_msg = (
             "Works with `--mode residual --which-gaussian-extractor mcalens` "
-            "or `--mode pnpmcalens`."
+            "or `--mode pnpmcalens`. "
+        ) if verbose else ""
+        parser.add_argument(
+            "--update-ng-first", action='store_true',
+            default=argparse.SUPPRESS,
+            help=(
+                "Update the non-Gaussian component before the Gaussian component. "
+                f"{additional_msg}"
+            )
         )
-    )
-    parser.add_argument(
-        "--starlet", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use a starlet denoiser instead of a trained model. "
-            "Only used if `--mode` is set to 'pnpmcalens'. "
-            "This option should be activated for standard MCALens."
+        parser.add_argument(
+            "-ig", "--niter-per-step-g", type=int,
+            default=argparse.SUPPRESS,
+            help=(
+                "Number of iterations for one Gaussian step. "
+                f"{additional_msg}"
+                f"Default = {wlmcalens.NITER_PER_STEP_G}"
+            )
         )
-    )
-    parser.add_argument(
-        "-thresh", "--starlet-detection-threshold", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Detection threshold for computing the support of active "
-            "starlet coefficients. "
-            "Works with `--mode residual --which-gaussian-extractor mcalens` "
-            "or `--mode pnpmcalens --starlet`. "
-            f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
+        parser.add_argument(
+            "-ing", "--niter-per-step-ng", type=int,
+            default=argparse.SUPPRESS,
+            help=(
+                "Number of iterations for one non-Gaussian step. "
+                f"{additional_msg}"
+                f"Default = {wlmcalens.NITER_PER_STEP_NG}"
+            )
         )
-    )
-    parser.add_argument(
-        "-ig", "--niter-per-step-g", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for one Gaussian step in PnPMCALens. "
-            f"Default = {wlmcalens.NITER_PER_STEP_G}"
+        additional_msg = (
+            "Works with `--mode residual --which-gaussian-extractor mcalens`. "
+        ) if verbose else ""
+        parser.add_argument(
+            "-thresh", "--starlet-detection-threshold", type=float,
+            default=argparse.SUPPRESS,
+            help=(
+                "Detection threshold for computing the support of active "
+                "starlet coefficients. "
+                f"{additional_msg}"
+                f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
+            )
         )
-    )
-    parser.add_argument(
-        "-ing", "--niter-per-step-ng", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for one non-Gaussian step in PnPMCALens. "
-            f"Default = {wlmcalens.NITER_PER_STEP_NG}"
-        )
-    )
-    parser.add_argument(
-        "--multfact-step-size-gaussian", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Multiplicative factor for the step size in Gaussian extraction. "
-            "Only used if `--mode` is set to 'residual'. "
-        )
-    )
-    wiener(parser)
 
 
 def output(parser, output_filename):

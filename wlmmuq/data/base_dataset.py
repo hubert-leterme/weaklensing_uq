@@ -606,6 +606,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
             std_noise *= self.std_noise # Shape = ([nimgs], nx, ny)
 
         # Generate noise realizations
+        # TODO: use physics = iterativemm.MassMapping(...)
         noise = std_noise * np.random.normal(size=kappa_true.shape)
         noise = self._convert_to_tensor(noise)
         scale = self._convert_to_tensor(scale)
