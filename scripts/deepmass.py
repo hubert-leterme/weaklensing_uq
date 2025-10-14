@@ -38,6 +38,7 @@ def main(
         niter_wiener: int=_commons.NITER_WIENER,
         eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
         mode_cqr: str=_commons.MODE_CQR,
+        scaling_factor_chisqcqr: float | None=None,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         hyperparam_precalib: list[float] | None=None,
         find_optimal_hyperparam_precalib: bool=False,
@@ -158,21 +159,27 @@ def main(
         kappa_pred_calib = out_deepmass_calib["kappa_pred"]
         var_calib = out_deepmass_calib["var"]
 
-        for rho in hyperparam_precalib:
-            uq_dict = _commons.apply_calibration_and_get_metrics(
-                kappa_pred, var, kappa_true,
-                kappa_pred_calib, var_calib, kappa_true_calib,
-                confidence_uq=confidence_uq,
-                imgsize=imgsize, mode=mode_cqr,
-                hyperparam_precalib=rho,
-                find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                device=device, verbose=verbose
-            )
-            uq_key = _commons.get_uq_keys(rho=rho)
-            out_dict.update({
-                uq_key: uq_dict
-            })
+        mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
+            mode_cqr, scaling_factor_chisqcqr
+        )
+        for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
+            for rho in hyperparam_precalib:
+                uq_dict = _commons.apply_calibration_and_get_metrics(
+                    kappa_pred, var, kappa_true,
+                    kappa_pred_calib, var_calib, kappa_true_calib,
+                    confidence_uq=confidence_uq,
+                    imgsize=imgsize, mode=mcqr, a=a,
+                    hyperparam_precalib=rho,
+                    find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
+                    mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                    device=device, verbose=verbose
+                )
+                uq_key = _commons.get_uq_keys(
+                    mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
+                )
+                out_dict.update({
+                    uq_key: uq_dict
+                })
 
         calibration_time = _commons.get_inference_time(
             beg_time, which="calibration", verbose=verbose

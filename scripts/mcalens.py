@@ -5,7 +5,6 @@ import tqdm
 import torch
 
 import wlmmuq
-import wlmmuq.models.torch as wlnn
 import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
 import wlmmuq.models.deepinv.callbacks as wlcallbacks
@@ -40,6 +39,7 @@ def main(
         niter_per_step_g: int=wlmcalens.NITER_PER_STEP_G,
         niter_per_step_ng: int=wlmcalens.NITER_PER_STEP_NG,
         mode_cqr: str=_commons.MODE_CQR,
+        scaling_factor_chisqcqr: float | None=None,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         get_initial_bounds: bool=False,
         n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
@@ -187,21 +187,27 @@ def main(
             kappa_pred_calib = out_pnpmass_calib["kappa_pred"]
             var_calib = out_pnpmass_calib["var"]
 
-            for rho in hyperparam_precalib:
-                uq_dict = _commons.apply_calibration_and_get_metrics(
-                    kappa_pred, var, kappa_true,
-                    kappa_pred_calib, var_calib, kappa_true_calib,
-                    confidence_uq=confidence_uq,
-                    imgsize=imgsize, mode=mode_cqr,
-                    hyperparam_precalib=rho,
-                    find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                    mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                    device=device, verbose=verbose
-                )
-                uq_key = _commons.get_uq_keys(rho=rho)
-                out_dict.update({
-                    uq_key: uq_dict
-                })
+            mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
+                mode_cqr, scaling_factor_chisqcqr
+            )
+            for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
+                for rho in hyperparam_precalib:
+                    uq_dict = _commons.apply_calibration_and_get_metrics(
+                        kappa_pred, var, kappa_true,
+                        kappa_pred_calib, var_calib, kappa_true_calib,
+                        confidence_uq=confidence_uq,
+                        imgsize=imgsize, mode=mcqr, a=a,
+                        hyperparam_precalib=rho,
+                        find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
+                        mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                        device=device, verbose=verbose
+                    )
+                    uq_key = _commons.get_uq_keys(
+                        mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
+                    )
+                    out_dict.update({
+                        uq_key: uq_dict
+                    })
 
             calibration_time = _commons.get_inference_time(
                 beg_time, which="calibration", verbose=verbose

@@ -735,11 +735,25 @@ def get_inference_time(beg_time, which="inference", verbose=False):
     return inference_time
 
 
+def convert_into_list(value):
+    if not isinstance(value, list):
+        value = [value]
+    return value
+
+
+def convert_into_list_cqr_mode(mode_cqr, scaling_factor_chisqcqr):
+    mode_cqr = convert_into_list(mode_cqr)
+    scaling_factor_chisqcqr = convert_into_list(scaling_factor_chisqcqr)
+    for i, mcqr in enumerate(mode_cqr):
+        if mcqr != "chisqcqr":
+            scaling_factor_chisqcqr[i] = None
+    return mode_cqr,scaling_factor_chisqcqr
+
+
 def convert_into_hyperparam_list(
         hyperparam, find_optimal_hyperparam_precalib=False
 ):
-    if not isinstance(hyperparam, list):
-        hyperparam = [hyperparam]
+    hyperparam = convert_into_list(hyperparam)
     if find_optimal_hyperparam_precalib and None not in hyperparam:
         hyperparam.append(None)
 
@@ -754,7 +768,7 @@ def apply_calibration_and_get_metrics(
         hyperparam_precalib=None,
         find_optimal_hyperparam_precalib=False,
         mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
-        device="cpu", verbose=False
+        device="cpu", verbose=False, **kwargs
 ):
     err_metric = wlpnp.MiscoverageRate(meancentering=False, mask=mask).to(device)
     predinterv_metric = wlpnp.PredInterv(meancentering=False, mask=mask).to(device)
@@ -764,7 +778,7 @@ def apply_calibration_and_get_metrics(
         print("Instantiate CQR model and compute the calibration parameters")
     cqr = _instantiate_cqr(
         confidence_uq=confidence_uq, imgsize=imgsize,
-        mode=mode, device=device
+        mode=mode, mask=mask, device=device, **kwargs
     )
     if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
         hyperparam_precalib = _get_optimal_hyperparam_precalib(
@@ -812,19 +826,15 @@ def apply_calibration_and_get_metrics(
 
 def _instantiate_cqr(
         confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
-        mode=MODE_CQR, device="cpu"
+        mode=MODE_CQR, mask=None, device="cpu", **kwargs
 ):
-    if mode == "addcqr":
-        cqr_class = wlcqr.AddCQR
-    elif mode == "multcqr":
-        cqr_class = wlcqr.MultCQR
-    else:
-        raise ValueError(
-            f"Invalid CQR mode '{mode}'. "
-            "Supported modes are 'addcqr' and 'multcqr'."
-        )
+    cqr_class = wlnn.CQR_CLASSES[mode]
+    if mode == "chisqcqr":
+        kwargs.update(mask=mask)
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
-    cqr = cqr_class(alpha, map_size=imgsize).eval().to(device)
+    cqr = cqr_class(
+        alpha, map_size=imgsize, **kwargs
+    ).eval().to(device)
 
     return cqr
 
@@ -913,8 +923,15 @@ def _get_error_bars(
     return confidence_uq * var**0.5
 
 
-def get_uq_keys(rho=None, const=None):
+def get_uq_keys(
+        mode_cqr=None, scaling_factor_chisqcqr=None,
+        rho=None, const=None,
+):
     uq_key = "uq"
+    if mode_cqr is not None and mode_cqr != "addcqr":
+        uq_key = f"{uq_key}_{mode_cqr}"
+        if mode_cqr == "chisqcqr" and scaling_factor_chisqcqr is not None:
+            uq_key = f"{uq_key}_a_{scaling_factor_chisqcqr:.3f}"
     if rho is not None:
         uq_key = f"{uq_key}_rho_{rho:.3f}"
     if const is not None:

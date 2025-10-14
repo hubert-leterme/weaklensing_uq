@@ -408,11 +408,20 @@ def cqr(parser, prompt_init_bounds=False, montecarlo=False, zero_init_bounds=Fal
         )
     )
     parser.add_argument(
-        "--mode-cqr", type=str,
+        "--mode-cqr", type=str, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            "Mode for CQR. Possible values are: 'addcqr' | 'multcqr'. "
-            f"Default = {_commons.MODE_CQR}"
+            f"Mode for CQR. Possible values are: {' | '.join(wlnn.CQR_CLASSES.keys())}. "
+            f"Several values can be provided. Default = '{_commons.MODE_CQR}'"
+        )
+    )
+    parser.add_argument(
+        "--scaling-factor-chisqcqr", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Scaling factor for Chi-squared CQR. "
+            "Only used if `--mode-cqr` is set to 'chisqcqr'. "
+            "Several values can be provided. Default = None"
         )
     )
     parser.add_argument(

@@ -31,6 +31,7 @@ def main(
         imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
         num_workers: int=NUM_WORKERS,
         mode_cqr: str=_commons.MODE_CQR,
+        scaling_factor_chisqcqr: float | None=None,
         confidence_uq: int | float=_commons.CONFIDENCE_UQ,
         get_initial_bounds: bool=False,
         save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
@@ -128,15 +129,22 @@ def main(
         kappa_pred_calib = out_ks_calib["kappa_pred"]
         var_calib = out_ks_calib["var"]
 
-        uq_dict = _commons.apply_calibration_and_get_metrics(
-            kappa_pred, var, kappa_true,
-            kappa_pred_calib, var_calib, kappa_true_calib,
-            confidence_uq=confidence_uq,
-            imgsize=imgsize, mode=mode_cqr,
-            mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-            device=device, verbose=verbose
+        mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
+            mode_cqr, scaling_factor_chisqcqr
         )
-        out_dict.update({"uq": uq_dict})
+        for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
+            uq_dict = _commons.apply_calibration_and_get_metrics(
+                kappa_pred, var, kappa_true,
+                kappa_pred_calib, var_calib, kappa_true_calib,
+                confidence_uq=confidence_uq,
+                imgsize=imgsize, mode=mcqr, a=a,
+                mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                device=device, verbose=verbose
+            )
+            uq_key = _commons.get_uq_keys(mode_cqr=mcqr, scaling_factor_chisqcqr=a)
+            out_dict.update({
+                uq_key: uq_dict
+            })
 
         calibration_time = _commons.get_inference_time(
             beg_time, which="calibration", verbose=verbose
@@ -219,7 +227,8 @@ if __name__ == "__main__":
         default=argparse.SUPPRESS,
         help=(
             "Standard deviation of the Gaussian filter used in KS. "
-            "If not provided, no Gaussian filter is used."
+            "If not provided, no Gaussian filter is used. "
+            "Default = None"
         )
     )
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)

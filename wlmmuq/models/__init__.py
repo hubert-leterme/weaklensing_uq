@@ -17,3 +17,9 @@ MODEL_CLASSES_DEEPMASS = {
 } # (model_class, scale_as_input)
 
 MODEL_CLASSES = MODEL_CLASSES_DENOISER | MODEL_CLASSES_DEEPMASS
+
+CQR_CLASSES = {
+    "addcqr": cqr.AddCQR,
+    "multcqr": cqr.MultCQR,
+    "chisqcqr": cqr.ChisqCQR
+}
