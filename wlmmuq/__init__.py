@@ -2,14 +2,12 @@ import os
 import warnings
 import yaml
 
-# First, check if the config file wcnn_config.yml is in the current directory.
-# If not in there, check in "~/.config/".
+# Look for configuration file
 CONFIG_DIRLIST = [
-    os.getcwd(), # run a script from the directory where the config file is located
-    os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)
-    )), # look into the parent directory
-    os.path.expanduser("~/.config") # or look into a generic directory
+    os.getcwd(), # Project-local directory
+    os.path.join(os.path.expanduser("~"), ".config", __name__), # User-specific config directory
+    os.path.join("/etc", __name__), # System-wide config directory
+    os.path.dirname(__file__), # Package-default directory
 ]
 
 CONFIGFILE = None
