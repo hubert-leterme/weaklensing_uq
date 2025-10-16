@@ -47,6 +47,9 @@ if PATH_TO_STD_NOISE is not None:
 PATH_TO_MASK = CONFIG_DATA.get('path_to_mask', None)
 if PATH_TO_MASK is not None:
     PATH_TO_MASK = os.path.expanduser(PATH_TO_MASK)
+PATH_TO_EXTENT = CONFIG_DATA.get('path_to_extent', None)
+if PATH_TO_EXTENT is not None:
+    PATH_TO_EXTENT = os.path.expanduser(PATH_TO_EXTENT)
 PATH_TO_PS = CONFIG_DATA.get('path_to_ps', None)
 if PATH_TO_PS is not None:
     PATH_TO_PS = os.path.expanduser(PATH_TO_PS)
