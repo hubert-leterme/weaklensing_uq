@@ -13,7 +13,7 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = os.path.join(wlmmuq.CHECKPOINT_DIR, "wiener")
+OUTPUT_DIR = os.path.join(wlmmuq.MODEL_DIR, "wiener")
 OUTPUT_FILENAME = "results_wiener"
 
 def main(

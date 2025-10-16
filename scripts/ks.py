@@ -14,7 +14,7 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = os.path.join(wlmmuq.CHECKPOINT_DIR, "ks")
+OUTPUT_DIR = os.path.join(wlmmuq.MODEL_DIR, "ks")
 OUTPUT_FILENAME = "results_ks"
 
 def main(

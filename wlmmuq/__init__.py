@@ -37,9 +37,9 @@ if COSMOS_DIR is not None:
 KTNG_DIR = CONFIG_DATA.get('ktng_dir', None)
 if KTNG_DIR is not None:
     KTNG_DIR = os.path.expanduser(KTNG_DIR)
-CHECKPOINT_DIR = CONFIG_DATA.get('checkpoint_dir', None)
-if CHECKPOINT_DIR is not None:
-    CHECKPOINT_DIR = os.path.expanduser(CHECKPOINT_DIR)
+MODEL_DIR = CONFIG_DATA.get('model_dir', None)
+if MODEL_DIR is not None:
+    MODEL_DIR = os.path.expanduser(MODEL_DIR)
 
 PATH_TO_STD_NOISE = CONFIG_DATA.get('path_to_std_noise', None)
 if PATH_TO_STD_NOISE is not None:

@@ -9,7 +9,7 @@ verbose: true
 
 cosmos_dir: path/to/COSMOS/v1.0
 ktng_dir: path/to/kappaTNG
-checkpoint_dir: path/to/checkpoints
+model_dir: path/to/models
 
 path_to_std_noise: path/to/std_noise.pt
 path_to_mask: path/to/mask.pt

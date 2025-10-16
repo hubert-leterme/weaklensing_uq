@@ -20,7 +20,7 @@ OUTPUT_FILENAME = "results_pnpmass"
 def main(
         path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
         path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR,
+        checkpoint_dir: str=wlmmuq.MODEL_DIR,
         checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
         path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str=wlmmuq.PATH_TO_MASK,

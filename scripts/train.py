@@ -43,7 +43,7 @@ def main(
         nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS,
-        checkpoint_dir: str=wlmmuq.CHECKPOINT_DIR, checkpoint_subdir: str=None,
+        checkpoint_dir: str=wlmmuq.MODEL_DIR, checkpoint_subdir: str=None,
         num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,

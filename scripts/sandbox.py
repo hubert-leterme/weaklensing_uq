@@ -5,7 +5,7 @@ path_to_test_dataset=~/Documents/Data/kappaTNG_cropped/LP001_cropped_384.hdf5
 
 # Check if correct number of arguments are provided
 if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <GPU_ID> <CHECKPOINT_DIR> [OPTION1 [OPTION 2 ...]]"
+  echo "Usage: $0 <GPU_ID> <MODEL_DIR> [OPTION1 [OPTION 2 ...]]"
   echo "Example: $0 0 checkpoint/dir/ -cqr path/to/cqr.pt -a torch.DRUNet -s small -t yyyymmdd_hhmmss -uq -t0 yyyymmdd_hhmmss [-i 3] [-w 8]"
   exit 1
 fi

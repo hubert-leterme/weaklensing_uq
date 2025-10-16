@@ -232,7 +232,7 @@ def checkpoint_dir(parser):
         "--checkpoint-dir", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Checkpoint parent directory. Default = {wlmmuq.CHECKPOINT_DIR}"
+            f"Checkpoint parent directory. Default = {wlmmuq.MODEL_DIR}"
         )
     )
     parser.add_argument(
