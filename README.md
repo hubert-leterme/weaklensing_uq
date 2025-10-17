@@ -4,43 +4,49 @@
 
 #### Conda virtual environment
 
+For reproducibility.
+
 ```bash
 conda env create -f env.yml
 conda activate wlmmuq
 ```
 
-#### Additional packages
+#### Installation
 
-Some packages must be installed manually.
-
-- `pycs` library, from the `cosmostat` repository (https://github.com/CosmoStat/cosmostat). Tested with commit nb `3eff4935bc3cd2368844c67452e429e0f4e7a127`. If `python -m pip install .` fails, simply specify the path to the git repository in `config.yml` (see below). Otherwise, leave it blank.
-
-- `pysparse` Python bindings, from the `Sparse2D` repository (https://github.com/CosmoStat/Sparse2D). Tested with commit nb `3f9d54863765980299cfe92e0624ba93ed7ff02b`.
+Install `wlmmuq` library, provided in this repository, with `pip install .`.
 
 #### Configuration file
 
 Update `config.yml` provided at the root of this repository, to configure data directories and file paths:
 
 - `cosmos_dir`: Path to the COSMOS S10 weak lensing shear catalog (Schrabback et al. 2010). The directory contains data files named `cosmos_bright_cat_min.asc` and `cosmos_faint_cat.asc`.
-- `ktng_dir`: Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations. See `https://github.com/0satoken/kappaTNG` to download the dataset. The directory contains HDF5 files named `LP001_run[001-100]_maps.hdf5`.
-- `pycs_dir`: Path to the `pycs` library (see above). This should be used only if the `pip` installation is unsuccessful. Otherwise, leave it blank.
-- `pickle_dir`: Path to the folder where the pickled objects will be stored. Used when running the script `massmapping.py`.
+- `ktng_dir`: Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations. See `https://github.com/0satoken/kappaTNG` to download the dataset. The directory contains a file named `zs.dat` as well as HDF5 files named `LP[XXX]/LP[XXX]_run[001-100]_maps.hdf5`, where `[XXX]` ranges from `001` to `100`.
 
-#### Note
+## Python scripts
 
-If you encounter the error `ImportError: libpython3.11.so.1.0: cannot open shared object file: No such file or directory`, you can create a symbolic link to resolve it. Typically, the `libpython3.11.so.1.0` file is located in the `~/miniconda3/envs/wlmmuq/lib` directory within your virtual environment. You can link this file to a standard root location such as `/lib/x86_64-linux-gnu` by running the following command:
-```sh
-ln -s ~/miniconda3/envs/wlmmuq/lib/libpython3.11.so.1.0 /lib/x86_64-linux-gnu/libpython3.11.so.1.0
+**TODO: update.**
+
+### Creating an augmented dataset
+
+Data augmentation by rotating and randomly cropping convergence maps. Used for training DeepMass.
+
+```bash
+python create_augmented_dataset.py path/to/destination/file.hdf5 --idx-lp 2 --nimgs 100 -b 25 --angle-batch-size 36 --angle-step 1 --niter-per-angle 2 --seed 42 -v
 ```
-Please note that this workaround is not recommended as it makes some libraries available outside the virtual environment, which could lead to potential conflicts. However, this solution is provided here in the absence of a better alternative.
 
-## Jupyter notebook reproducing our experiments
+### Training DeepMass
 
-Check `wlmmuq.ipynb`.
+```bash
+python train.py path/to/augmented/dataset.hdf5 --input-method wiener --checkpoint-dir path/to/checkpoint --save-freq 8 --backup-dir path/to/backup -log path/to/log.csv --seed 42 -v
+```
+
+## Jupyter notebooks
+
+Examples are provided in the Jupyter notebooks provided in the directory `./notebooks`.
 
 ## License
 
-Copyright 2024 Hubert Leterme
+Copyright 2025 Hubert Leterme & Andreas Tersenov
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
