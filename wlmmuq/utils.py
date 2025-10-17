@@ -852,16 +852,16 @@ class KappamapVisualizer:
 
 class KappamapVisualizerCompact(KappamapVisualizer):
 
-    def visualize(self, title: str=None, showstd: bool=False, **kwargs):
+    def visualize(self, showstd: bool=False, **kwargs):
         plt.figure(figsize=(8, 6))
         plt.subplot(221)
-        self.skyshow_pointestimate(title=title, **kwargs)
+        self.skyshow_pointestimate(title="Point estimate", **kwargs)
         plt.subplot(222)
-        self.skyshow_variance(title=title, showstd=showstd, **kwargs)
+        self.skyshow_variance(title="Std estimate", showstd=showstd, **kwargs)
         plt.subplot(223)
-        self.skyshow_bound("lower", title=title, **kwargs)
+        self.skyshow_bound("lower", title=f"Lower bound", **kwargs)
         plt.subplot(224)
-        self.skyshow_bound("upper", title=title, **kwargs)
+        self.skyshow_bound("upper", title=f"Upper bound", **kwargs)
         plt.show()
 
 
