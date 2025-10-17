@@ -949,6 +949,7 @@ def save_results(
     if verbose:
         print(f"Save results to {path_to_output}")
 
+    os.makedirs(os.path.dirname(path_to_output), exist_ok=True)
     torch.save(out_dict, path_to_output)
 
 
