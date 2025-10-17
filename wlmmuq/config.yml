@@ -1,0 +1,30 @@
+# Configuration file for data directories and file paths
+#
+# Parameters:
+#   verbose: Boolean flag to enable verbose output when importing the wlmmuq library.
+#   cosmos_dir: Path to the COSMOS data directory.
+#   ktng_dir: Path to the kappaTNG data directory.
+
+verbose: true
+
+cosmos_dir: path/to/COSMOS/v1.0
+ktng_dir: path/to/kappaTNG
+model_dir: path/to/models
+
+path_to_std_noise: path/to/std_noise.pt
+path_to_mask: path/to/mask.pt
+path_to_extent: path/to/extent.pt
+path_to_ps: path/to/powerspectrum.pt
+
+path_to_train_val_dataset: path/to/train/dataset.hdf5
+path_to_test_dataset: path/to/test/dataset.hdf5
+path_to_calib_dataset: path/to/calib/dataset.hdf5
+
+learnlets_pretrained_weights_dir: path/to/weights
+
+key_replacement_dict:
+  wiener_init.optim.data_fidelity.0.d.var: preproc.optim.data_fidelity.0.d.param_vector
+  wiener_init.optim.data_fidelity.0.d.param_vector: preproc.optim.data_fidelity.0.d.param_vector
+  wiener_init.optim.prior.0.denoiser.powerspectrum: preproc.optim.prior.0.denoiser.powerspectrum
+  wiener_init.physics.mask: preproc.physics.mask
+  wiener_init.physics.noise_model.sigma: preproc.physics.noise_model.sigma

@@ -6,11 +6,14 @@ from scipy import ndimage, signal, stats, sparse, linalg
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
+import deepinv as dinv
 
 #from lenspack.image.inversion import ks93, ks93inv
 from lenspack.utils import bin2d
 
 from . import ks93
+
+ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -197,8 +200,8 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
 
 def get_std_noise(ngal, shapedisp, std_noise_mask):
 
-    out = np.nan_to_num(
-        shapedisp / np.sqrt(ngal), posinf=std_noise_mask
+    out = torch.nan_to_num(
+        shapedisp / ngal**0.5, posinf=std_noise_mask
     ) # standard deviation of the noise
 
     return out
@@ -257,6 +260,7 @@ def get_masked_and_noisy_shear(
     check_mask(mask)
     gamma_masked = mask * gamma
 
+    # TODO: use physics = iterativemm.MassMapping(...)
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
         noise = randn(*shape) + 1j * randn(*shape)
         if device is not None:
@@ -397,72 +401,6 @@ def split_test_calib(list_of_arr, nimgs_calib, **kwargs):
         list_of_arr_test.append(arr_test)
 
     return list_of_arr_calib, list_of_arr_test
-
-
-def _get_stats(func, *args, mask=None):
-
-    # TODO: replace by a decorator
-    width1, width2 = test_array_shape(args)[-2:]
-    if mask is not None:
-        assert mask.shape[-2:] == (width1, width2)
-
-    vals = func(*args) # shape = (nimgs, [npatches], nx, ny)
-    if mask is not None:
-        vals *= mask # shape = (nimgs, [npatches], nx, ny)
-        npixels = mask.sum(axis=(-2, -1)) # int or shape = (npatches,)
-    else:
-        npixels = width1 * width2
-
-    return vals.sum(axis=(-2, -1)) / npixels # shape = (nimgs, [npatches])
-
-
-def miscoverage_rate(kappa_lo, kappa_hi, kappa, mask=None):
-    """
-    Empirical miscoverage rate of the prediction intervals.
-
-    Parameters
-    ----------
-    kappa_lo, kappa_hi (numpy.ndarray)
-        Arrays of shape (nimgs, nx, ny), lower- and upper-bounds of the
-        prediction intervals.
-    kappa (numpy.ndarray)
-        Array of shape (nimgs, nx, ny), ground-truth convergence map.
-    mask (numpy.ndarray, default=None)
-        Array of shape (nx, ny) or (nimgs, nx, ny), boundaries of the shape catalog.
-
-    Returns
-    -------
-    out (numpy.ndarray)
-        Array of shape (nimgs,)
-    
-    """
-    def func(kappa_lo, kappa_hi, kappa):
-        return (kappa < kappa_lo) | (kappa > kappa_hi)
-    return _get_stats(func, kappa_lo, kappa_hi, kappa, mask=mask)
-
-
-def mean_predinterv(kappa_lo, kappa_hi, mask=None):
-    def func(kappa_lo, kappa_hi):
-        return kappa_hi - kappa_lo
-    return _get_stats(func, kappa_lo, kappa_hi, mask=mask)
-
-
-def normalized_mse(kappa_pred, kappa, mask=None, meancentering=True):
-    if meancentering:
-        kappa_pred = meancenter(kappa_pred, mask=mask)
-        kappa = meancenter(kappa, mask=mask)
-    def func(kappa_pred, kappa):
-        return (kappa_pred - kappa)**2
-    return _get_stats(func, kappa_pred, kappa, mask=mask)
-
-
-def rmse(kappa_pred, kappa, **kwargs):
-    return normalized_mse(kappa_pred, kappa, **kwargs)**0.5
-
-
-def mean_val(kappa_pred, mask=None):
-    func = lambda kappa_pred: kappa_pred # identity
-    return _get_stats(func, kappa_pred, mask=mask)
 
 
 def get_emp_variance(func, nreal_noise, *args, **kwargs):
@@ -669,33 +607,13 @@ def meancenter(
     return arr - mean
 
 
-def get_metrics(pred, res, truth, **kwargs):
-
-    kappa_lo = pred - res
-    kappa_hi = pred + res
-
-    # Error rate per image (over pixels)
-    err = miscoverage_rate(
-        kappa_lo, kappa_hi, truth, **kwargs
-    )
-
-    # Mean length of prediction intervals
-    predinterv = mean_predinterv(
-        kappa_lo, kappa_hi, **kwargs
-    )
-
-    # Mean value for the lower and upper bounds
-    lower = mean_val(kappa_lo, **kwargs)
-    upper = mean_val(kappa_hi, **kwargs)
-
-    return err, predinterv, lower, upper
-
-
 def plot_means_errs(
-        list_of_means, list_of_stds, list_of_methods, xticklabels=None, sec_xticklabels=None,
+        list_of_means, list_of_stds, list_of_methods, xticklabels=None,
+        rotation_xticklabels=45, sec_xticklabels=None,
         xlabel=None, ylabel=None, drawtarget=True, alpha=None, drawbounds=True, offset=0.15,
-        y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None, loclegend=None,
-        figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None
+        y_lower=None, y_upper=None, logscale=False, ymin=None, ymax=None,
+        figsize=(6, 3), savefig=False, filepath=None, filename=None, extension=None,
+        args_legend_main=None, args_legend_other=None
 ):
     """
     Plot means with error bars representing standard deviations
@@ -709,17 +627,18 @@ def plot_means_errs(
         nvals = 1
 
     _, ax = plt.subplots(figsize=figsize)
+    handles_main = []
     for i, (means, stds, label) in enumerate(zip(list_of_means, list_of_stds, list_of_methods)):
         x_values = np.arange(nvals) + 1 + (i - (nseries - 1) / 2) * offset  # Adjusted x-coordinates
         means = np.array(means)
         stds = np.array(stds)
         mask = means != None # Array of booleans. Do not use `means is not None` as it returns False
-        plt.errorbar(
+        handle = plt.errorbar(
             x_values[mask], means[mask], yerr=stds[mask], fmt='.', capsize=3, label=label
         )
-
+        handles_main.append(handle)
     if xticklabels is not None:
-        plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=45)
+        plt.xticks(np.arange(nvals) + 1, xticklabels, rotation=rotation_xticklabels)
     else:
         plt.xticks([])
     ax.set_xlim(0.5, nvals + 0.5)
@@ -741,14 +660,27 @@ def plot_means_errs(
         plt.xlabel(xlabel)
     if ylabel is not None:
         plt.ylabel(ylabel)
+    handles_other = []
     if drawtarget:
-        plt.axhline(y=alpha, color='red', linestyle='--', linewidth=0.8, label=r'$\alpha$ (target)')
+        handle = plt.axhline(
+            y=alpha, color='red', linestyle='--',
+            linewidth=0.8, label=r'$\alpha$ (target)'
+        )
+        handles_other.append(handle)
     if drawbounds:
-        plt.axhspan(
+        handle = plt.axhspan(
             y_lower, y_upper,
             color='yellow', alpha=0.3, linewidth=0., label="Theoretical bounds"
         )
-    plt.legend(loc=loclegend)
+        handles_other.append(handle)
+    if args_legend_main is None:
+        args_legend_main = {}
+    if args_legend_other is None:
+        args_legend_other = {}
+    legend_main = plt.legend(handles=handles_main, **args_legend_main)
+    plt.gca().add_artist(legend_main)
+    if handles_other != []:
+        plt.legend(handles=handles_other, **args_legend_other)
     if logscale:
         plt.yscale('log')
     kwargs = {}
@@ -815,14 +747,14 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, kappa_true=None, kappa_pred=None, var_pred=None, res_pred=None,
+            self, kappa_true=None, kappa_pred=None, var=None, res_pred=None,
             extent=None, boundaries=None, mask=None, imgsize=None,
             vmin=None, vmax=None, vmax_sqdiff=None, vmax_bounds=None,
             plot_colorbar=False,
     ):
         self.kappa_true = kappa_true
         self.kappa_pred = kappa_pred
-        self.var_pred = var_pred
+        self.var = var
         self.res_pred = res_pred
         self.extent = extent
         self.boundaries = boundaries
@@ -835,10 +767,11 @@ class KappamapVisualizer:
         self.plot_colorbar = plot_colorbar
 
 
-    @property
-    def bounds(self):
-        lowerbound = self.kappa_pred - self.res_pred - self.kappa_true
-        upperbound = self.kappa_pred + self.res_pred - self.kappa_true
+    def bounds(self, res_pred=None):
+        if res_pred is None:
+            res_pred = self.res_pred
+        lowerbound = self.kappa_pred - res_pred - self.kappa_true
+        upperbound = self.kappa_pred + res_pred - self.kappa_true
         if self.mask is not None:
             lowerbound *= self.mask
             upperbound *= self.mask
@@ -869,22 +802,27 @@ class KappamapVisualizer:
         return self.skyshow_kappamap(self.kappa_pred, **kwargs)
 
 
-    def skyshow_variance(self, **kwargs):
+    def skyshow_variance(self, showstd=False, **kwargs):
 
-        var_pred = self.var_pred
-        if torch.is_tensor(var_pred):
-            var_pred = var_pred.cpu().numpy()
+        img = self.var
+        vmax = self.vmax_sqdiff
+        if showstd:
+            img = img**0.5
+            vmax = vmax**0.5
+        if torch.is_tensor(img):
+            img = img.cpu().numpy()
+
         skyshow(
-            var_pred, vmin=0., vmax=self.vmax_sqdiff, extent=self.extent,
+            img, vmin=0., vmax=vmax, extent=self.extent,
             boundaries=self.boundaries, printxylabels=False,
             printxticks=False, printyticks=False, printcolorbar=True,
             imgsize=self.imgsize, **kwargs
         )
 
 
-    def skyshow_bound(self, which, **kwargs):
+    def skyshow_bound(self, which, res_pred=None, **kwargs):
 
-        lower_bound, upper_bound = self.bounds
+        lower_bound, upper_bound = self.bounds(res_pred=res_pred)
         if which == "lower":
             bound = lower_bound
         elif which == "upper":
@@ -914,83 +852,129 @@ class KappamapVisualizer:
 
 class KappamapVisualizerCompact(KappamapVisualizer):
 
-    def __init__(self, *args, msg='method?', **kwargs):
-        super().__init__(*args, **kwargs)
-        self.msg = msg
-
-    def visualize(self):
-        plt.figure(figsize=(12, 6))
-        plt.subplot(231)
-        self.skyshow_truth(title='Ground truth')
-        plt.subplot(232)
-        self.skyshow_pointestimate(title=f'Point estimate ({self.msg})')
-        plt.subplot(233)
-        self.skyshow_variance(title=f'Variance ({self.msg})')
-        plt.subplot(234)
-        self.skyshow_bound("lower", title=f'Lower bound ({self.msg})')
-        plt.subplot(235)
-        self.skyshow_bound("upper", title=f'Upper bound ({self.msg})')
+    def visualize(self, showstd: bool=False, **kwargs):
+        plt.figure(figsize=(8, 6))
+        plt.subplot(221)
+        self.skyshow_pointestimate(title="Point estimate", **kwargs)
+        plt.subplot(222)
+        self.skyshow_variance(title="Std estimate", showstd=showstd, **kwargs)
+        plt.subplot(223)
+        self.skyshow_bound("lower", title=f"Lower bound", **kwargs)
+        plt.subplot(224)
+        self.skyshow_bound("upper", title=f"Upper bound", **kwargs)
         plt.show()
 
 
 class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
-            self, *args, savefig=False, save_dir=None, extension=None, showpred=True,
-            **kwargs
+            self, *args, savefig=False, save_dir=None, extension=None,
+            showtruth=True, showpred=True, showbounds=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
         self.save_dir = save_dir
         self.extension = extension
+        self.showtruth = showtruth
         self.showpred = showpred
+        self.showbounds = showbounds
 
 
-    def visualize(self, filename: str=None, **kwargs):
-        if self.showpred:
+    def visualize(
+            self, title: str=None, filename: str=None,
+            showvar: bool=False, showstd: bool=False, **kwargs
+    ):
+        if self.showtruth:
             plt.figure(figsize=(5, 3))
-            self.skyshow_pointestimate()
+            self.skyshow_truth(title=title, **kwargs)
             if self.savefig:
                 plt.savefig(
-                    os.path.join(self.save_dir, f"{filename}.{self.extension}"), bbox_inches='tight'
+                    os.path.join(self.save_dir, f"kappa.{self.extension}"),
+                    bbox_inches='tight'
                 )
             plt.show()
 
-        plt.figure(figsize=(5, 3))
-        self.skyshow_bound("lower")
-        if self.savefig:
-            plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_low.{self.extension}"), bbox_inches='tight'
-            )
+        if self.showpred:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_pointestimate(title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
+
+        if showvar or showstd:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_variance(title=title, showstd=showstd, **kwargs)
+            if self.savefig:
+                if showstd:
+                    suffix = "std"
+                else:
+                    suffix = "var"
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_{suffix}.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
+
+        if self.showbounds:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_bound("lower", title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_low.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
+
+            plt.figure(figsize=(5, 3))
+            self.skyshow_bound("upper", title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_high.{self.extension}"),
+                    bbox_inches='tight'
+                )
+
         plt.show()
 
-        plt.figure(figsize=(5, 3))
-        self.skyshow_bound("upper")
-        if self.savefig:
-            plt.savefig(
-                os.path.join(self.save_dir, f"{filename}_high.{self.extension}"), bbox_inches='tight'
-            )
-        plt.show()
 
-
-def get_sup_step_size(std_noise, mask=None, its=20):
+def get_sup_step_size(
+        param_mahalanobis: float | torch.Tensor, its=ITS_POWER_ITERATION,
+        physics=None, device: str | torch.device = "cpu"
+):
     """
     Get the upper bound for the step size in PGD algorithms where the data
-    fidelity term is the negative log-likelihood. This function uses the power
-    iteration method.
+    fidelity term is the MSE using the Mahalanobis norm.
+    This function uses the power iteration method.
+
+    Parameters
+    ----------
+    param_mahalanobis: float or torch.Tensor
+        SPD matrix for the Mahalanobis norm (std_noise**2 for the negative log-likelihood,
+        std_noise for the noise-whitening data fidelity)
+      if torch.is_tensor(param_mahalanobis):      The noise model is not used for this function. If none is given,
+        then the identity is used.
+    device: str, optional
+        Device to which `physics` is stored. Default is "cpu"
     """
-    if torch.is_tensor(std_noise):
-        std_noise = std_noise.cpu().numpy()
-    if mask is not None and torch.is_tensor(mask):
-        mask = mask.cpu().numpy()
-    nx, ny = std_noise.shape
+    # TODO: retrieve `param_mahalanobis` from `physics`
+    if torch.is_tensor(param_mahalanobis):
+        param_mahalanobis = param_mahalanobis.to(device)
+    nx, ny = param_mahalanobis.shape
+
+    if physics is None:
+        physics = dinv.physics.LinearPhysics().to(device) # Identity
 
     def matvec(kappa_flattened):
         kappa = kappa_flattened.reshape(nx, ny)
-        gamma = get_shear_from_convergence(kappa, mask=mask, return_complex=True)
-        gamma /= std_noise**2
-        out = get_convergence_from_shear(gamma, mask=mask, return_complex=True)
-        return out.flatten()
+        kappa = torch.tensor(
+            kappa, dtype=torch.float32, device=device
+        )
+        gamma = physics.A(kappa)
+        gamma /= param_mahalanobis
+        out = physics.A_adjoint(gamma)
+        return out.cpu().numpy().astype(np.float64).flatten()
 
     linearop = sparse.linalg.LinearOperator(
         shape=(nx*ny, nx*ny), matvec=matvec, rmatvec=matvec
@@ -998,6 +982,16 @@ def get_sup_step_size(std_noise, mask=None, its=20):
     spectrnorm = linalg.interpolative.estimate_spectral_norm(linearop, its=its)
 
     return 2 / spectrnorm
+
+
+def get_g_param(std_noise, noise_whitening):
+
+    if not noise_whitening:
+        g_param = std_noise**2 # Negative log-likelihood as data fidelity
+    else:
+        g_param = std_noise # Noise-whitening data fidelity
+
+    return g_param
 
 
 def infer_model(

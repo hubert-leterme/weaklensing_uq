@@ -1,12 +1,9 @@
-import warnings
 import torch
 from torch import nn
 import torchinfo
 import deepinv as dinv
-import learnlet
 
 from .sunet import sunet
-from .deepinv import iterativemm
 from .. import utils
 
 from .. import LEARNLETS_PRETRAINED_WEIGHTS_DIR
@@ -15,9 +12,6 @@ METRIC_DICT = {
     'mse': dinv.metric.MSE(),
     'mae': dinv.metric.MAE()
 }
-
-NITER_WIENER = 12 # For DeepMass
-MULTFACT_STEP_SIZE = 0.99 # Fraction of the upper limit for the step size
 
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
@@ -55,24 +49,40 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            meancentering: bool=True, onlypositive: bool=False, **kwargs
+            order2: bool=False, additional_outlayer: str | None=None,
+            **kwargs
     ):
         kwargs = self._preprocess_kwargs(
             map_size=map_size, in_channels=in_channels, out_channels=out_channels,
             **kwargs
         )
         super().__init__(**kwargs)
-        if hasattr(self, 'additional_output'):
-            raise NotImplementedError("Attribute `additional_output` already exists.")
-        if meancentering:
-            if onlypositive:
-                warnings.warn("`onlypositive` is ignored when `meancentering` is True.")
-            self.additional_output = Meancentering()
-        elif onlypositive:
-            self.additional_output = nn.ReLU()
+        if hasattr(self, 'additional_outlayer'):
+            raise NotImplementedError("Attribute `additional_outlayer` already exists.")
+        if not order2:
+            if additional_outlayer is not None:
+                raise ValueError(
+                    "Mean centering used as output layer in order-1 models. "
+                    f"Argument `additional_outlayer` ('{additional_outlayer}') "
+                    "should not be provided."
+                )
+            self.additional_outlayer = Meancentering()
+            self.outrelu_eval = None
         else:
-            warnings.warn("No meancentering or positivity constraint applied.")
-            self.additional_output = None
+            if additional_outlayer is not None:
+                if additional_outlayer == "meancentering":
+                    self.additional_outlayer = Meancentering()
+                elif additional_outlayer == "leakyrelu":
+                    self.additional_outlayer = nn.LeakyReLU() # Avoids vanishing gradients
+                else:
+                    raise ValueError(
+                        "Unknown option for `enforce_nonnegativity_during_training`: "
+                        f"{additional_outlayer}. "
+                        "Available options: 'meancentering', 'leakyrelu'."
+                    )
+            else:
+                self.additional_outlayer = None
+            self.outrelu_eval = nn.ReLU()
 
         # For printing summary
         fake_input_data = self._get_fake_input_data()
@@ -87,13 +97,18 @@ class ModelMixin:
 
     def forward(self, inp, *args, **kwargs):
         out = super().forward(inp, *args, **kwargs)
-        if self.additional_output is not None:
-            out = self.additional_output(out)
+        if self.additional_outlayer is not None:
+            out = self.additional_outlayer(out)
+        if self.outrelu_eval is not None and not self.training:
+            out = self.outrelu_eval(out)
         return out
 
 
     def _get_fake_input_data(self):
-        raise NotImplementedError
+        return (
+            torch.randn(1, self.in_channels, self.map_size, self.map_size),
+            torch.randn(1,)
+        )
 
 
     def summary(self, **kwargs):
@@ -115,7 +130,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
             map_size=map_size, in_channels=in_channels, out_channels=out_channels, **kwargs
         )
 
-    def forward(self, inp, sigma=None, *args, **kwargs):
+    def forward(self, inp, sigma=None, **kwargs):
         r"""
         The noise level is not used in this model.
 
@@ -124,10 +139,7 @@ class NoiseAgnosticModelMixin(ModelMixin):
         """
         # The signature of this forward method follows the specifications of DeepInverse,
         # to be able to use the `Trainer` class from DeepInverse for training.
-        return super().forward(inp, *args, **kwargs)
-
-    def _get_fake_input_data(self):
-        return (torch.randn(1, self.in_channels, self.map_size, self.map_size),)
+        return super().forward(inp, **kwargs)
 
 
 class NoiseAwareModelMixin(ModelMixin):
@@ -144,7 +156,7 @@ class NoiseAwareModelMixin(ModelMixin):
             out_channels=out_channels, **kwargs
         )
 
-    def forward(self, inp, sigma, *args, **kwargs):
+    def forward(self, inp, sigma, **kwargs):
         # This code block is inspired from the DRUNet implementation
         if isinstance(sigma, torch.Tensor):
             if sigma.ndim > 0:
@@ -162,13 +174,7 @@ class NoiseAwareModelMixin(ModelMixin):
         inp = torch.cat((inp, noise_level_map), 1)
         # End of copy-pasted code block
 
-        return super().forward(inp, *args, **kwargs)
-
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
+        return super().forward(inp, **kwargs)
 
 
 # class ScoreMatchingMixin:
@@ -188,14 +194,15 @@ class NoiseAwareModelMixin(ModelMixin):
 class DRUNet(ModelMixin, dinv.models.DRUNet):
 
     def __init__(
-            self, map_size=None, in_channels=1, out_channels=1, **kwargs
+            self, map_size=None, in_channels=1, out_channels=1,
+            no_bias=False, **kwargs
     ):
         self.map_size = map_size
         self.in_channels = in_channels
         self.out_channels = out_channels
         super().__init__(
             map_size=map_size, in_channels=in_channels,
-            out_channels=out_channels, **kwargs
+            out_channels=out_channels, bias=not no_bias, **kwargs
         )
 
     def _preprocess_kwargs(
@@ -222,46 +229,39 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         )
         return kwargs
 
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
-
 
 #=================================================================================
 # Learnlet
 #=================================================================================
 
 # Learnlet is inherently noise-aware, no need to inherit from NoiseAwareModelMixin
-class Learnlet(ModelMixin, learnlet.Learnlet):
+try:
+    import learnlet
+except ImportError:
+    Learnlet = None
+else:
+    class Learnlet(ModelMixin, learnlet.Learnlet):
 
-    def __init__(
-            self, map_size=None, in_channels=1, out_channels=1,
-            pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
-    ):
-        self.map_size = map_size
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        if in_channels != 1 or out_channels != 1:
-            raise NotImplementedError
-        super().__init__(
-            map_size=map_size,
-            in_channels=in_channels, out_channels=out_channels,
-            pretrained_weights_dir=pretrained_weights_dir, **kwargs
-        )
+        def __init__(
+                self, map_size=None, in_channels=1, out_channels=1,
+                pretrained_weights_dir=LEARNLETS_PRETRAINED_WEIGHTS_DIR, **kwargs
+        ):
+            self.map_size = map_size
+            self.in_channels = in_channels
+            self.out_channels = out_channels
+            if in_channels != 1 or out_channels != 1:
+                raise NotImplementedError
+            super().__init__(
+                map_size=map_size,
+                in_channels=in_channels, out_channels=out_channels,
+                pretrained_weights_dir=pretrained_weights_dir, **kwargs
+            )
 
-    def _preprocess_kwargs(
-            self, map_size=None, in_channels=1, out_channels=1, **kwargs
-    ):
-        # map_size, in_channels and out_channels discarded
-        return kwargs
-
-    def _get_fake_input_data(self):
-        return (
-            torch.randn(1, self.in_channels, self.map_size, self.map_size),
-            torch.randn(1,)
-        )
+        def _preprocess_kwargs(
+                self, map_size=None, in_channels=1, out_channels=1, **kwargs
+        ):
+            # map_size, in_channels and out_channels discarded
+            return kwargs
 
 
 #=================================================================================
@@ -274,64 +274,64 @@ class BaseUNet(nn.Module):
     https://github.com/NiallJeffrey/DeepMass
 
     """
-    def __init__(self, in_channels=1, out_channels=1, bias=True):
+    def __init__(self, in_channels=1, out_channels=1, no_bias=False):
 
         super().__init__()
 
         # Encoder blocks
         self.enc1 = nn.Sequential(
-            nn.Conv2d(in_channels, 16, 3, padding='same', bias=bias),
+            nn.Conv2d(in_channels, 16, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(16, affine=bias)
+            nn.BatchNorm2d(16, affine=not no_bias)
         )
         self.pool1 = nn.AvgPool2d(2)
 
         self.enc2 = nn.Sequential(
-            nn.Conv2d(16, 32, 3, padding='same', bias=bias),
+            nn.Conv2d(16, 32, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(32, affine=bias)
+            nn.BatchNorm2d(32, affine=not no_bias)
         )
         self.pool2 = nn.AvgPool2d(2)
 
         self.enc3 = nn.Sequential(
-            nn.Conv2d(32, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(32, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
         self.pool3 = nn.AvgPool2d(2)
 
         self.enc4 = nn.Sequential(
-            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(64, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
         self.pool4 = nn.AvgPool2d(2)
 
         self.encdeep = nn.Sequential(
-            nn.Conv2d(64, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(64, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias)
+            nn.BatchNorm2d(64, affine=not no_bias)
         )
 
         # Decoder convolutions
         self.decdeep = nn.Sequential(
-            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.Conv2d(128, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU(),
-            nn.BatchNorm2d(64, affine=bias),
+            nn.BatchNorm2d(64, affine=not no_bias),
         )
         self.dec5 = nn.Sequential(
-            nn.BatchNorm2d(128, affine=bias),
-            nn.Conv2d(128, 64, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(128, affine=not no_bias),
+            nn.Conv2d(128, 64, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
         self.dec6 = nn.Sequential(
-            nn.BatchNorm2d(96, affine=bias),
-            nn.Conv2d(96, 32, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(96, affine=not no_bias),
+            nn.Conv2d(96, 32, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
         self.dec7 = nn.Sequential(
-            nn.BatchNorm2d(48, affine=bias),
-            nn.Conv2d(48, 16, 3, padding='same', bias=bias),
+            nn.BatchNorm2d(48, affine=not no_bias),
+            nn.Conv2d(48, 16, 3, padding='same', bias=not no_bias),
             nn.ReLU()
         )
 
@@ -441,7 +441,7 @@ class Meancentering(nn.Module):
     Module for meancentering the input tensor.
     """
     def forward(self, x):
-        return utils.meancenter(x)
+        return utils.meancenter(x, axis=tuple(range(1, x.ndim)))
 
 
 class Concatenate(nn.Module):
@@ -484,134 +484,4 @@ class Order2SupLoss(dinv.loss.SupLoss):
         with torch.no_grad():
             x_pred = self.order1_model(y, physics) # physics = sigma in the case of DRUNet
         x = (x - x_pred)**2
-        return super().forward(x_net, x, **kwargs)
-
-
-class NonGaussianSupLoss(dinv.loss.SupLoss):
-    r"""
-    Supervised loss for estimating the non-Gaussian part of images.
-
-    A noisy shear map with Gaussian white noise is computed from the ground-truth
-    convergence map, and iterative Wiener filtering is applied to get the Gaussian
-    part of the convergence map. The non-Gaussian part is then computed as the difference
-    between the ground-truth convergence map and the Gaussian part.
-    """
-    def __init__(
-            self, powerspectrum_wiener: torch.Tensor, sigma_wiener: float=None,
-            niter_wiener: int=NITER_WIENER,
-            multfact_step_size_wiener: float=MULTFACT_STEP_SIZE, **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.multfact_step_size_wiener = multfact_step_size_wiener
-        if sigma_wiener is not None:
-            std_noise_wiener = sigma_wiener * torch.ones_like(powerspectrum_wiener)
-            step_size_wiener = self._get_step_size(sigma_wiener)
-        else:
-            std_noise_wiener = None
-            step_size_wiener = None
-        self.register_buffer('std_noise_wiener', std_noise_wiener)
-
-        # Initialize the Wiener filter
-        self.wiener = IterativeWiener(
-            step_size=step_size_wiener, powerspectrum=powerspectrum_wiener,
-            std_noise=std_noise_wiener, niter=niter_wiener
-        )
-
-
-    def forward(self, x_net, x, physics=None, **kwargs):
-
-        with torch.no_grad():
-
-            # Update parameters of the iterative Wiener algorithm, if needed 
-            if self.std_noise_wiener is None:
-                # The noise standard deviation is provided by physics
-                # std_noise_wiener = physics
-                # step_size = self._get_step_size(physics)
-                # self.wiener.optim.init_params_algo.update({
-                #     "stepsize": [step_size], "g_param": [step_size]
-                # })
-                # self.wiener.physics.noise_model.update_parameters(sigma=physics)
-                raise NotImplementedError
-                # TODO: adaptive step size for the iterative Wiener algorithm
-                # (may be different for each input image)
-            else:
-                std_noise_wiener = self.std_noise_wiener
-
-            # Get noisy shear map
-            gamma = utils.get_shear_from_convergence(x, return_complex=True)
-            gamma_noisy, _ = utils.get_masked_and_noisy_shear(
-                gamma, std_noise=std_noise_wiener, device=gamma.device
-            )
-
-            # Remove Gaussian part from the ground truth
-            x -= self.wiener(gamma_noisy)
-
-        return super().forward(x_net, x, **kwargs)
-
-
-    def _get_step_size(self, sigma):
-        return self.multfact_step_size_wiener * sigma**2
-
-
-#=================================================================================
-# DeepMass with Wiener initialization
-#=================================================================================
-
-class IterativeWiener(nn.Module):
-
-    def __init__(
-            self, step_size: float,
-            powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor=None, niter: int=NITER_WIENER
-    ):
-        super().__init__()
-        data_fidelity = iterativemm.Mahalanobis(sigma=std_noise)
-        prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
-
-        self.optim = iterativemm.optim_builder(
-            iteration="PGD", prior=prior,
-            data_fidelity=data_fidelity,
-            early_stop=False, max_iter=niter, custom_init=iterativemm.zero_init,
-            params_algo={"stepsize": step_size, "g_param": step_size},
-        )
-        self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
-
-
-    def forward(self, gamma_noisy):
-        return self.optim(gamma_noisy, self.physics)
-
-
-class WienerInitMixin:
-
-    def __init__(
-            self, args_wienerinit: dict, *args, **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-        self.wiener_init = IterativeWiener(**args_wienerinit)
-
-
-    def forward(self, inp, *args, **kwargs):
-        inp = self.wiener_init(inp)
-        out = super().forward(inp, *args, **kwargs)
-        return out
-
-    def _get_fake_input_data(self):
-        return (torch.randn(
-            1, self.in_channels, self.map_size, self.map_size,
-            dtype=torch.complex64
-    ),)
-
-
-class UNetWienerInit(WienerInitMixin, UNet):
-    pass
-
-class SUNetWienerInit(WienerInitMixin, SUNet):
-    pass
-
-
-#=================================================================================
-# Functions
-#=================================================================================
-
-def load_model(path_to_pretrained_model, **kwargs):
-    raise NotImplementedError
+        return super().forward(x_net=x_net, x=x, y=y, physics=physics, **kwargs)

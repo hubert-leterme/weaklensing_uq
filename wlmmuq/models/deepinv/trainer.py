@@ -19,11 +19,13 @@ from ... import utils
 class Trainer(dinv.Trainer):
 
     def __init__(
-            self, *args, scale_as_input=False, pbar_logs=True, **kwargs
+            self, *args, scale_as_input=False, pbar_logs=True,
+            preproc_for_residual: dinv.optim.BaseOptim=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
         self.pbar_logs = pbar_logs
+        self.preproc_for_residual = preproc_for_residual
 
         self.current_iterators = None
         self.total_training_time = 0
@@ -47,6 +49,7 @@ class Trainer(dinv.Trainer):
                 warnings.warn("Output `physics` overriden.")
             y, scale = y
             physics = scale
+            # TODO: should return an object of type `dinv.physics.Physics`
         return x, y, physics
 
 
@@ -357,7 +360,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Optional argument `callbacks`
+        - Optional argument `callbacks`
+        - Optional pre-processing
 
         ************************************************************
 
@@ -494,6 +498,16 @@ class Trainer(dinv.Trainer):
 
         for g in G_perm:  # for each dataloader
             x, y, physics_cur = self.get_samples(self.current_iterators, g)
+            callbacks.on_get_samples_end(physics_cur)
+
+            # If required, compute residuals for both the input and the ground truth
+            if self.preproc_for_residual is not None:
+                x_preproc = self.preproc_for_residual(y, self.physics[g])
+                x = x - x_preproc
+                y = y - self.physics[g].A(x_preproc)
+                # TODO: `self.physics[g]` to be replaced by `physics_cur` when fixed
+                # The noise parameters are currently not stored into `self.physics[g]`,
+                # but `self.preproc_for_residual` is assumed to only use the noiseless forward operator.
 
             # Compute loss and perform backprop
             x_net, logs = self.compute_loss(

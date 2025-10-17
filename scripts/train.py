@@ -4,41 +4,47 @@ import argparse
 import torch
 import deepinv as dinv
 
+import wlmmuq
 import wlmmuq.data.torch as wlds
 import wlmmuq.models as wlnn
-import wlmmuq.utils as wlutils
 
 from wlmmuq.data import SCALE, NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER
 
 import _commons
-from _commons import IMGSIZE, BATCH_SIZE, KEYS_MODEL, MULTFACT_STEP_SIZE
+import _add_arguments
 
-NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations in the original dataset
-NIMGS_VAL = 1440 # Remaining 2 realizations
-NIMGS_PS = 2048
-BATCH_SIZE_PS = 256
 NREAL_PER_IMG = 1
-NEPOCHS = 20
 LOSS = 'mse'
 LEARNING_RATE = 1e-4
 DROP_RATE = 0.1 # Drop rate for the learning rate scheduler
 NDECAYS = 4 # Number of decays for the learning rate scheduler
 
 def main(
-        path_to_augmented_dataset,
+        path_to_train_val_dataset: str=wlmmuq.PATH_TO_TRAIN_VAL_DATASET,
+        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str=wlmmuq.PATH_TO_MASK,
+        path_to_ps=wlmmuq.PATH_TO_PS,
         cosmos_include_faint=False,
-        backend=None, arch=None, denoiser=False, use_stdnoise_mask=False,
-        wiener_init=False, nimgs_ps=NIMGS_PS, batch_size_ps=BATCH_SIZE_PS,
-        niter_wiener=NITER_WIENER,
-        multfact_step_size_wienerinit=MULTFACT_STEP_SIZE,
-        nongaussian=False, sigma_wiener=None,
-        order2=False, path_to_pred_dataset=None,
-        path_to_order1_model=None, imgsize=IMGSIZE,
-        nimgs_train=NIMGS_TRAIN, nimgs_val=NIMGS_VAL, nreal_per_img=NREAL_PER_IMG,
-        nepochs=NEPOCHS, batch_size=BATCH_SIZE,
+        inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
+        arch=None, denoiser=False,
+        nongaussian=False,
+        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
+        niter_wiener=_commons.NITER_WIENER,
+        starlet_detection_threshold=wlnn.deepinv.pnpmcalens.STARLET_DETECTION_THRESHOLD,
+        eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
+        model_specs: str | None=None,
+        order2=False, additional_outlayer=None,
+        arch_order1=None,
+        timestamp_order1=None, epoch_order1=None,
+        model_specs_order1: str | None=None,
+        imgsize=_commons.IMGSIZE,
+        nimgs_train=_commons.NIMGS_TRAIN, nimgs_val=_commons.NIMGS_VAL,
+        nreal_per_img=NREAL_PER_IMG,
+        nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
-        ndecays=NDECAYS, loss=LOSS, checkpoint_dir='.', num_workers=NUM_WORKERS,
+        ndecays=NDECAYS, loss=LOSS,
+        checkpoint_dir: str=wlmmuq.MODEL_DIR, checkpoint_subdir: str=None,
+        num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
         cprofiler_cuda_synchronize=False,
@@ -49,84 +55,87 @@ def main(
     if verbose:
         print(f"Number of workers: {num_workers}")
 
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
-    try:
-        no_bias = kwargs.pop("no_bias")
-    except KeyError:
-        pass
-    else:
-        kwargs_model.update(bias=not no_bias)
+    if checkpoint_subdir is not None:
+        checkpoint_dir = os.path.join(checkpoint_dir, checkpoint_subdir)
 
-    # Compute the power spectrum for Wiener initialization
-    if wiener_init or nongaussian:
-        powerspectrum = _commons.get_powerspectrum_from_dataset(
-            path_to_augmented_dataset, nimgs=nimgs_ps,
-            batch_size=batch_size_ps, output_shape=imgsize,
-            num_workers=num_workers, device=device, verbose=verbose
-        )
-    else:
-        powerspectrum = None
-
-    if not denoiser or use_stdnoise_mask:
-        std_noise, mask = _commons.get_stdnoise_mask(
-            imgsize, cosmos_include_faint=cosmos_include_faint,
-            convert_to_torch_tensor=True, inpainting=True,
-            verbose=verbose
-        )
-        kwargs.update(std_noise=std_noise, mask=mask)
-
-        if wiener_init:
-            assert not denoiser
-
-            # Compute step size
-            step_size = multfact_step_size_wienerinit * wlutils.get_sup_step_size(
-                std_noise=std_noise, mask=mask
-            )
-            if verbose:
-                print(f"Wiener initialization with step size {step_size:.1e}")
-
-            args_wienerinit = dict(
-                step_size=step_size, powerspectrum=powerspectrum,
-                std_noise=std_noise, mask=mask, niter=niter_wiener
-            )
-            kwargs_model.update(args_wienerinit=args_wienerinit)
-
-    if arch is not None:
-        backend = arch.split(".")[0]
-        cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
-        if scale_as_input:
-            kwargs.update(scale_as_input=scale_as_input)
-    else:
-        cnn_class = None
-        scale_as_input = False
-
-    if backend == 'tensorflow':
-        raise ValueError("Deprecated TensorFlow backend. Use PyTorch instead.")
-    elif backend != 'torch':
-        raise ValueError("Unsupported backend.")
-
-    kwargs_model_order1 = None
-    if order2:
-        if path_to_pred_dataset is not None:
-            kwargs.update(
-                order=2, pred_filepath=path_to_pred_dataset
-            )
-        else:
-            # No mean centering and only positive values in order-2 moment networks
-            kwargs_model_order1 = kwargs_model.copy()
-            kwargs_model.update(
-                meancentering=False, onlypositive=True
-            )
+    callback_list = []
 
     if denoiser:
+        std_noise = mask = None
         dataset_class = wlds.HDF5DatasetDenoiser
-    else:
-        dataset_class = wlds.HDF5DatasetMassMapping
+        noise_model = dinv.physics.GaussianNoise(sigma=0) # sigma to be updated
+        physics = dinv.physics.LinearPhysics(noise_model=noise_model)
 
+    else:
+        # Get noise srtandard deviation and mask
+        std_noise, mask = _commons.get_stdnoise_mask(
+            path_to_std_noise=path_to_std_noise,
+            path_to_mask=path_to_mask,
+            imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+            inpainting=inpainting_deepmass, verbose=verbose
+        )
+        # Update arguments for data loading
+        kwargs.update(std_noise=std_noise, mask=mask)
+
+        dataset_class = wlds.HDF5DatasetMassMapping
+        physics = wlnn.deepinv.iterativemm.MassMapping(
+            sigma=std_noise, mask=mask
+        )
+
+    # Initialize model
+    if verbose:
+        print("Initialize model")
+    kwargs_model = {k: kwargs.pop(k) for k in _commons.KEYS_MODEL if k in kwargs}
+    _commons.update_kwargs_model(
+        kwargs_model,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener, device=device, verbose=verbose
+    )
+    model, scale_as_input = _commons.instantiate_model(
+        arch, imgsize=imgsize, order2=order2,
+        additional_outlayer=additional_outlayer,
+        device=device, verbose=verbose, **kwargs_model
+    )
+    model.train()
+
+    # Set loss function
+    metric = wlnn.torch.METRIC_DICT[loss]
+    if order2:
+        if verbose:
+            print("Load trained order-1 moment network")
+        if arch_order1 is None:
+            arch_order1 = arch
+            kwargs_model_order1 = kwargs_model.copy()
+        else:
+            kwargs_model_order1 = {}
+            for k in _commons.KEYS_MODEL:
+                k1 = f"{k}_order1"
+                if k1 in kwargs:
+                    kwargs_model_order1.update({k: kwargs.pop(k1)})
+            _commons.update_kwargs_model(
+                kwargs_model_order1,
+                std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+                eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+                niter_wiener=niter_wiener, device=device, verbose=verbose
+            )
+        order1_model = _commons.load_trained_model(
+            checkpoint_dir, arch_order1, timestamp_order1, epoch_order1,
+            model_specs=model_specs_order1, imgsize=imgsize, order2=False,
+            device=device, verbose=verbose, **kwargs_model_order1
+        )
+        loss_fun = wlnn.torch.Order2SupLoss(
+            order1_model=order1_model, metric=metric
+        )
+    else:
+        loss_fun = dinv.loss.SupLoss(metric=metric)
+
+    # Initialize data loaders
     if verbose:
         print("Initialize batch generators for training and validation")
+    kwargs.update(scale_as_input=scale_as_input)
     train_dataset = dataset_class(
-        hdf5_filepath=path_to_augmented_dataset,
+        hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
         newaxis=True, nreal_per_img=nreal_per_img,
@@ -134,54 +143,13 @@ def main(
     )
     train_dataloader = train_dataset.to_dataloader()
     val_dataset = dataset_class(
-        hdf5_filepath=path_to_augmented_dataset,
+        hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
         output_shape=imgsize, newaxis=True,
         num_workers=num_workers, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()
-
-    # Initialize model
-    model = cnn_class(
-        map_size=imgsize, **kwargs_model
-    ).to(device)
-
-    if verbose:
-        model.summary()
-
-    # Set directories
-    if not order2:
-        output_type = "pe" # Point estimate
-    else:
-        output_type = "var" # Variance
-
-    checkpoint_dir = os.path.expanduser(checkpoint_dir)
-    checkpoint_dir = os.path.join(checkpoint_dir, output_type)
-    checkpoint_dir = os.path.normpath(checkpoint_dir)
-
-    # Set loss function
-    metric = wlnn.torch.METRIC_DICT[loss]
-    if order2 and path_to_pred_dataset is None:
-        order1_model = cnn_class(
-            map_size=imgsize, **kwargs_model_order1
-        )
-        checkpoint_order1_model = torch.load(path_to_order1_model)
-        order1_model.load_state_dict(checkpoint_order1_model['state_dict'])
-
-        loss_fun = wlnn.torch.Order2SupLoss(
-            order1_model=order1_model, metric=metric
-        )
-    elif nongaussian:
-        loss_fun = wlnn.torch.NonGaussianSupLoss(
-            powerspectrum_wiener=powerspectrum,
-            sigma_wiener=sigma_wiener, niter_wiener=niter_wiener,
-            multfact_step_size_wiener=multfact_step_size_wienerinit,
-            metric=metric
-        )
-        # TODO: non-Gaussian loss function for order-2 networks
-    else:
-        loss_fun = dinv.loss.SupLoss(metric=metric)
 
     # Set optimizer and learning rate scheduler
     optimizer = torch.optim.Adam(
@@ -199,20 +167,46 @@ def main(
 
     loss_fun.to(device)
     kwargs_trainer = {}
+
+    if nongaussian:
+        assert denoiser # Only for training a denoiser
+        gaussian_extractor, callback_gaussian_extractor = \
+                _commons.get_gaussian_extractor(
+            which=which_gaussian_extractor,
+            path_to_ps=path_to_ps,
+            white_noise=True,
+            imgsize=imgsize, physics=physics,
+            niter=1, # Convergence in one iteration (white noise)
+            starlet_detection_threshold=starlet_detection_threshold,
+            mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
+            device=device, verbose=verbose
+        ) # Not all arguments are needed here (`white_noise=True`)
+        kwargs_trainer.update(preproc_for_residual=gaussian_extractor)
+        if callback_gaussian_extractor is not None:
+            callback_list.append(callback_gaussian_extractor)
+        callback_list.append(
+            wlnn.deepinv.pnpmcalens.ParamsAlgoUpdater(
+                optim=gaussian_extractor
+            )
+        )
+
+    if model_specs is None:
+        model_specs = _commons.MODEL_SPECS[order2]
+    save_path = os.path.join(checkpoint_dir, model_specs)
     if resume:
-        ckpt_pretrained = os.path.join(
-            checkpoint_dir, timestamp_resume, f"ckp_{epoch_resume}.pth.tar"
+        path_to_checkpoint_pretrained = _commons.get_path_to_checkpoint(
+            save_path, timestamp_resume, epoch_resume
         )
         if verbose:
-            print(f"Resuming training from {ckpt_pretrained}")
-        kwargs_trainer.update(ckpt_pretrained=ckpt_pretrained)
+            print(f"Resuming training from {path_to_checkpoint_pretrained}")
+        kwargs_trainer.update(ckpt_pretrained=path_to_checkpoint_pretrained)
     trainer = wlnn.deepinv.trainer.Trainer(
         model,
         device=device,
-        save_path=checkpoint_dir,
+        save_path=save_path,
         verbose=verbose,
         scale_as_input=scale_as_input,
-        physics=None,
+        physics=physics,
         online_measurements=False,
         epochs=nepochs,
         scheduler=scheduler,
@@ -224,17 +218,18 @@ def main(
         **kwargs_trainer
     )
 
-    # Define profiling callbacks
+    # Profiling callback
     if cprofiler:
-        cprofiler_callback = wlnn.deepinv.callbacks.CProfilerCallback(
-            trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
-            cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
+        callback_list.append(
+            wlnn.deepinv.callbacks.CProfilerCallback(
+                trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
+                cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
+            )
         )
-    else:
-        cprofiler_callback = None
 
     # Train model
-    trainer.train(callbacks=cprofiler_callback)
+    callbacks = wlnn.deepinv.callbacks.CallbackList(callback_list)
+    trainer.train(callbacks=callbacks)
 
     train_dataset.close()
     val_dataset.close()
@@ -242,18 +237,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "path_to_augmented_dataset", type=str,
-        help="Path to the augmented dataset (HDF5 file)"
-    )
-    parser.add_argument(
-        "--backend", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Deep learning framework used to train the model ('tensorflow' or 'torch')."
-        )
-    )
-    _commons.add_arguments_model(parser)
+    _add_arguments.model(parser, uq=True, deepmass=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
@@ -263,51 +247,33 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--wiener-init", action='store_true',
+        "-ng", "--nongaussian", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Use Wiener initialization, for DeepMass."
+            "Split the Gaussian and non-Gaussian parts of the convergence maps. "
+            "This option is only compatible with flag `--denoiser`."
         )
     )
     parser.add_argument(
-        "--nimgs-ps", type=int,
+        "--which-gaussian-extractor", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Number of images used to compute the power spectrum for Wiener initialization. "
-            f"Default = {NIMGS_PS}"
+            "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
+            "Only used if `--nongaussian` is activated. "
+            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
         )
     )
     parser.add_argument(
-        "--batch-size-ps", type=int,
+        "-thresh", "--starlet-detection-threshold", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Batch size used to compute the power spectrum for Wiener initialization. "
-            f"Default = {BATCH_SIZE_PS}"
+            "Detection threshold for computing the support of active "
+            "starlet coefficients. "
+            "Works with `--nongaussian --which-gaussian-extractor mcalens`. "
+            f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
-    parser.add_argument(
-        "--niter-wiener", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for the Wiener initialization. "
-            f"Default = {NITER_WIENER}"
-        )
-    )
-    parser.add_argument(
-        "--nongaussian", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Train the network on the non-Gaussian part of the convergence maps."
-        )
-    )
-    parser.add_argument(
-        "--sigma-wiener", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Noise standard deviation on which to estimate the Gaussian part of the "
-            "convergence maps. This argument must be provided if `--nongaussian` is used."
-        )
-    )
+    _add_arguments.gaussian_extractor(parser, wiener=True)
     parser.add_argument(
         "--scale", type=float,
         default=argparse.SUPPRESS,
@@ -327,48 +293,35 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--order2", action='store_true',
+        "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Train order-2 moment network. If activated, then either `--path-to-pred-dataset` "
-            "or `--path-to-order1-model` must be provided."
+            "Train order-2 moment network. If activated, then "
+            "`--timestamp-order1` and `--epoch-order1` must be provided."
+        )
+    )
+    _add_arguments.model_order1(parser, deepmass=True)
+    parser.add_argument(
+        "-t1", "--timestamp-order1", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Timestamp of the trained order-1 moment network. "
+            "Only used if `--order2` is activated. "
+            "Default = None"
         )
     )
     parser.add_argument(
-        "-pred", "--path-to-pred-dataset", type=str,
+        "-e1", "--epoch-order1", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Path to the prediction dataset (HDF5 file), computed with "
-            "a previously-trained network. This is useful to train a moment "
-            "network of order 2. Default = None"
+            "Epoch of the checkpoint for the trained order-1 network. "
+            "Only used if `--order2` is activated. "
+            "Default = None"
         )
     )
-    parser.add_argument(
-        "-o1", "--path-to-order1-model", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the trained order-1 moment network. "
-            "This is useful to train a moment network of order 2. "
-            "Only works for PyTorch models. Default = None"
-        )
+    _add_arguments.train_val_dataset(
+        parser, batch_size=_commons.BATCH_SIZE
     )
-    parser.add_argument(
-        "--nimgs-train", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images in the training set. "
-            f"Default = {NIMGS_TRAIN}"
-        )
-    )
-    parser.add_argument(
-        "--nimgs-val", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of images in the validation set. "
-            f"Default = {NIMGS_VAL}"
-        )
-    )
-    _commons.add_arguments_dataset(parser, batch_size=BATCH_SIZE)
     parser.add_argument(
         "--nreal-per-img", type=int,
         default=argparse.SUPPRESS,
@@ -378,19 +331,11 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--no-bias", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Do not use bias in convolution or batch "
-            "normalization layers."
-        )
-    )
-    parser.add_argument(
         "-e", "--nepochs", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Number of training epochs. "
-            f"Default = {NEPOCHS}"
+            f"Default = {_commons.EPOCH}"
         )
     )
     parser.add_argument(
@@ -415,11 +360,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    parser.add_argument(
-        "--checkpoint-dir", type=str,
-        default=argparse.SUPPRESS,
-        help="Path to checkpoint directory (saving model after each epoch). Default = None"
-    )
+    _add_arguments.checkpoint_dir(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,
@@ -429,7 +370,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--timestamp-resume", type=str,
+        "-tr", "--timestamp-resume", type=str,
         default=argparse.SUPPRESS,
         help=(
             "Timestamp of the checkpoint to resume training from. "
@@ -438,7 +379,7 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--epoch-resume", type=int,
+        "-er", "--epoch-resume", type=int,
         default=argparse.SUPPRESS,
         help=(
             "Epoch of the checkpoint to resume training from. "
@@ -480,7 +421,7 @@ if __name__ == "__main__":
             "WARNING: This will slow down the training."
         )
     )
-    _commons.add_arguments_seed_verbose(parser)
+    _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()
 

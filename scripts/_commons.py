@@ -1,34 +1,66 @@
 import os
-import random
-import argparse
 import warnings
-import tqdm
+import time
+import random
 import numpy as np
+from scipy.optimize import minimize
 import torch
 import astropy.table as aptable
 import deepinv as dinv
 
-from wlmmuq import cosmos as wlcosmos
-from wlmmuq import kappatng as wlktng
 from wlmmuq import utils as wlutils
+from wlmmuq.data import cosmos as wlcosmos
+from wlmmuq.data import kappatng as wlktng
 from wlmmuq.data import torch as wlbl
 from wlmmuq import models as wlnn
 from wlmmuq.models.deepinv import iterativemm as wlpnp
+from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
+from wlmmuq.models import cqr as wlcqr
 
-from wlmmuq.kappatng import OPENINGANGLE
-from wlmmuq.data import NUM_WORKERS
-from wlmmuq.models.torch import NITER_WIENER, MULTFACT_STEP_SIZE
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
+from wlmmuq.models.deepinv.preproc_models import NITER_WIENER
+from wlmmuq.models.deepinv.pnpmcalens import \
+    NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
 
+# The following global variables are valid for the kappaTNG dataset
 NINPIMGS = 100 # Number of input images before cropping
+NIMGS_TRAIN = 70560 # Corresponding to the 98 first realizations
+NIMGS_VAL = 1440 # Remaining 2 realizations
 NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dataset)
-NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files(augmented dataset)
+NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augmented dataset)
+MIN_IDX_FILENAME_ORI_VAL = 98 # To avoid overlaps with the training set
+MIN_IDX_FILENAME_ORI_CALIB = 58 # To avoid overlaps with the test set
+
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
 BATCH_SIZE = 32
-KEYS_MODEL = ['model_size', 'args_wienerinit']
+NIMGS_SAVE = 16
+KEYS_MODEL = [
+    "no_bias", "model_size", "mode_preproc",
+    "args_preproc", "additional_outlayer"
+] # Arguments passed to the model's constructor
+EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
+WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
+MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
+NITER_MCALENS = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
+
+INPAINTING_WIENER = False
+INPAINTING_PNPMASS = False
+INPAINTING_DEEPMASS = True
+
+N_NOISE_REALS_UQ = 32
+
+MODE_CQR = "addcqr"
+BOUNDS_MULTFACT_CONFIDENCE_UQ = (0., 2.)
+BOUNDS_ADDCONST_CONFIDENCE_UQ = (-0.005, 0.005)
+
+MODEL_SPECS = [
+    "pe", # Point estimate (order-1 models)
+    "var" # Variance estimate (order-2 models)
+]
 
 def set_seed(seed):
     """Set the random seed for reproducibility."""
@@ -36,6 +68,12 @@ def set_seed(seed):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
+
+
+def get_path_to_output(output_dir, output_filename, checkpoint_dir=None):
+    if checkpoint_dir is not None:
+        output_dir = os.path.join(checkpoint_dir, output_dir)
+    return os.path.join(output_dir, output_filename)
 
 
 def get_device(verbose=False):
@@ -46,30 +84,39 @@ def get_device(verbose=False):
 
 
 def get_stdnoise_mask(
-        imgsize, cosmos_include_faint=False, convert_to_torch_tensor=False,
+        path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
+        imgsize=IMGSIZE,
+        cosmos_include_faint=False,
         inpainting=False, verbose=False
 ):
-    if verbose:
-        print("Load COSMOS galaxy shape catalog")
-    cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
-    if cosmos_include_faint:
-        cat_cosmos = aptable.vstack(
-            [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
+    if path_to_std_noise is not None:
+        assert path_to_mask is not None, (
+            "If `path_to_std_noise` is provided, `path_to_mask` must also be provided."
         )
+        if verbose:
+            print("Load noise standard deviation and mask from files")
+        std_noise = torch.load(path_to_std_noise)
+        mask = torch.load(path_to_mask)
     else:
-        cat_cosmos = cat_cosmos_bright
-    data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
-    shapedisp = data_dict["shapedisp"]
-    ngal = data_dict["ngal"]
-    mask = data_dict["mask"]
-    std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
-    if inpainting:
-        std_noise[~mask] = np.max(std_noise) # Set the noise standard deviation for masked data
+        if verbose:
+            print("Load COSMOS galaxy shape catalog")
+        cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
+        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+        if cosmos_include_faint:
+            cat_cosmos = aptable.vstack(
+                [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
+            )
+        else:
+            cat_cosmos = cat_cosmos_bright
+        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
+        shapedisp = data_dict["shapedisp"]
+        ngal = data_dict["ngal"]
+        mask = data_dict["mask"]
+        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
 
-    if convert_to_torch_tensor:
-        mask = torch.tensor(mask, dtype=bool)
-        std_noise = torch.tensor(std_noise, dtype=torch.float32)
+    if inpainting:
+        # Set the noise standard deviation for masked data
+        std_noise[~mask] = std_noise.max()
 
     return std_noise, mask
 
@@ -95,7 +142,12 @@ def create_dataset_from_kappatng(
         Index of the learning potential. It indicates which folder to look
         into for the HDF5 files containing the dataset (`LPxxx` where `xxx`
         ranges from `001` to `100`).
-    openingangle : floatfrom wlmmuq.kappatng import OPENINGANGLE
+    openingangle : float
+        Opening angle of the input images in degrees.
+    ninpimgs : int
+        Number of input images before cropping/augmentation.
+    verbose : bool, optional
+    **kwargs
         Additional arguments to pass to the function `func`.
     """
     # Get redshift weights from the COSMOS catalog
@@ -115,86 +167,196 @@ def create_dataset_from_kappatng(
     )
 
 
-def get_powerspectrum_from_dataset(
-        hdf5_filepath, nimgs, device=None, verbose=False, **kwargs
+def get_checkpoint_dirs(
+        checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
 ):
-    if verbose:
-        print(f"Compute the power spectrum of {nimgs} images")
-    dataloader = wlbl.HDF5DatasetKappa(
-        hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
-    ).to_dataloader()
-    dataloader = iter(dataloader)
-
-    list_of_powerspectrum = []
-    while True:
-        try:
-            kappa_ps = next(dataloader)
-        except StopIteration:
-            break
-        if device is not None:
-            kappa_ps = kappa_ps.to(device)
-        list_of_powerspectrum.append(
-            wlutils.get_powerspectrum(kappa_ps)
+    checkpoint_dir0 = checkpoint_dir
+    if checkpoint_subdir is not None:
+        checkpoint_dir = os.path.join(checkpoint_dir0, checkpoint_subdir)
+    else:
+        raise ValueError("Argument `checkpoint_subdir` must be provided.")
+    if checkpoint_subdir_uq is not None:
+        checkpoint_dir_uq = os.path.join(checkpoint_dir0, checkpoint_subdir_uq)
+        warnings.warn(
+            f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
+            f"the one used for the point estimate ({checkpoint_dir})"
         )
-    powerspectrum = torch.stack(list_of_powerspectrum, dim=0)
-    powerspectrum = torch.mean(powerspectrum, dim=0)
+    else:
+        checkpoint_dir_uq = checkpoint_dir
 
-    return powerspectrum
+    return checkpoint_dir, checkpoint_dir_uq
 
 
-def load_trained_model(
-        arch, imgsize, checkpoint_dir=None, timestamp=None, epoch=EPOCH,
-        load_model_uq=False, timestamp_uq=None, epoch_uq=None,
-        verbose=False, **kwargs
+def get_path_to_checkpoint(save_path, timestamp, epoch):
+    path_to_checkpoint = os.path.join(
+        save_path, timestamp, f"ckp_{epoch}.pth.tar"
+    )
+    return path_to_checkpoint
+
+
+def update_kwargs_model(
+        kwargs_model,
+        std_noise=None, mask=None, path_to_ps=None,
+        eps_sup_step_size_wiener=None,
+        niter_wiener=None, device="cpu", verbose=False
 ):
+    try:
+        mode_preproc = kwargs_model["mode_preproc"]
+    except KeyError:
+        mode_preproc = None
+    if mode_preproc is not None and "args_preproc" not in kwargs_model:
+        # Load arguments for Wiener or KS initialization
+        # Only for DeepMass (denoiser = False)
+        if mode_preproc == "wiener":
+            args_preproc = _get_args_wienerinit(
+                std_noise, mask, path_to_ps=path_to_ps,
+                eps_sup_step_size=eps_sup_step_size_wiener,
+                niter=niter_wiener, device=device, verbose=verbose
+            )
+        elif mode_preproc == "ks":
+            args_preproc = {"std_noise": std_noise, "mask": mask}
+        else:
+            raise ValueError(
+                f"Invalid preprocessing mode '{mode_preproc}'. "
+                "Supported modes are 'wiener' and 'ks'."
+            )
+        kwargs_model.update(args_preproc=args_preproc)
+
+
+def instantiate_model(
+        arch, imgsize=IMGSIZE,
+        device="cpu", verbose=False, **kwargs
+):
+
     if arch is None:
         raise ValueError(
             "Model architecture must be provided with -a or --arch"
         )
-    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
-    cnn_class, _ = wlnn.MODEL_CLASSES[arch]
-
-    model = cnn_class(
-        map_size=imgsize, meancentering=True, onlypositive=False, **kwargs_model
-    )
-    model.eval()
-    if timestamp is not None:
-        _load_model_checkpoint(
-            model, checkpoint_dir, "pe", timestamp, epoch, verbose
-        )
+    cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
+    model = cnn_class(map_size=imgsize, **kwargs).to(device)
     if verbose:
         model.summary()
 
-    if load_model_uq:
-        model_uq = cnn_class(
-            map_size=imgsize, meancentering=False, onlypositive=True, **kwargs_model
+    return model, scale_as_input
+
+
+def load_trained_model(
+        checkpoint_dir, arch, timestamp,
+        epoch=EPOCH, imgsize=IMGSIZE, order2=False,
+        additional_outlayer=None,
+        key_replacement_dict=KEY_REPLACEMENT_DICT,
+        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER, model_specs=None,
+        device="cpu", verbose=False, **kwargs
+):
+    update_kwargs_model(
+        kwargs,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose
+    )
+    model, _ = instantiate_model(
+        arch, imgsize=imgsize, order2=order2,
+        additional_outlayer=additional_outlayer,
+        device=device, verbose=verbose, **kwargs
+    )
+    checkpoint_dir = os.path.expanduser(checkpoint_dir)
+    if timestamp is None:
+        path_to_checkpoint = checkpoint_dir
+    else:
+        if model_specs is None:
+            model_specs = MODEL_SPECS[order2]
+        save_path = os.path.join(checkpoint_dir, model_specs)
+        path_to_checkpoint = get_path_to_checkpoint(
+            save_path, timestamp, epoch
         )
-        model_uq.eval()
-        if timestamp_uq is not None:
-            if epoch_uq is None:
-                epoch_uq = epoch
-            _load_model_checkpoint(
-                model_uq, checkpoint_dir, "var", timestamp_uq, epoch_uq, verbose
-            )
+    checkpoint = torch.load(path_to_checkpoint, map_location=device)
+    state_dict = checkpoint['state_dict']
+    if key_replacement_dict is not None:
+        for old_key, new_key in key_replacement_dict.items():
+            if old_key in state_dict:
+                if verbose:
+                    print(f"Replacing key '{old_key}' with '{new_key}'")
+                state_dict[new_key] = state_dict.pop(old_key)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.eval()
+
+    return model
+
+
+def load_trained_models(
+        checkpoint_dir, arch, timestamp, epoch=EPOCH,
+        model_specs=None,
+        load_model_uq=False, checkpoint_dir_uq=None,
+        arch_uq=None, timestamp_uq=None, epoch_uq=None,
+        model_specs_uq=None,
+        imgsize=IMGSIZE,
+        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER,
+        device="cpu", verbose=False, **kwargs
+):
+    kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
+    if verbose:
+        print("Load trained order-1 model")
+    model = load_trained_model(
+        checkpoint_dir, arch, timestamp, epoch=epoch,
+        imgsize=imgsize, order2=False,
+        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener, model_specs=model_specs,
+        device=device, verbose=verbose,
+        **kwargs_model
+    )
+    if load_model_uq:
+        if arch_uq is None:
+            arch_uq = arch
+            kwargs_model_uq = kwargs_model.copy()
+        else:
+            kwargs_model_uq = {}
+            for k in KEYS_MODEL:
+                kuq = f"{k}_uq"
+                if kuq in kwargs:
+                    kwargs_model_uq.update({k: kwargs.pop(kuq)})
+        if epoch_uq is None:
+            epoch_uq = epoch
+
         if verbose:
-            model_uq.summary()
+            print("Load trained order-2 model")
+        model_uq = load_trained_model(
+            checkpoint_dir_uq, arch_uq, timestamp_uq,
+            epoch=epoch_uq, imgsize=imgsize, order2=True,
+            std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+            eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+            niter_wiener=niter_wiener, model_specs=model_specs_uq,
+            device=device, verbose=verbose,
+            **kwargs_model_uq
+        )
     else:
         model_uq = None
 
     return model, model_uq
 
 
-def _load_model_checkpoint(
-        model, checkpoint_dir, model_type, timestamp,
-        epoch=EPOCH, verbose=False
+def instantiate_starlet_denoiser(
+        imgsize=IMGSIZE,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        device="cpu", verbose=False
 ):
-    path_to_checkpoint_pe = os.path.join(
-        checkpoint_dir, model_type, timestamp, f"ckp_{epoch}.pth.tar"
-    )
+    denoiser = wlpnpmcalens.Starlet2d(
+        in_channels=1, nx=imgsize, ny=imgsize,
+        detection_threshold=starlet_detection_threshold
+    ).to(device)
     if verbose:
-        print(f"Load checkpoint from {path_to_checkpoint_pe}")
-    checkpoint = torch.load(path_to_checkpoint_pe)
-    model.load_state_dict(checkpoint['state_dict'])
+        print(
+            f"Starlet denoiser instantiated with {denoiser.ns} scales and "
+            f"a {int(starlet_detection_threshold)}-sigma detection threshold."
+        )
+    callback = wlpnpmcalens.StarletResetter(denoiser)
+
+    return denoiser, callback
 
 
 def get_dataloader_massmapping(
@@ -210,343 +372,592 @@ def get_dataloader_massmapping(
     return test_dataloader
 
 
-def get_pnpmass_modules(std_noise, mask, denoiser, denoiser_uq=None):
+def _get_args_wienerinit(
+        std_noise, mask, path_to_ps=PATH_TO_PS,
+        white_noise=False,
+        step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        niter=NITER_WIENER, device="cpu", verbose=False
+):
+    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
+    powerspectrum = torch.load(path_to_ps)
+    step_size, _ = _get_step_size_param_mahalanobis(
+        white_noise=white_noise,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size, eps=eps_sup_step_size,
+        device=device, verbose=verbose
+    ) # Bayesian Wiener filtering
+    args_wienerinit = dict(
+        step_size=step_size, powerspectrum=powerspectrum,
+        std_noise=std_noise, mask=mask, niter=niter
+    )
+    return args_wienerinit
 
-    # Instantiate data fidelity, prior and metrics
-    data_fidelity = wlpnp.Mahalanobis(
-        sigma=std_noise**0.5
-    ) # Sqrt of noise stdev because we do not consider the negative log-likelihood
+
+def _get_datafidelity_params(
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        step_size=None, multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        device="cpu", verbose=False
+):
+    step_size, param_mahalanobis = \
+            _get_step_size_param_mahalanobis(
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        eps=eps_sup_step_size,
+        device=device, verbose=verbose
+    )
+    if not white_noise:
+        data_fidelity = wlpnp.Mahalanobis(param_vector=param_mahalanobis)
+        g_param = step_size
+    else:
+        # Regular L2 data fidelity with unitary variance
+        data_fidelity = dinv.optim.data_fidelity.L2()
+        g_param = None # To be updated for each new noise realization
+    params_algo = {"stepsize": step_size, "g_param": g_param}
+
+    return data_fidelity, params_algo
+
+
+def _get_datafidelity_prior_params_gaussian(
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        step_size=None,
+        multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        device="cpu", verbose=False
+):
+    data_fidelity, params_algo = _get_datafidelity_params(
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size,
+        multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
+        device=device, verbose=verbose
+    )
+    powerspectrum = torch.load(path_to_ps)
+    prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
+
+    return data_fidelity, prior, params_algo
+
+
+def _get_datafidelity_prior_params_nongaussian(
+        denoiser, denoiser_uq=None,
+        white_noise=False, std_noise=None, physics=None,
+        step_size=None, multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        device="cpu", verbose=False
+):
+    data_fidelity, params_algo = _get_datafidelity_params(
+        white_noise=white_noise, noise_whitening=True,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
+        device=device, verbose=verbose
+    ) # Noise-whitening data fidelity
     prior = dinv.optim.prior.PnP(denoiser)
     if denoiser_uq is not None:
         prior_uq = dinv.optim.prior.PnP(denoiser_uq)
     else:
         prior_uq = None
-    rmse = wlpnp.RMSE(mask=mask) # RMSE computed within the mask
 
-    # Instantiate physics (forward model)
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
-
-    return data_fidelity, prior, prior_uq, rmse, physics
+    return data_fidelity, prior, prior_uq, params_algo
 
 
-def get_pnpmass_step_size(
-        std_noise, mask, step_size=None, multfact_step_size=MULTFACT_STEP_SIZE
+def _get_step_size_param_mahalanobis(
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        step_size=None, multfact_step_size=None,
+        eps=EPS_SUP_STEP_SIZE,
+        device="cpu", verbose=False
 ):
-    if step_size is None:
-        upperbound_step_size = wlutils.get_sup_step_size(
-            std_noise**0.5, # Sqrt of noise stdev because we do not consider the negative log-likelihood
-            mask=mask
-        )
-        step_size = multfact_step_size * upperbound_step_size
+    if not white_noise:
+        param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
+        if step_size is None or step_size <= 0:
+            step_size = wlutils.get_sup_step_size(
+                param_mahalanobis=param_mahalanobis,
+                physics=physics, device=device
+            )
+            if verbose:
+                print(
+                    f"Step size upper bound computed using power iteration = {step_size:.2e}"
+                )
+            step_size *= (1 - eps)
+        if multfact_step_size is not None:
+            step_size *= multfact_step_size
+    else:
+        # The standard MSE is used as data fidelity
+        # The parameter `g_param` for the proximal operator must be updated accordingly
+        if step_size is not None:
+            warnings.warn(
+                "The step size is not used for white noise. "
+                "It will be set to 1."
+            )
+        step_size = 1
+        param_mahalanobis = None
 
-    return step_size
+    return step_size, param_mahalanobis
 
 
-def get_wiener(path_to_ps, std_noise, mask, niter=NITER_WIENER, verbose=False):
-
-    if path_to_ps is None:
-        warnings.warn(
-            "Unknown power spectrum; the Wiener estimate "
-            "will not be computed."
-        )
-        return None
+def get_wiener(
+        path_to_ps=PATH_TO_PS,
+        white_noise=False, noise_whitening=False,
+        std_noise=None, physics=None,
+        step_size=None, eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        niter=NITER_WIENER, device="cpu", verbose=False
+):
     if verbose:
         print("Get optimizer for iterative Wiener filtering")
-    powerspectrum, step_size = get_powerspectrum_step_size_wienerinit(
-        path_to_ps, std_noise, mask
+    data_fidelity, prior, params_algo = _get_datafidelity_prior_params_gaussian(
+        path_to_ps=path_to_ps,
+        white_noise=white_noise, noise_whitening=noise_whitening,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size, eps_sup_step_size=eps_sup_step_size,
+        device=device, verbose=verbose
     )
-    data_fidelity = wlpnp.Mahalanobis(sigma=std_noise)
-    prior = dinv.optim.PnP(wlpnp.ProximalWiener(powerspectrum))
-    out = wlpnp.optim_builder(
-        iteration="PGD", prior=prior,
-        data_fidelity=data_fidelity,
+    wiener = wlpnp.optim_builder(
+        iteration="PGD",
+        params_algo=params_algo.copy(),
+        data_fidelity=data_fidelity, prior=prior,
         early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-        params_algo={"stepsize": step_size, "g_param": step_size},
+    ).to(device)
+
+    return wiener
+
+
+def get_gaussian_extractor(
+        which=WHICH_GAUSSIAN_EXTRACTOR,
+        path_to_ps=PATH_TO_PS,
+        white_noise=False,
+        imgsize=IMGSIZE, std_noise=None, physics=None,
+        step_size=None, step_size_ng=None,
+        multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        niter=NITER_WIENER,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        mcalens_update_ng_first=False,
+        device="cpu", verbose=False
+):
+    data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
+        path_to_ps=path_to_ps,
+        white_noise=white_noise,
+        std_noise=std_noise, physics=physics,
+        step_size=step_size,
+        multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
+        device=device, verbose=verbose
     )
-    return out
+    if which == "wiener":
+        if verbose:
+            print("Wiener used as Gaussian extractor")
+        extractor = wlpnp.optim_builder(
+            iteration="PGD",
+            params_algo=params_algo_g.copy(),
+            data_fidelity=data_fidelity_g, prior=prior_g,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+        ).to(device)
+        callback = None
+
+    elif which == "mcalens":
+        if verbose:
+            print("MCALens used as Gaussian extractor")
+        denoiser_ng, _, callback = instantiate_starlet_denoiser(
+            imgsize=imgsize,
+            starlet_detection_threshold=starlet_detection_threshold,
+            device=device, verbose=verbose
+        )
+        data_fidelity_ng, prior_ng, _, params_algo_ng = \
+                _get_datafidelity_prior_params_nongaussian(
+            denoiser_ng, white_noise=white_noise,
+            std_noise=std_noise, physics=physics,
+            step_size=step_size_ng, eps_sup_step_size=eps_sup_step_size,
+            device=device, verbose=verbose
+        )
+        extractor = wlpnpmcalens.optim_builder_mcalens(
+            iteration_g="PGD", iteration_ng="PGD",
+            params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo_ng.copy(),
+            data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
+            prior_g=prior_g, prior_ng=prior_ng,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            update_ng_first=mcalens_update_ng_first,
+            output_mode="discard_ng", verbose=verbose
+        ).to(device)
+
+    else:
+        raise ValueError(
+            f"Invalid extractor '{which}'. "
+            "Supported extractors are 'wiener' and 'mcalens'."
+        )
+
+    return extractor, callback
 
 
 def get_pnpmass(
-        std_noise, mask, denoiser, denoiser_uq, niter, step_size, init_estimate=None
+        denoiser, denoiser_uq, imgsize=IMGSIZE,
+        std_noise=None, rmse_fn=None, physics=None,
+        step_size=None, multfact_step_size=None,
+        eps_sup_step_size=EPS_SUP_STEP_SIZE,
+        niter=NITER_PNPMASS, mode="regular",
+        which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
+        update_ng_first=False,
+        path_to_ps=PATH_TO_PS,
+        niter_wiener=NITER_WIENER,
+        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        niter_per_step_g=NITER_PER_STEP_G,
+        niter_per_step_ng=NITER_PER_STEP_NG,
+        device="cpu", verbose=False
 ):
-    data_fidelity, prior, prior_uq, rmse, physics = get_pnpmass_modules(
-        std_noise, mask, denoiser, denoiser_uq
+    data_fidelity, prior, prior_uq, params_algo = \
+            _get_datafidelity_prior_params_nongaussian(
+        denoiser, denoiser_uq=denoiser_uq,
+        white_noise=False, std_noise=std_noise, physics=physics,
+        step_size=step_size, multfact_step_size=multfact_step_size,
+        eps_sup_step_size=eps_sup_step_size,
+        device=device, verbose=verbose
     )
-    pnpmass = wlpnp.optim_builder(
-        iteration="PGD", prior=prior, prior_uq=prior_uq,
-        data_fidelity=data_fidelity,
-        early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-        metric_dict={"rmse": rmse}, verbose=True,
-        params_algo={"stepsize": step_size, "g_param": step_size},
-        init_estimate=init_estimate,
-    )
-    return pnpmass, physics
+    step_size = params_algo["stepsize"]
+    kwargs = {}
+    if rmse_fn is not None:
+        kwargs.update(metric_dict={"rmse": rmse_fn})
 
+    if mode in ["regular", "residual"]:
+        if mode == "residual":
+            if verbose:
+                print("Instantiate PnPMass on residuals (ResPnPMass)")
 
-def run_wiener_pnpmass_batch(
-        wiener: wlpnp.BaseOptim, pnpmass: wlpnp.BaseOptim,
-        physics: wlpnp.MassMapping,
-        dataloader, step_size, niter, confidence_uq=CONFIDENCE_UQ,
-        mask: torch.Tensor=None, device="cpu", verbose=False
-):
-    listof_gamma_noisy = []
-    listof_kappa_true = []
-    listof_kappa_wiener = []
-    listof_kappa_pnpmass = []
-    listof_var_pnpmass = []
-    listof_rmse_iter = []
-
-    pbar = tqdm.tqdm(dataloader, disable=not verbose)
-    pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
-    for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
-        gamma_noisy = gamma_noisy.to(device)
-        with torch.no_grad():
-            if wiener is not None:
-                kappa_wiener = wiener(gamma_noisy, physics, compute_metrics=False)
-            else:
-                kappa_wiener = None
-            out, metrics = pnpmass(
-                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+            # Note: the step sizes for the Gaussian extractor are computed automatically
+            gaussian_extractor, callback_gaussian_extractor = \
+                    get_gaussian_extractor(
+                which=which_gaussian_extractor,
+                path_to_ps=path_to_ps,
+                white_noise=False,
+                imgsize=imgsize, std_noise=std_noise, physics=physics,
+                step_size=None, step_size_ng=None,
+                eps_sup_step_size=eps_sup_step_size,
+                niter=niter_wiener,
+                starlet_detection_threshold=starlet_detection_threshold,
+                mcalens_update_ng_first=update_ng_first,
+                device=device, verbose=False
             )
-            if not isinstance(out, tuple):
-                kappa_pnpmass = out
-                var_pnpmass = torch.zeros(kappa_true.shape, device=device)
-            else:
-                kappa_pnpmass, var_pnpmass = out
-            listof_gamma_noisy.append(gamma_noisy) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            if wiener is not None:
-                listof_kappa_wiener.append(kappa_wiener) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pnpmass.append(kappa_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var_pnpmass.append(var_pnpmass) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse_iter.append(metrics["rmse"]) # Shape = (batch_size, niter)
+        else:
+            if verbose:
+                print("Instantiate PnPMass")
+            gaussian_extractor = None
+            callback_gaussian_extractor = None
+        pnpmass = wlpnp.optim_builder(
+            iteration="PGD", params_algo=params_algo.copy(),
+            data_fidelity=data_fidelity, prior=prior,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            verbose=verbose, **kwargs
+        ).to(device)
 
-    gamma_noisy = torch.cat(listof_gamma_noisy, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    if wiener is not None:
-        kappa_wiener = torch.cat(listof_kappa_wiener, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-        mask = mask.to(device)
-        rmse_wiener = wlutils.rmse(kappa_wiener, kappa_true, mask=mask)
+    elif mode == "pnpmcalens":
+        if verbose:
+            print("Instantiate PnPMCALens")
+
+        # Note: the step size for the Gaussian component is computed automatically
+        data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
+            path_to_ps=path_to_ps,
+            white_noise=False,
+            std_noise=std_noise, physics=physics,
+            step_size=None,
+            eps_sup_step_size=eps_sup_step_size,
+            device=device, verbose=verbose
+        )
+        pnpmass = wlpnpmcalens.optim_builder_mcalens(
+            iteration_g="PGD", iteration_ng="PGD",
+            niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
+            params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
+            data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
+            prior_g=prior_g, prior_ng=prior,
+            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            update_ng_first=update_ng_first,
+            output_mode="add_components", verbose=True, **kwargs
+        ).to(device)
+        gaussian_extractor = None
+        callback_gaussian_extractor = None
+
     else:
-        kappa_wiener = None
-        rmse_wiener = None
-    kappa_pnpmass = torch.cat(listof_kappa_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    var_pnpmass = torch.cat(listof_var_pnpmass, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
-    rmse_iter = torch.cat(listof_rmse_iter, dim=0) # Shape = (nimgs, niter)
+        raise ValueError(
+            f"Invalid mode '{mode}'. "
+            "Supported modes are 'regular', 'residual', and 'pnpmcalens'."
+        )
 
-    res_pnpmass = confidence_uq * var_pnpmass**0.5
+    if denoiser_uq is not None:
+        pnpmass_uq = wlpnp.optim_builder(
+            iteration="PGD", params_algo=params_algo.copy(),
+            data_fidelity=data_fidelity, prior=prior_uq,
+            early_stop=False, max_iter=1, custom_init=wlpnp.zero_init,
+            verbose=verbose
+        ).to(device)
+    else:
+        pnpmass_uq = None
 
-    return gamma_noisy, kappa_true, kappa_wiener, \
-        kappa_pnpmass, var_pnpmass, res_pnpmass, rmse_wiener, rmse_iter
+    out = (
+        pnpmass, pnpmass_uq, gaussian_extractor,
+        step_size, callback_gaussian_extractor
+    )
+
+    return out
 
 
-def get_powerspectrum_step_size_wienerinit(
-        path_to_ps, std_noise, mask, multfact_step_size=MULTFACT_STEP_SIZE,
+def variance_estimation_through_noise_propagation(
+        method: wlpnp.BaseOptim,
+        physics: wlpnp.MassMapping,
+        output_shape: tuple | torch.Size,
+        n_noise_reals: int=N_NOISE_REALS_UQ,
+        device="cpu", verbose=False, **kwargs
+):
+    noise_outputs = torch.zeros(
+        n_noise_reals, *output_shape, device=device
+    ) # Shape = (nreals, batch_size, 1, imgsize, imgsize), dtype = float32
+    zeros = torch.zeros(
+        *output_shape, dtype=torch.complex64, device=device
+    ) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
+    if verbose:
+        print(f"Propagate {n_noise_reals} noise realisations through the pipeline")
+    for i in range(n_noise_reals):
+        # Generate noise realisations
+        noise = physics.noise_model(zeros) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
+        # Propagate noise realisations through the pipeline
+        # For MCALens, the support of active wavelet coefficients is assumed to be already initialized.
+        noise_outputs[i] = method(noise, physics, **kwargs)
+
+    return torch.std(noise_outputs, dim=0)**2 # Shape = (batch_size, 1, imgsize, imgsize)
+
+
+def get_inference_time(beg_time, which="inference", verbose=False):
+    inference_time = time.time() - beg_time
+    if verbose:
+        print(f"Total {which} time: {inference_time:.2f} seconds")
+    return inference_time
+
+
+def convert_into_list(value):
+    if not isinstance(value, list):
+        value = [value]
+    return value
+
+
+def convert_into_list_cqr_mode(mode_cqr, scaling_factor_chisqcqr):
+    mode_cqr = convert_into_list(mode_cqr)
+    scaling_factor_chisqcqr = convert_into_list(scaling_factor_chisqcqr)
+    for i, mcqr in enumerate(mode_cqr):
+        if mcqr != "chisqcqr":
+            scaling_factor_chisqcqr[i] = None
+    return mode_cqr,scaling_factor_chisqcqr
+
+
+def convert_into_hyperparam_list(
+        hyperparam, find_optimal_hyperparam_precalib=False
+):
+    hyperparam = convert_into_list(hyperparam)
+    if find_optimal_hyperparam_precalib and None not in hyperparam:
+        hyperparam.append(None)
+
+    return hyperparam
+
+
+def apply_calibration_and_get_metrics(
+        kappa_pred, var, kappa_true,
+        kappa_pred_calib, var_calib, kappa_true_calib,
+        confidence_uq=CONFIDENCE_UQ,
+        imgsize=IMGSIZE, mode=MODE_CQR,
+        hyperparam_precalib=None,
+        find_optimal_hyperparam_precalib=False,
+        mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
+        device="cpu", verbose=False, **kwargs
+):
+    err_metric = wlpnp.MiscoverageRate(meancentering=False, mask=mask).to(device)
+    predinterv_metric = wlpnp.PredInterv(meancentering=False, mask=mask).to(device)
+
+    # Compute the calibration parameters on the calibration set
+    if verbose:
+        print("Instantiate CQR model and compute the calibration parameters")
+    cqr = _instantiate_cqr(
+        confidence_uq=confidence_uq, imgsize=imgsize,
+        mode=mode, mask=mask, device=device, **kwargs
+    )
+    if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
+        hyperparam_precalib = _get_optimal_hyperparam_precalib(
+            cqr,
+            kappa_pred, var,
+            kappa_pred_calib, var_calib, kappa_true_calib,
+            predinterv_metric, confidence_uq=confidence_uq,
+            verbose=verbose
+        )
+
+    # Compute pre- and post-calibration residuals
+    if verbose:
+        print("Calibrate residuals with CQR")
+    res, res_cqr = _get_residuals_cqr(
+        cqr, var, kappa_pred_calib, var_calib,
+        kappa_true_calib, confidence_uq=confidence_uq,
+        hyperparam_precalib=hyperparam_precalib
+    )
+
+    bounds = _get_bounds(kappa_pred, res)
+    err = err_metric(bounds, kappa_true)
+    predinterv = predinterv_metric(bounds, kappa_true)
+
+    bounds_cqr = _get_bounds(kappa_pred, res_cqr)
+    err_cqr = err_metric(bounds_cqr, kappa_true)
+    predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
+
+    out_dict = {
+        "state_dict_cqr": cqr.state_dict(),
+        "err": err.cpu(),
+        "predinterv": predinterv.cpu(),
+        "err_cqr": err_cqr.cpu(),
+        "predinterv_cqr": predinterv_cqr.cpu(),
+        "hyperparam_precalib": hyperparam_precalib
+    }
+    if save_tensors:
+        out_dict.update({
+            "res": res[:nimgs_save].cpu(),
+            "res_cqr": res_cqr[:nimgs_save].cpu() \
+                if res_cqr is not None else None,
+        })
+
+    return out_dict
+
+
+def _instantiate_cqr(
+        confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
+        mode=MODE_CQR, a=None, mask=None, device="cpu", **kwargs
+):
+    cqr_class = wlnn.CQR_CLASSES[mode]
+    if mode == "chisqcqr":
+        kwargs.update(a=a, mask=mask)
+    alpha = wlutils.get_alpha_from_confidence(confidence_uq)
+    cqr = cqr_class(
+        alpha, map_size=imgsize, **kwargs
+    ).eval().to(device)
+
+    return cqr
+
+
+def _get_optimal_hyperparam_precalib(
+        cqr: wlcqr.AddCQR | wlcqr.MultCQR,
+        kappa_pred: torch.Tensor,
+        var: torch.Tensor,
+        kappa_pred_calib: torch.Tensor,
+        var_calib: torch.Tensor,
+        kappa_true_calib: torch.Tensor,
+        predinterv_metric: wlpnp.PredInterv,
+        confidence_uq: int | float=CONFIDENCE_UQ,
         verbose=False
 ):
     if verbose:
-        print("Get Wiener initialization parameters")
-    powerspectrum = torch.load(path_to_ps)
-    step_size = multfact_step_size * wlutils.get_sup_step_size(
-        std_noise=std_noise, mask=mask
+        print("Find optimal hyperparameters for CQR")
+    if isinstance(cqr, wlcqr.AddCQR):
+        bounds_hyperparam = BOUNDS_MULTFACT_CONFIDENCE_UQ
+        init_hyperparam = 1.0
+    else:
+        bounds_hyperparam = BOUNDS_ADDCONST_CONFIDENCE_UQ
+        init_hyperparam = 0.0
+
+    def mean_predinterv(params: np.ndarray):
+
+        _, res_cqr = _get_residuals_cqr(
+            cqr, var, kappa_pred_calib, var_calib,
+            kappa_true_calib, confidence_uq=confidence_uq,
+            hyperparam_precalib=params[0]
+        )
+        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
+        fake_kappa_true = torch.empty_like(
+            kappa_pred
+        ) # No need to have access to the ground truth to compute the error bar size
+        predinterv_cqr = predinterv_metric(
+            bounds_cqr, fake_kappa_true
+        ) # Shape = (nimgs,)
+
+        return predinterv_cqr.mean().item()
+
+    results_optim = minimize(
+        mean_predinterv, x0=init_hyperparam,
+        method="Nelder-Mead",
+        bounds=(bounds_hyperparam,)
     )
-    return powerspectrum, step_size
+    if verbose:
+        print(results_optim)
+
+    return results_optim.x[0]
 
 
-def save_results(result, model_dir, method, output_filename, verbose=False):
+def _get_bounds(kappa_pred, res):
+    kappa_lo = kappa_pred - res
+    kappa_hi = kappa_pred + res
+    out = torch.stack([kappa_lo, kappa_hi], dim=1) # Shape = (nimgs, 2, 1, nx, ny)
+    return out
 
-    output_dir = os.path.join(
-        model_dir, f"results_{method}"
+
+def _get_residuals_cqr(
+        cqr: wlcqr.AddCQR | wlcqr.MultCQR,
+        var: torch.Tensor,
+        kappa_pred_calib: torch.Tensor,
+        var_calib:torch.Tensor,
+        kappa_true_calib: torch.Tensor,
+        confidence_uq: int | float=CONFIDENCE_UQ,
+        hyperparam_precalib: float | None=None
+):
+    cqr.reset()
+    cqr.hyperparam_precalib = hyperparam_precalib
+    res = _get_error_bars(
+        var, confidence_uq=confidence_uq
     )
-    os.makedirs(output_dir, exist_ok=True)
-    path_to_output = os.path.join(output_dir, output_filename)
+    res_calib = _get_error_bars(
+        var_calib, confidence_uq=confidence_uq
+    )
+    cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
+    res_cqr = cqr(res)
+
+    return res, res_cqr
+
+
+def _get_error_bars(
+        var, confidence_uq=CONFIDENCE_UQ
+):  
+    return confidence_uq * var**0.5
+
+
+def get_uq_keys(
+        mode_cqr=None, scaling_factor_chisqcqr=None,
+        rho=None, const=None,
+):
+    uq_key = "uq"
+    if mode_cqr is not None and mode_cqr != "addcqr":
+        uq_key = f"{uq_key}_{mode_cqr}"
+        if mode_cqr == "chisqcqr" and scaling_factor_chisqcqr is not None:
+            uq_key = f"{uq_key}_a_{scaling_factor_chisqcqr:.3f}"
+    if rho is not None:
+        uq_key = f"{uq_key}_rho_{rho:.3f}"
+    if const is not None:
+        uq_key = f"{uq_key}_const_{const:.3f}"
+    return uq_key
+
+
+def save_results(
+        out_dict, path_to_output, now,
+        verbose=False, **kwargs
+):
+    path_to_output = _complete_path_to_torch_saved_objects(
+        path_to_output, now, **kwargs
+    )
     if verbose:
         print(f"Save results to {path_to_output}")
-    torch.save(result, path_to_output)
+
+    os.makedirs(os.path.dirname(path_to_output), exist_ok=True)
+    torch.save(out_dict, path_to_output)
 
 
-def add_arguments_create_dataset(parser):
+def _complete_path_to_torch_saved_objects(
+        path, timestamp, step_size=None
+):
+    if step_size is not None:
+        path = f"{path}_step-size_{step_size:.3f}"
+    path = f"{path}_{timestamp}.pt"
 
-    parser.add_argument(
-        "--idx-lp", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Index of the learning potential, indicating which folder to look "
-            "into for the HDF5 files containing the dataset (`LPxxx` where `xxx` "
-            "ranges from `001` to `100`). Default = `001`"
-        )
-    )
-    parser.add_argument(
-        "--openingangle", type=float,
-        default=argparse.SUPPRESS,
-        help=f"Opening angle (deg). Default = {OPENINGANGLE}"
-    )
-    parser.add_argument(
-        "--ninpimgs", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            f"Number of input images. Default = {NINPIMGS}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size, to avoid memory overload. "
-            "Default = 50"
-        )
-    )
-
-def add_arguments_model_dir(parser):
-
-    parser.add_argument(
-        "model_dir", type=str,
-        help=(
-            "Root directory containing the checkpoints ('./pe' and './var'), and "
-            "where the results will be saved."
-        )
-    )
-    parser.add_argument(
-        "output_filename", type=str,
-        help="Name of the output file (without extension)"
-    )
-
-def add_arguments_model(parser):
-
-    parser.add_argument(
-        "-a", "--arch", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Architecture of the model. Possible values are: "
-            f"{' | '.join(wlnn.MODEL_CLASSES.keys())}. Default = None"
-        )
-    )
-    parser.add_argument(
-        "-s", "--model-size", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Size of the model (DRUNet only). Possible values are: "
-            f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
-        )
-    )
-
-def add_arguments_checkpoint(parser):
-
-    parser.add_argument(
-        "-t", "--timestamp", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Timestamp of the model to load. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "-e", "--epoch", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Epoch of the model to load. "
-            f"Default = {EPOCH}"
-        )
-    )
-    parser.add_argument(
-        "-uq", "--load-model-uq", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Load the order-2 moment network, for UQ."
-        )
-    ) 
-    parser.add_argument(
-        "-t0", "--timestamp_uq", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Timestamp of the model to load. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "--epoch_uq", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Epoch of the model to load. "
-            f"Default is the same value as `--epoch` ({EPOCH} if not provided)."
-        )
-    )
-
-def add_arguments_dataset(parser, batch_size):
-
-    parser.add_argument(
-        "--imgsize", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of pixels (width) in input images. "
-            f"Default = {IMGSIZE}"
-        )
-    )
-    parser.add_argument(
-        "-b", "--batch-size", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Batch size. "
-            f"Default = {batch_size}"
-        )
-    )
-    parser.add_argument(
-        "-f", "--min-idx-filename-ori",
-        type=int, default=argparse.SUPPRESS,
-        help=(
-            "Filter images by filenames with indices equal or larger than this value. "
-            "Default is None."
-        )
-    )
-    parser.add_argument(
-        "-w", "--num-workers", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of workers for parallel processing. Only work for PyTorch datasets. "
-            f"Default = {NUM_WORKERS}"
-        )
-    )
-
-
-def add_arguments_wienerinit(parser):
-
-    parser.add_argument(
-        "--wiener-init", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Use Wiener initialization. "
-            "Default = False"
-        )
-    )
-    parser.add_argument(
-        "--path-to-ps", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the power spectrum file used for Wiener initialization. "
-            "Default = None"
-        )
-    )
-    parser.add_argument(
-        "--niter-wiener", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Number of iterations for Wiener initialization. "
-            f"Default = {NITER_WIENER}"
-        )
-    )
-
-
-def add_arguments_seed_verbose(parser):
-
-    parser.add_argument(
-        "--seed", type=int,
-        default=argparse.SUPPRESS,
-        help=(
-            "Seed for the random number generators"
-        )
-    )
-    parser.add_argument(
-        "-v", "--verbose", action='store_true',
-        default=argparse.SUPPRESS
-    ) 
+    return path

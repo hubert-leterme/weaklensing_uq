@@ -1,4 +1,5 @@
 import shutil
+import warnings
 import torch
 from torch import nn
 import deepinv as dinv
@@ -28,25 +29,41 @@ class MahalanobisDistance(dinv.optim.Distance):
     .. math::
         f(x) = \frac{1}{2}\|x-y\|_{\Sigma^{-1}}^2 = \frac{1}{2} (x-y)^\top \Sigma^{-1} (x-y)
 
-    where :math:`\Sigma` is a diagonal covariance matrix with positive entries.
+    where :math:`\Sigma` is a diagonal matrix with positive entries.
 
-    :param torch.Tensor sigma: standard deviation for each pixel (square root of the variance).
-        Default: None.
+    :param torch.Tensor param_vector: tensor representing the diagonal of
+    the matrix :math:`\Sigma`. Default: ``None``.
     """
 
-    def __init__(self, sigma: float | torch.Tensor=1.):
+    def __init__(
+            self, param_vector: float | torch.Tensor=None,
+            sigma: float | torch.Tensor=None
+    ):
         super().__init__()
+        if sigma is not None:
+            if param_vector is not None:
+                raise ValueError(
+                    "Either `sigma` or `param_vector` should be provided, not both."
+                )
+            warnings.warn(
+                "The `sigma` parameter is deprecated and will be removed in future versions. "
+                "Please use `param_vector` instead (`sigma**2`).",
+                DeprecationWarning
+            )
+            param_vector = sigma**2
         # The tensor is properly sent to GPU when applying `self.to(device)`
-        if torch.is_tensor(sigma):
-            self.register_buffer("var", sigma**2)
+        if torch.is_tensor(param_vector):
+            self.register_buffer("param_vector", param_vector)
         else:
-            self.var = sigma**2
+            self.param_vector = param_vector
 
 
     def fn(self, x: torch.Tensor, y: torch.Tensor, *args, **kwargs):
         z = x - y # Shape = ([batch_size], [nchannels], nx, ny)
         dim = tuple(range(1, z.dim())) # Exclude batch dimension
-        d = 0.5 * torch.sum(torch.abs(z)**2 / self.var, dim=dim) # Shape = ([batch_size],)
+        d = 0.5 * torch.sum(
+            torch.abs(z)**2 / self.param_vector, dim=dim
+        ) # Shape = ([batch_size],)
         return d
 
 
@@ -63,7 +80,7 @@ class MahalanobisDistance(dinv.optim.Distance):
         :param torch.Tensor y: Observation :math:`y`.
         :return: (:class:`torch.Tensor`) gradient of the distance function :math:`\nabla_{x}\distance{x}{y}`.
         """
-        return (x - y) / self.var # Shape = ([batch_size], [nchannels], nx, ny)
+        return (x - y) / self.param_vector # Shape = ([batch_size], [nchannels], nx, ny)
 
 
     def prox(self, x, y, *args, gamma=1.0, **kwargs):
@@ -72,9 +89,29 @@ class MahalanobisDistance(dinv.optim.Distance):
 
 class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
 
-    def __init__(self, sigma: float | torch.Tensor=1.):
+    def __init__(
+            self, param_vector: float | torch.Tensor=None,
+            sigma: float | torch.Tensor=None
+    ):
         super().__init__()
-        self.d = MahalanobisDistance(sigma=sigma)
+        self.d = MahalanobisDistance(
+            param_vector=param_vector, sigma=sigma
+        )
+
+
+class ComplexGaussianNoise(dinv.physics.GaussianNoise):
+    """
+    Proper complex Gaussian noise model.
+    """
+    # TODO: check whether __add__ and __mul__ must be redefined
+    def __init__(self, sigma_real: float | torch.Tensor=0., **kwargs):
+        super().__init__(sigma=sigma_real, **kwargs)
+
+    def forward(self, x, sigma_real=None, seed=None, **kwargs):
+        out_real = super().forward(x.real, sigma=sigma_real, seed=seed, **kwargs)
+        seed = seed + 1 if seed is not None else None
+        out_imag = super().forward(x.imag, sigma=sigma_real, seed=seed, **kwargs)
+        return out_real + 1j * out_imag
 
 
 class MassMapping(dinv.physics.LinearPhysics):
@@ -83,7 +120,7 @@ class MassMapping(dinv.physics.LinearPhysics):
             self, sigma: float | torch.Tensor=0.,
             mask: torch.Tensor=None, **kwargs
     ):
-        noise_model = dinv.physics.GaussianNoise(sigma=sigma)
+        noise_model = ComplexGaussianNoise(sigma_real=sigma)
         super().__init__(
             A=self.get_shear_from_convergence,
             A_adjoint=self.get_convergence_from_shear,
@@ -111,15 +148,23 @@ class MassMapping(dinv.physics.LinearPhysics):
 
 class ProximalWiener(nn.Module):
 
-    def __init__(self, powerspectrum):
+    def __init__(self, powerspectrum, meancentering=True):
         super().__init__()
         self.register_buffer("powerspectrum", powerspectrum)
+        self.meancentering = meancentering
 
 
-    def forward(self, inp, step_size):
+    def forward(
+            self, inp: torch.Tensor,
+            g_param: float | torch.Tensor
+    ):
+        # Either one scalar parameter for the whole batch, or one specific
+        # parameter for each image
         out = torch.fft.fft2(inp)
-        out /= (1 + step_size / self.powerspectrum)
+        out /= (1 + g_param / self.powerspectrum)
         out = torch.fft.ifft2(out)
+        if self.meancentering:
+            out = utils.meancenter(out, axis=tuple(range(1, out.ndim)))
 
         return out.real
 
@@ -128,7 +173,7 @@ class ProximalWiener(nn.Module):
 # Metrics
 #########################################################################
 
-class MSE(dinv.metric.MSE):
+class MeancenterMaskMixin:
 
     def __init__(
             self, mask: torch.Tensor=None, meancentering: bool=True,
@@ -144,17 +189,66 @@ class MSE(dinv.metric.MSE):
 
     def metric(self, x_net, x, *args, **kwargs):
         if self.meancentering:
-            x_net = utils.meancenter(x_net, mask=self.mask)
-            x = utils.meancenter(x, mask=self.mask)
+            x_net = utils.meancenter(
+                x_net, mask=self.mask,
+                axis=tuple(range(1, x_net.ndim))
+            )
+            try:
+                x = utils.meancenter(
+                    x, mask=self.mask,
+                    axis=tuple(range(1, x.ndim))
+                )
+            except (RuntimeError, AttributeError):
+                x = 0.
         if self.mask is not None:
             x_net = x_net[..., self.mask]
-            x = x[..., self.mask]
+            try:
+                x = x[..., self.mask]
+            except TypeError:
+                pass
         return super().metric(x_net, x, *args, **kwargs)
 
 
-class RMSE(MSE):
+class SquareRootMixin:
     def metric(self, x_net, x, *args, **kwargs):
         return super().metric(x_net, x, *args, **kwargs) ** 0.5
+
+
+class MSE(MeancenterMaskMixin, dinv.metric.MSE):
+    pass
+
+class NMSE(MeancenterMaskMixin, dinv.metric.NMSE):
+    pass
+
+
+class RMSE(SquareRootMixin, MSE):
+    """Root Mean Squared Error metric."""
+
+class NRMSE(SquareRootMixin, NMSE):
+    """Normalized Root Mean Squared Error metric."""
+
+
+class BaseMetricOnLowerUpperBounds(dinv.metric.Metric):
+
+    def metric(self, x_net, x, *args, **kwargs):
+        x_lo = x_net[:, 0]
+        x_hi = x_net[:, 1]
+        out = self._unreduced_metric(x_lo, x_hi, x, *args, **kwargs)
+        return out.mean(dim=tuple(range(1, x.ndim)), keepdim=False)
+
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        raise NotImplementedError
+
+class MetricOnLowerUpperBounds(MeancenterMaskMixin, BaseMetricOnLowerUpperBounds):
+    pass
+
+class MiscoverageRate(MetricOnLowerUpperBounds):
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        return ((x < x_lo) | (x > x_hi)).to(torch.float32)
+
+class PredInterv(MetricOnLowerUpperBounds):
+    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
+        return x_hi - x_lo
 
 
 #########################################################################
@@ -185,30 +279,10 @@ class MetricDict(dict):
         ) # Shape = (batch_size, niter + 1)
 
 
-class FixedPointUQ(nn.Module):
-    def __init__(self, fixed_point:dinv.optim.FixedPoint):
-        super().__init__()
-        self.fixed_point = fixed_point
-
-    def forward(self, *args, compute_metrics=False, x_gt=None, **kwargs):
-        X, metrics = self.fixed_point.forward(
-            *args, compute_metrics=compute_metrics, x_gt=x_gt, **kwargs
-        )
-        X_uq = self.fixed_point.single_iteration(
-            X,
-            self.fixed_point.max_iter,
-            *args,
-            **kwargs,
-        )
-        return (X, X_uq), metrics
-
-
 class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
-            self, *args, metric_dict: MetricDict=None,
-            prior_uq: dinv.optim.Prior=None,
-            init_estimate: dinv.optim.BaseOptim=None, **kwargs
+            self, *args, metric_dict: MetricDict=None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -227,9 +301,6 @@ class BaseOptim(dinv.optim.BaseOptim):
         else:
             self.metric_dict = None
         self.batch_size = None
-        if prior_uq is not None:
-            self.fixed_point = FixedPointUQ(self.fixed_point)
-        self.prior_uq = prior_uq
 
         get_output_0 = self.get_output
         def _get_output(X):
@@ -240,8 +311,6 @@ class BaseOptim(dinv.optim.BaseOptim):
                 out = get_output_0(X)
             return out
         self.get_output = _get_output
-
-        self.init_estimate = init_estimate
 
 
     def _update_metrics(
@@ -295,67 +364,21 @@ class BaseOptim(dinv.optim.BaseOptim):
         return metrics
 
 
-    def update_prior_fn(self, it):
-        r"""
-        For each prior function in `prior`, selects the prior value for iteration ``it``
-        (if this prior depends on the iteration number).
-        If `it == self.max_iter`, then the optimizer is set to UQ mode.
-
-        :param int it: iteration number.
-        :return: the prior at iteration ``it``.
-        """
-        if it < self.max_iter:
-            # Do not use `super().update_prior_fn(it)` to avoid passing a bound method
-            # without class context to the FixedPoint module
-            cur_prior = self.prior[it] if len(self.prior) > 1 else self.prior[0]
-        elif self.prior_uq is not None:
-            cur_prior = self.prior_uq
-        else:
-            raise ValueError
-        return cur_prior
-
-
-    def forward(
-            self, y, physics, x_gt=None, compute_metrics=False,
-            kwargs_init_estimate=None, **kwargs
-    ):
-        if self.init_estimate is not None:
-            if kwargs_init_estimate is None:
-                kwargs_init_estimate = {}
-            with torch.no_grad():
-                x_init = self.init_estimate(
-                    y, physics, x_gt=None,
-                    compute_metrics=False, **kwargs_init_estimate
-                )
-                # Get residuals (input and ground truth)
-                y = y - physics.A(x_init)
-                x_gt = x_gt - x_init
-
-        out = super().forward(
-            y, physics, x_gt=x_gt, compute_metrics=compute_metrics, **kwargs
-        )
-
-        if self.init_estimate is not None:
-            with torch.no_grad():
-                if compute_metrics:
-                    x, metrics = out
-                else:
-                    x = out
-                    metrics = None
-                x = x + x_init # Add initial estimate
-                if compute_metrics:
-                    out = x, metrics
-                else:
-                    out = x
-
-        return out
-
-
 def zero_init(y: torch.Tensor, _unused_physics):
     """The optimization algorithm is initialized with zero-valued tensors"""
     x_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
     z_init = torch.zeros_like(y, dtype=torch.float32, device=y.device)
     return {"est": (x_init, z_init)}
+
+
+class ManualInit:
+    """
+    Manual initialization with user-provided tensors.
+    """
+    def __init__(self):
+        self.X_init = None
+    def __call__(self, _unused_y, _unused_physics):
+        return {"est": self.X_init}
 
 
 def optim_builder(
@@ -364,7 +387,6 @@ def optim_builder(
     params_algo={"lambda": 1.0, "stepsize": 1.0, "g_param": 0.05},
     data_fidelity=None,
     prior=None,
-    prior_uq=None,
     F_fn=None,
     g_first=False,
     bregman_potential=None,
@@ -409,7 +431,6 @@ def optim_builder(
         has_cost=iterator.has_cost,
         data_fidelity=data_fidelity,
         prior=prior,
-        prior_uq=prior_uq,
         params_algo=params_algo,
         max_iter=max_iter,
         **kwargs,
