@@ -33,7 +33,7 @@ optional_args_cleaned=$(echo "$optional_args" \
 output_filename=$(echo "results_mcalens_${optional_args_cleaned}" | sed 's/__/_/g' | sed 's/_\+$//')
 
 # Command to execute
-cmd=$(echo "python scripts/pnpmass.py -c mcalens --mode pnpmcalens --starlet --update-ng-first ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
+cmd=$(echo "python scripts/mcalens.py --update-ng-first ${optional_args} -o ${output_filename} --seed 42 -v" | xargs)
 
 # Print the command for tracking
 echo "Running the following command:"
