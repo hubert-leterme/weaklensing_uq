@@ -826,11 +826,11 @@ def apply_calibration_and_get_metrics(
 
 def _instantiate_cqr(
         confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
-        mode=MODE_CQR, mask=None, device="cpu", **kwargs
+        mode=MODE_CQR, a=None, mask=None, device="cpu", **kwargs
 ):
     cqr_class = wlnn.CQR_CLASSES[mode]
     if mode == "chisqcqr":
-        kwargs.update(mask=mask)
+        kwargs.update(a=a, mask=mask)
     alpha = wlutils.get_alpha_from_confidence(confidence_uq)
     cqr = cqr_class(
         alpha, map_size=imgsize, **kwargs
