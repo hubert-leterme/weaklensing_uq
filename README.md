@@ -35,7 +35,15 @@ pip install . # Install wlmmuq
 
 ### Datasets
 
-TODO:
+#### COSMOS shape catalog
+
+The HST/COSMOS weak lensing reduced shear catalog from Schrabback et al. (2010, A&A 516, A63) is provided in `./data/COSMOS/`, together with some precomputed PyTorch tensors. You can move them to any location and update the configuration file accordingly.
+
+#### The $\kappa$-TNG dataset
+
+The $\kappa$-TNG dataset can be downloaded from the official file server—see `https://github.com/0satoken/kappaTNG` for more information. Then, data augmentation and / or cropping can be applied for ready-to-use datasets (see below).
+
+For the sake of convenience, the power spectrum has been precomputed on $2\,048$ images from the training set, and is provided in `./data/kappaTNG/ps_LP002_384.pt`. You can move this file to any location and update the configuration file accordingly.
 
 ## Python scripts
 
