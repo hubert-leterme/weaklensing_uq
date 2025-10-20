@@ -1,27 +1,44 @@
+# ==========================================================
 # Configuration file for data directories and file paths
-#
-# Parameters:
-#   verbose: Boolean flag to enable verbose output when importing the wlmmuq library.
-#   cosmos_dir: Path to the COSMOS data directory.
-#   ktng_dir: Path to the kappaTNG data directory.
+# ==========================================================
 
-verbose: true
+# Update the paths to point to the correct locations on your system.
+# This will set the global variables (e.g., wlmmuq.COSMOS_DIR, wlmmuq.KTNG_DIR...) accordingly.
+# Leave blank if not needed; the corresponding global variables will then be set to None.
 
+verbose: true # Prints the location of this configuration file when importing `wlmmuq`
+
+# Path to the HST/COSMOS weak lensing reduced shear catalog from Schrabback et al. (2010, A&A 516, A63)
+# The directory contains data files named `cosmos_bright_cat_min.asc` and `cosmos_faint_cat.asc`.
+# Used for computing the mask and noise standard deviation
 cosmos_dir: path/to/COSMOS/v1.0
-ktng_dir: path/to/kappaTNG
+
+# Path to the $\kappa$TNG dataset of cosmological hydrodynamic simulations.
+# See `https://github.com/0satoken/kappaTNG` to download the dataset.
+# The directory contains a file named `zs.dat` as well as HDF5 files named
+# `LP[XXX]/LP[XXX]_run[001-100]_maps.hdf5`, where `[XXX]` ranges from `001` to `100`.
+ktng_dir: path/to/kappaTNG # Contains the original kappa-maps and the redshift 
+
+# Root directory to save trained models and inference results
 model_dir: path/to/models
 
-path_to_std_noise: path/to/std_noise.pt
-path_to_mask: path/to/mask.pt
-path_to_extent: path/to/extent.pt
-path_to_ps: path/to/powerspectrum.pt
+# Path to precomputed objects
+path_to_std_noise: path/to/std_noise.pt # Precomputed standard deviation of the noise
+path_to_mask: path/to/mask.pt # Precomputed mask
+path_to_extent: path/to/extent.pt # Precomputed extent of the observed field
+path_to_ps: path/to/powerspectrum.pt # Precomputed power spectrum
 
-path_to_train_val_dataset: path/to/train/dataset.hdf5
-path_to_test_dataset: path/to/test/dataset.hdf5
-path_to_calib_dataset: path/to/calib/dataset.hdf5
+# Paths to datasets
+path_to_train_val_dataset: path/to/train/dataset.hdf5 # Augmented dataset from LP002 (kappaTNG)
+path_to_test_dataset: path/to/test/dataset.hdf5 # Cropped dataset from LP001 (kappaTNG)
+path_to_calib_dataset: path/to/calib/dataset.hdf5 # Augmented dataset from LP001 (kappaTNG)
 
+# Directory containing pre-trained weights for the Learnlet denoiser
 learnlets_pretrained_weights_dir: path/to/weights
 
+# The following dictionary is intended for backward compatibility with previously-trained models,
+# to avoid errors raised by PyTorch when loading state_dicts with outdated key names.
+# Usage: [old_key_name]: [new_key_name]
 key_replacement_dict:
   wiener_init.optim.data_fidelity.0.d.var: preproc.optim.data_fidelity.0.d.param_vector
   wiener_init.optim.data_fidelity.0.d.param_vector: preproc.optim.data_fidelity.0.d.param_vector
