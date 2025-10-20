@@ -237,7 +237,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _add_arguments.model(parser, uq=True, deepmass=True)
+    _add_arguments.model(parser, uq=True, denoiser=True, deepmass=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
         default=argparse.SUPPRESS,
