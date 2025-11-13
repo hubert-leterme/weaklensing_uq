@@ -174,7 +174,7 @@ class Trainer(dinv.Trainer):
 
         # Evaluate reconstruction network
         x_net = self.model_inference(y=y, physics=physics, x=x, train=train)
-        callbacks.on_forward_end()
+        callbacks.on_forward_end(x_net)
 
         if train or self.display_losses_eval:
             # Compute the losses

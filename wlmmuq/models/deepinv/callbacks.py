@@ -23,7 +23,7 @@ class BaseCallback:
         pass
     def on_get_samples_end(self, physics):
         pass
-    def on_forward_end(self):
+    def on_forward_end(self, out):
         pass
     def on_loss_end(self, loss):
         pass
@@ -81,7 +81,7 @@ class CProfilerCallback(BaseCallback):
                 and self._nbatches >= self.max_nbatches:
             self._end_profiling()
 
-    def on_forward_end(self):
+    def on_forward_end(self, out):
         self._cuda_synchronize()
 
     def on_loss_end(self, loss):
@@ -180,8 +180,8 @@ class CallbackList(BaseCallback):
         self._loop_over_callbacks("on_eval_batch_end", batch)
     def on_get_samples_end(self, physics):
         self._loop_over_callbacks("on_get_samples_end", physics)
-    def on_forward_end(self):
-        self._loop_over_callbacks("on_forward_end")
+    def on_forward_end(self, out):
+        self._loop_over_callbacks("on_forward_end", out)
     def on_loss_end(self, loss):
         self._loop_over_callbacks("on_loss_end", loss)
     def on_backward_end(self):
