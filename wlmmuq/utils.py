@@ -747,11 +747,12 @@ def skyshow(
 class KappamapVisualizer:
 
     def __init__(
-            self, kappa_true=None, kappa_pred=None, var=None, res_pred=None,
+            self, kappa_inp=None, kappa_true=None, kappa_pred=None, var=None, res_pred=None,
             extent=None, boundaries=None, mask=None, imgsize=None,
             vmin=None, vmax=None, vmax_sqdiff=None, vmax_bounds=None,
             plot_colorbar=False,
     ):
+        self.kappa_inp = kappa_inp
         self.kappa_true = kappa_true
         self.kappa_pred = kappa_pred
         self.var = var
@@ -794,6 +795,8 @@ class KappamapVisualizer:
 
         return out
 
+    def skyshow_inp(self, **kwargs):
+        return self.skyshow_kappamap(self.kappa_inp, **kwargs)
 
     def skyshow_truth(self, **kwargs):
         return self.skyshow_kappamap(self.kappa_true, **kwargs)
@@ -869,12 +872,13 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
     def __init__(
             self, *args, savefig=False, save_dir=None, extension=None,
-            showtruth=True, showpred=True, showbounds=True, **kwargs
+            showinp=True, showtruth=True, showpred=True, showbounds=True, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.savefig = savefig
         self.save_dir = save_dir
         self.extension = extension
+        self.showinp = showinp
         self.showtruth = showtruth
         self.showpred = showpred
         self.showbounds = showbounds
@@ -884,12 +888,22 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
             self, title: str=None, filename: str=None,
             showvar: bool=False, showstd: bool=False, **kwargs
     ):
+        if self.showinp:
+            plt.figure(figsize=(5, 3))
+            self.skyshow_inp(title=title, **kwargs)
+            if self.savefig:
+                plt.savefig(
+                    os.path.join(self.save_dir, f"{filename}_inp.{self.extension}"),
+                    bbox_inches='tight'
+                )
+            plt.show()
+
         if self.showtruth:
             plt.figure(figsize=(5, 3))
             self.skyshow_truth(title=title, **kwargs)
             if self.savefig:
                 plt.savefig(
-                    os.path.join(self.save_dir, f"kappa.{self.extension}"),
+                    os.path.join(self.save_dir, f"{filename}_true.{self.extension}"),
                     bbox_inches='tight'
                 )
             plt.show()
@@ -899,7 +913,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
             self.skyshow_pointestimate(title=title, **kwargs)
             if self.savefig:
                 plt.savefig(
-                    os.path.join(self.save_dir, f"{filename}.{self.extension}"),
+                    os.path.join(self.save_dir, f"{filename}_pred.{self.extension}"),
                     bbox_inches='tight'
                 )
             plt.show()
