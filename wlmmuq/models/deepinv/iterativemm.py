@@ -5,6 +5,7 @@ from torch import nn
 import deepinv as dinv
 
 from ... import utils
+from . import callbacks
 
 #########################################################################
 # Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
@@ -379,6 +380,20 @@ class ManualInit:
         self.X_init = None
     def __call__(self, _unused_y, _unused_physics):
         return {"est": self.X_init}
+    
+
+class CallbackWrapperForFGSteps(nn.Module):
+
+    def __init__(self, fg_step, callback: callbacks.BaseCallback | None = None):
+        super().__init__()
+        self.fg_step = fg_step
+        self.callback = callback
+
+    def forward(self, *args, **kwargs):
+        out = self.fg_step(*args, **kwargs)
+        if self.callback is not None:
+            self.callback.on_forward_end(out)
+        return out
 
 
 def optim_builder(
@@ -390,6 +405,8 @@ def optim_builder(
     F_fn=None,
     g_first=False,
     bregman_potential=None,
+    callback_f_step: callbacks.BaseCallback | None = None,
+    callback_g_step: callbacks.BaseCallback | None = None,
     **kwargs,
 ):
     r"""
@@ -426,6 +443,10 @@ def optim_builder(
         g_first=g_first,
         bregman_potential=bregman_potential,
     )
+    if callback_f_step is not None:
+        iterator.f_step = CallbackWrapperForFGSteps(iterator.f_step, callback=callback_f_step)
+    if callback_g_step is not None:
+        iterator.g_step = CallbackWrapperForFGSteps(iterator.g_step, callback=callback_g_step)
     return BaseOptim(
         iterator,
         has_cost=iterator.has_cost,
