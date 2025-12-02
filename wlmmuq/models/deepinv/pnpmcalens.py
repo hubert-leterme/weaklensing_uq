@@ -22,7 +22,8 @@ STARLET_L2NORM = True
 STARLET_ONLY_POSITIVE = True
 STARLET_GEN2 = True
 STARLET_ENFORCE_GEN1_TABNORM = True
-STARLET_RETAIN_PREVIOUS_REC = True
+STARLET_RETAIN_PREVIOUS_REC = True # If true, then the starlet decomposition is performed on the
+                                   # residuals only (as in MCALens)
 
 class MCAIteration(nn.Module):
 
@@ -292,6 +293,8 @@ class Starlet2d(nn.Module):
             self, x: torch.Tensor, sigma: float | torch.Tensor
     ):
         if self.x_prev is not None:
+            # The starlet decomposition is done on the residual only
+            # See Algorithm 1 in Starck et al. (2021) (MCALens)
             x -= self.x_prev
         wt = self.dec(x) # Wavelet decomposition
         if self.active_coefs is None:
