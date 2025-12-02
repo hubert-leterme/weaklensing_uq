@@ -103,8 +103,8 @@ def _get_shear_fromto_convergence(
 
 def get_shear_from_convergence(
         kappa1: np.ndarray | torch.Tensor,
-        kappa2: np.ndarray | torch.Tensor=None,
-        mask: np.ndarray | torch.Tensor=None,
+        kappa2: np.ndarray | torch.Tensor | None = None,
+        mask: np.ndarray | torch.Tensor | None = None,
         complexconjugate=False, return_complex=False
 ):
     """
@@ -140,8 +140,8 @@ def get_shear_from_convergence(
 
 def get_convergence_from_shear(
         gamma1: np.ndarray | torch.Tensor,
-        gamma2: np.ndarray | torch.Tensor=None,
-        mask: np.ndarray | torch.Tensor=None,
+        gamma2: np.ndarray | torch.Tensor | None = None,
+        mask: np.ndarray | torch.Tensor | None = None,
         complexconjugate=False, return_complex=False
 ):
     """

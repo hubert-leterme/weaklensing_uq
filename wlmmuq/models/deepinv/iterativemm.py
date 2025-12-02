@@ -118,8 +118,8 @@ class ComplexGaussianNoise(dinv.physics.GaussianNoise):
 class MassMapping(dinv.physics.LinearPhysics):
 
     def __init__(
-            self, sigma: float | torch.Tensor=0.,
-            mask: torch.Tensor=None, **kwargs
+            self, sigma: float | torch.Tensor = 0.,
+            mask: torch.Tensor | None = None, **kwargs
     ):
         noise_model = ComplexGaussianNoise(sigma_real=sigma)
         super().__init__(

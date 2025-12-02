@@ -153,7 +153,7 @@ class PyTorchProfilerCallback(BaseCallback):
 
 class CallbackList(BaseCallback):
 
-    def __init__(self, callbacks: BaseCallback=None):
+    def __init__(self, callbacks: list[BaseCallback] | None = None):
         super().__init__()
         self.callbacks = callbacks if callbacks is not None else []
 
