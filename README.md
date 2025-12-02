@@ -114,7 +114,7 @@ python scripts/train.py -a UNetPreproc -m wiener -e 20 --lr-scheduler -c deepmas
 #### Variance estimate (order-2 networks)
 
 ```bash
-python scripts/train.py -a torch.UNetPreproc -m wiener -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
+python scripts/train.py -a UNetPreproc -m wiener -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
 ```
 
 The order-2 network has been trained on 100 epochs, vs only 20 epochs for the order-1 network. This was motivated by the validation loss still decreasing after $20$ epochs.
@@ -127,10 +127,10 @@ The following scripts run PnPMass with a step size set to 50%, 75% and 100% of i
 
 ```bash
 # Standard version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a torch.SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 
 # Residual version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a torch.SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 ```
 
 #### Run PnPMass with uncertainty quantification and conformal prediction
