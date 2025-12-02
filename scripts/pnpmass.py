@@ -128,22 +128,38 @@ def main(
         beg_time = time.time()
 
         # Instantiate the PnP model
-        pnpmass, pnpmass_uq, gaussian_extractor, \
-                tau, callback_gaussian_extractor = \
+        pnpmass, pnpmass_uq, tau = \
                     _commons.get_pnpmass(
-            denoiser, denoiser_uq, imgsize=imgsize,
+            denoiser, denoiser_uq,
             std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
             step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode=mode,
-            which_gaussian_extractor=which_gaussian_extractor,
             update_ng_first=update_ng_first,
             path_to_ps=path_to_ps,
-            niter_wiener=niter_wiener,
-            starlet_detection_threshold=starlet_detection_threshold,
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose
         )
+
+        # Get Gaussian extractor
+        # Note: the step sizes for the Gaussian extractor are computed automatically
+        if mode == "residual":
+            gaussian_extractor, callback_gaussian_extractor = \
+                    _commons.get_gaussian_extractor(
+                which=which_gaussian_extractor,
+                path_to_ps=path_to_ps,
+                white_noise=False,
+                imgsize=imgsize, std_noise=std_noise, physics=physics,
+                step_size=None, step_size_ng=None,
+                eps_sup_step_size=eps_sup_step_size,
+                niter=niter_wiener,
+                starlet_detection_threshold=starlet_detection_threshold,
+                mcalens_update_ng_first=update_ng_first,
+                device=device, verbose=False
+            )
+        else:
+            gaussian_extractor = None
+            callback_gaussian_extractor = None
 
         # Set callback list
         callback_list = []

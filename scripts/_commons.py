@@ -595,16 +595,13 @@ def get_gaussian_extractor(
 
 
 def get_pnpmass(
-        denoiser, denoiser_uq, imgsize=IMGSIZE,
+        denoiser, denoiser_uq,
         std_noise=None, rmse_fn=None, physics=None,
         step_size=None, multfact_step_size=None,
         eps_sup_step_size=EPS_SUP_STEP_SIZE,
-        niter=NITER_PNPMASS, mode="regular",
-        which_gaussian_extractor=WHICH_GAUSSIAN_EXTRACTOR,
+        niter=NITER_PNPMASS, mode=MODE_PNPMASS,
         update_ng_first=False,
         path_to_ps=PATH_TO_PS,
-        niter_wiener=NITER_WIENER,
-        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
         niter_per_step_g=NITER_PER_STEP_G,
         niter_per_step_ng=NITER_PER_STEP_NG,
         device="cpu", verbose=False
@@ -623,29 +620,9 @@ def get_pnpmass(
         kwargs.update(metric_dict={"rmse": rmse_fn})
 
     if mode in ["regular", "residual"]:
-        if mode == "residual":
-            if verbose:
-                print("Instantiate PnPMass on residuals (ResPnPMass)")
+        if verbose:
+            print("Instantiate PnPMass")
 
-            # Note: the step sizes for the Gaussian extractor are computed automatically
-            gaussian_extractor, callback_gaussian_extractor = \
-                    get_gaussian_extractor(
-                which=which_gaussian_extractor,
-                path_to_ps=path_to_ps,
-                white_noise=False,
-                imgsize=imgsize, std_noise=std_noise, physics=physics,
-                step_size=None, step_size_ng=None,
-                eps_sup_step_size=eps_sup_step_size,
-                niter=niter_wiener,
-                starlet_detection_threshold=starlet_detection_threshold,
-                mcalens_update_ng_first=update_ng_first,
-                device=device, verbose=False
-            )
-        else:
-            if verbose:
-                print("Instantiate PnPMass")
-            gaussian_extractor = None
-            callback_gaussian_extractor = None
         pnpmass = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior,
@@ -676,8 +653,6 @@ def get_pnpmass(
             update_ng_first=update_ng_first,
             output_mode="add_components", verbose=True, **kwargs
         ).to(device)
-        gaussian_extractor = None
-        callback_gaussian_extractor = None
 
     else:
         raise ValueError(
@@ -695,12 +670,7 @@ def get_pnpmass(
     else:
         pnpmass_uq = None
 
-    out = (
-        pnpmass, pnpmass_uq, gaussian_extractor,
-        step_size, callback_gaussian_extractor
-    )
-
-    return out
+    return pnpmass, pnpmass_uq, step_size
 
 
 def variance_estimation_through_noise_propagation(

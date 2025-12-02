@@ -112,16 +112,14 @@ def main(
         beg_time = time.time()
 
         # Instantiate the PnP model
-        mcalens, _, _, tau, _ = _commons.get_pnpmass(
-            starlet, denoiser_uq=None, imgsize=imgsize,
+        mcalens, _, tau = _commons.get_pnpmass(
+            starlet, denoiser_uq=None,
             std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
             step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode="pnpmcalens",
-            which_gaussian_extractor="wiener",
             update_ng_first=True,
             path_to_ps=path_to_ps,
-            starlet_detection_threshold=starlet_detection_threshold,
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose
         )
