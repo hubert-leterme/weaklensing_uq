@@ -27,7 +27,7 @@ class KS(dinv.models.Reconstructor):
 
     def forward(self, gamma, physics):
 
-        kappa_ks = physics.A_adj(gamma)
+        kappa_ks = physics.A_adjoint(gamma)
         if self.std_gaussianfilter is not None:
             kappa_ks = F.gaussian_blur(
                 kappa_ks, kernel_size=self.kernel_size_gaussianfilter,
@@ -47,7 +47,7 @@ class KS(dinv.models.Reconstructor):
             (nx, ny), device=std_noise.device
         ).unsqueeze(0).unsqueeze(0) # Shape = (1, 1, imgsize, imgsize)
         dirac[..., -1, -1] = 1.
-        ksmatr = physics.A_adj(dirac)
+        ksmatr = physics.A_adjoint(dirac)
         ksmatr_real = ksmatr.real
         ksmatr_imag = ksmatr.imag
         if self.std_gaussianfilter is not None:

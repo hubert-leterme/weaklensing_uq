@@ -50,7 +50,7 @@ class KSInit(nn.Module):
 
 
     def forward(self, gamma_noisy):
-        return self.physics.A_adj(gamma_noisy)
+        return self.physics.A_adjoint(gamma_noisy)
 
 
 class PreprocMixin:
