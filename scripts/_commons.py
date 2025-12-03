@@ -45,6 +45,7 @@ WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 NITER_MCALENS = 32
+NITER_STARLET_DEBIASING = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
 INPAINTING_WIENER = False

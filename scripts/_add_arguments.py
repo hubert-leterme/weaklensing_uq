@@ -558,6 +558,45 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
         )
 
 
+def starlet_debiasing(parser):
+
+    parser.add_argument(
+        "-sd", "--starlet-debiasing", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Apply starlet debiasing as a postprocessing step. "
+            "Adapted from U. Akhaury, P. Jablonka, J.-L. Starck, and F. Courbin, “Ground-based "
+            "image deconvolution with Swin Transformer UNet,” A&A, vol. 688, p. A6, Aug. 2024."
+        )
+    )
+    parser.add_argument(
+        "--step-size-starlet-debiasing", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Step size for the starlet debiasing postprocessing step. "
+            "If not provided or set to 0, the step size will be computed as "
+            f"Default = (1 - {_commons.EPS_SUP_STEP_SIZE:.1e}) * upper_bound, "
+            "where upper_bound is estimated from the noise standard deviation "
+            "and the mask, using the power iteration method."
+        )
+    )
+    parser.add_argument(
+        "--multfact-step-size-starlet-debiasing", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Multiplicative factor for the step size."
+        )
+    )
+    parser.add_argument(
+        "--niter-starlet-debiasing", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of iterations for the starlet debiasing postprocessing step. "
+            f"Default = {_commons.NITER_STARLET_DEBIASING}"
+        )
+    )
+
+
 def output(parser, output_filename):
 
     parser.add_argument(

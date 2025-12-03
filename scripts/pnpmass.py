@@ -48,6 +48,10 @@ def main(
         eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
         niter_per_step_g: int = wlmcalens.NITER_PER_STEP_G,
         niter_per_step_ng: int = wlmcalens.NITER_PER_STEP_NG,
+        starlet_debiasing: bool = False,
+        step_size_starlet_debiasing: float | None = None,
+        multfact_step_size_starlet_debiasing: float | None = None,
+        niter_starlet_debiasing: int = _commons.NITER_STARLET_DEBIASING,
         mode_cqr: str = _commons.MODE_CQR,
         scaling_factor_chisqcqr: float | None = None,
         confidence_uq: int | float = _commons.CONFIDENCE_UQ,
@@ -161,10 +165,34 @@ def main(
             gaussian_extractor = None
             callback_gaussian_extractor = None
 
+        # Instantiate starlet denoiser, in case of debiasing
+        if starlet_debiasing:
+            starlet, callback_starlet_denoiser = \
+                    _commons.instantiate_starlet_denoiser(
+                imgsize=imgsize,
+                starlet_detection_threshold=starlet_detection_threshold,
+                device=device, verbose=verbose
+            )
+            starlet_debiaser, _, step_size_starlet_debiasing = \
+                        _commons.get_pnpmass(
+                starlet, denoiser_uq=None,
+                std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
+                step_size=step_size_starlet_debiasing,
+                multfact_step_size=multfact_step_size_starlet_debiasing,
+                eps_sup_step_size=eps_sup_step_size,
+                niter=niter_starlet_debiasing, mode="regular",
+                device=device, verbose=verbose
+            )
+        else:
+            callback_starlet_denoiser = None
+            starlet_debiaser = None
+
         # Set callback list
         callback_list = []
         if callback_gaussian_extractor is not None:
             callback_list.append(callback_gaussian_extractor)
+        if callback_starlet_denoiser is not None:
+            callback_list.append(callback_starlet_denoiser)
         callbacks = wlcallbacks.CallbackList(callback_list)
 
         # Run PnPMass for each batch
@@ -175,6 +203,7 @@ def main(
             pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
             rmse_fn=rmse_fn,
             gaussian_extractor=gaussian_extractor,
+            starlet_debiaser=starlet_debiaser,
             callbacks=callbacks,
             device=device, verbose=verbose,
         )
@@ -215,6 +244,7 @@ def main(
                 pnpmass, pnpmass_uq, physics, calib_dataloader, tau, niter,
                 rmse_fn=rmse_fn,
                 gaussian_extractor=gaussian_extractor,
+                starlet_debiaser=starlet_debiaser,
                 callbacks=callbacks,
                 device=device, verbose=verbose,
             )
@@ -264,6 +294,7 @@ def run_pnpmass_batch(
         dataloader, step_size, niter,
         rmse_fn: wlpnp.RMSE | None = None,
         gaussian_extractor: wlpnp.BaseOptim | None = None,
+        starlet_debiaser: wlpnp.BaseOptim | None = None,
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):
@@ -271,6 +302,7 @@ def run_pnpmass_batch(
     listof_kappa_pred = []
     listof_var = []
     listof_rmse = []
+    listof_rmse_starlet_debiaser = []
     listof_l2norm = []
 
     if callbacks is None:
@@ -293,6 +325,12 @@ def run_pnpmass_batch(
             kappa_pred, metrics = pnpmass(
                 gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
             )
+            if starlet_debiaser is not None:
+                starlet_debiaser.custom_init.X_init = (kappa_pred,)
+                kappa_pred, metrics_starlet_debiaser = starlet_debiaser(
+                    gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+                )
+
             if pnpmass_uq is not None:
                 pnpmass_uq.custom_init.X_init = (kappa_pred,)
                 var = pnpmass_uq(
@@ -314,6 +352,8 @@ def run_pnpmass_batch(
         listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_rmse.append(metrics["rmse"]) # Shape = (batch_size, niter)
+        if starlet_debiaser is not None:
+            listof_rmse_starlet_debiaser.append(metrics_starlet_debiaser["rmse"]) # Shape = (batch_size, niter_debiaser)
         listof_l2norm.append(l2norm) # Shape = (batch_size, niter)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
@@ -321,9 +361,14 @@ def run_pnpmass_batch(
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
+        if starlet_debiaser is not None:
+            rmse_starlet_debiaser = torch.cat(listof_rmse_starlet_debiaser, dim=0) # Shape = (nimgs, niter_debiaser)
+        else:
+            rmse_starlet_debiaser = None
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs, niter)
     except TypeError:
         rmse = None
+        rmse_starlet_debiaser = None
         l2norm = None
 
     out = {
@@ -331,6 +376,7 @@ def run_pnpmass_batch(
         "kappa_pred": kappa_pred,
         "var": var,
         "rmse": rmse,
+        "rmse_starlet_debiaser": rmse_starlet_debiaser,
         "l2norm": l2norm,
     }
     return out
@@ -362,6 +408,7 @@ if __name__ == "__main__":
         )
     )
     _add_arguments.gaussian_extractor(parser, wiener=True, mcalens=True, verbose=True)
+    _add_arguments.starlet_debiasing(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_FILENAME)
