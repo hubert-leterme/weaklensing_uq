@@ -30,8 +30,8 @@ dependencies = [
   "wandb",
 ]
 
-[tool.setuptools]
-packages = ["wlmmuq"]
+[tool.setuptools.packages.find]
+where = ["."]
 
 [project.urls]
 Homepage = "https://github.com/hubert-leterme/weaklensing_uq"
