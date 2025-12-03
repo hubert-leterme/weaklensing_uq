@@ -184,6 +184,7 @@ def main(
                 device=device, verbose=verbose
             )
         else:
+            starlet = None
             callback_starlet_denoiser = None
             starlet_debiaser = None
 
@@ -204,6 +205,7 @@ def main(
             rmse_fn=rmse_fn,
             gaussian_extractor=gaussian_extractor,
             starlet_debiaser=starlet_debiaser,
+            starlet=starlet,
             callbacks=callbacks,
             device=device, verbose=verbose,
         )
@@ -245,6 +247,7 @@ def main(
                 rmse_fn=rmse_fn,
                 gaussian_extractor=gaussian_extractor,
                 starlet_debiaser=starlet_debiaser,
+                starlet=starlet,
                 callbacks=callbacks,
                 device=device, verbose=verbose,
             )
@@ -295,6 +298,7 @@ def run_pnpmass_batch(
         rmse_fn: wlpnp.RMSE | None = None,
         gaussian_extractor: wlpnp.BaseOptim | None = None,
         starlet_debiaser: wlpnp.BaseOptim | None = None,
+        starlet: wlmcalens.Starlet2d | None = None,
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):
@@ -327,6 +331,7 @@ def run_pnpmass_batch(
             )
             if starlet_debiaser is not None:
                 starlet_debiaser.custom_init.X_init = (kappa_pred,)
+                starlet.x_prev = kappa_pred
                 kappa_pred, metrics_starlet_debiaser = starlet_debiaser(
                     gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
                 )
