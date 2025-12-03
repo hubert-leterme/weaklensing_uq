@@ -665,7 +665,7 @@ def get_pnpmass(
         pnpmass_uq = wlpnp.optim_builder(
             iteration="PGD", params_algo=params_algo.copy(),
             data_fidelity=data_fidelity, prior=prior_uq,
-            early_stop=False, max_iter=1, custom_init=wlpnp.zero_init,
+            early_stop=False, max_iter=1, custom_init=wlpnp.ManualInit(),
             verbose=verbose
         ).to(device)
     else:
