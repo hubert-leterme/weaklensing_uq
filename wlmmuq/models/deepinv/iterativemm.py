@@ -377,7 +377,19 @@ class ManualInit:
     Manual initialization with user-provided tensors.
     """
     def __init__(self):
+        self._X_init = None
+    
+    @property
+    def X_init(self) -> tuple[torch.Tensor] | None:
+        return self._X_init
+    
+    @X_init.setter
+    def X_init(self, val: tuple[torch.Tensor] | None):
+        self._X_init = val
+
+    def reset(self):
         self.X_init = None
+
     def __call__(self, _unused_y, _unused_physics):
         return {"est": self.X_init}
     
