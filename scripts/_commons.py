@@ -281,7 +281,7 @@ def load_trained_model(
                 if verbose:
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
-    model.load_state_dict(checkpoint['state_dict'])
+    model.load_state_dict(state_dict)
     model.eval()
 
     return model
