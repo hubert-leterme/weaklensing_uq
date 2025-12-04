@@ -306,10 +306,12 @@ class Starlet2d(nn.Module):
             self._set_active_coefs(wt, sigma) # Set for all subsequent forward passes
         wt *= self.active_coefs # Projection onto the support of active coefficients
         x_denoised = self.rec(wt) # Wavelet reconstruction
-        if self.x_prev is not None:
-            x_denoised += self.x_prev
         if self.only_positive:
             x_denoised = torch.relu(x_denoised)
+        # Do not include self.x_prev in the positivity constrain
+        # (already positive up to a mean-centering constant)
+        if self.x_prev is not None:
+            x_denoised += self.x_prev
         if self.meancentering:
             x_denoised = utils.meancenter(x_denoised)
         if self.retain_previous_rec:
