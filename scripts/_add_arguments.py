@@ -546,16 +546,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
         additional_msg = (
             "Works with `--mode residual --which-gaussian-extractor mcalens`. "
         ) if verbose else ""
-        parser.add_argument(
-            "-thresh", "--starlet-detection-threshold", type=float,
-            default=argparse.SUPPRESS,
-            help=(
-                "Detection threshold for computing the support of active "
-                "starlet coefficients. "
-                f"{additional_msg}"
-                f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
-            )
-        )
+        _starlet_detection_threshold(parser, additional_msg=additional_msg)
 
 
 def starlet_debiasing(parser):
@@ -593,6 +584,22 @@ def starlet_debiasing(parser):
         help=(
             "Number of iterations for the starlet debiasing postprocessing step. "
             f"Default = {_commons.NITER_STARLET_DEBIASING}"
+        )
+    )
+    if not _argument_exists(parser, "--starlet-detection-threshold"):
+        _starlet_detection_threshold(parser)
+
+
+def _starlet_detection_threshold(parser, additional_msg=""):
+
+    parser.add_argument(
+        "-thresh", "--starlet-detection-threshold", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Detection threshold for computing the support of active "
+            "starlet coefficients. "
+            f"{additional_msg}"
+            f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
 
@@ -640,3 +647,10 @@ def seed_verbose(parser):
         "-v", "--verbose", action='store_true',
         default=argparse.SUPPRESS
     )
+
+
+def _argument_exists(parser, flag):
+    for action in parser._actions:
+        if flag in action.option_strings:
+            return True
+    return False

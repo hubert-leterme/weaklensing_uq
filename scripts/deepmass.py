@@ -6,6 +6,8 @@ import torch
 import wlmmuq
 import wlmmuq.utils as wlutils
 import wlmmuq.models.deepinv.iterativemm as wldinv
+import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
+import wlmmuq.models.deepinv.callbacks as wlcallbacks
 
 from wlmmuq.data import NUM_WORKERS
 
@@ -37,6 +39,11 @@ def main(
         num_workers: int = NUM_WORKERS,
         niter_wiener: int = _commons.NITER_WIENER,
         eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
+        starlet_debiasing: bool = False,
+        step_size_starlet_debiasing: float | None = None,
+        multfact_step_size_starlet_debiasing: float | None = None,
+        niter_starlet_debiasing: int = _commons.NITER_STARLET_DEBIASING,
+        starlet_detection_threshold: float = _commons.STARLET_DETECTION_THRESHOLD,
         mode_cqr: str | list[str] = _commons.MODE_CQR,
         scaling_factor_chisqcqr: float | None | list[float | None] = None,
         confidence_uq: int | float = _commons.CONFIDENCE_UQ,
@@ -109,6 +116,39 @@ def main(
             hyperparam_precalib,
             find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib
         )
+    
+    # Instantiate starlet denoiser, in case of debiasing
+    if starlet_debiasing:
+        starlet, callback_starlet_denoiser = \
+                _commons.instantiate_starlet_denoiser(
+            imgsize=imgsize,
+            starlet_detection_threshold=starlet_detection_threshold,
+            device=device, verbose=verbose
+        )
+        physics = wldinv.MassMapping(sigma=std_noise, mask=mask).to(device)
+        init_starlet_debiaser = wldinv.ManualInit()
+        starlet_debiaser, _, step_size_starlet_debiasing = \
+                    _commons.get_pnpmass(
+            starlet, denoiser_uq=None,
+            std_noise=std_noise, rmse_fn=rmse_fn, physics=physics,
+            step_size=step_size_starlet_debiasing,
+            multfact_step_size=multfact_step_size_starlet_debiasing,
+            eps_sup_step_size=eps_sup_step_size,
+            niter=niter_starlet_debiasing,
+            custom_init=init_starlet_debiaser,
+            mode="regular",
+            device=device, verbose=verbose
+        )
+    else:
+        starlet = None
+        callback_starlet_denoiser = None
+        starlet_debiaser = None
+
+    # Set callback list
+    callback_list = []
+    if callback_starlet_denoiser is not None:
+        callback_list.append(callback_starlet_denoiser)
+    callbacks = wlcallbacks.CallbackList(callback_list)
 
     beg_time = time.time()
 
@@ -118,7 +158,11 @@ def main(
         print(f"Compute DeepMass on the test set ({nimgs_test} images)")
     out_deepmass = run_deepmass_batch(
         deepmass, deepmass_uq, test_dataloader,
-        rmse_fn=rmse_fn, device=device, verbose=verbose,
+        rmse_fn=rmse_fn,
+        starlet_debiaser=starlet_debiaser,
+        starlet=starlet,
+        callbacks=callbacks,
+        device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
     kappa_pred = out_deepmass["kappa_pred"]
@@ -153,7 +197,11 @@ def main(
             print(f"Compute DeepMass on the calibration set ({nimgs_calib} images)")
         out_deepmass_calib = run_deepmass_batch(
             deepmass, deepmass_uq, calib_dataloader,
-            rmse_fn=rmse_fn, device=device, verbose=verbose,
+            rmse_fn=rmse_fn,
+            starlet_debiaser=starlet_debiaser,
+            starlet=starlet,
+            callbacks=callbacks,
+            device=device, verbose=verbose,
         )
         kappa_true_calib = out_deepmass_calib["kappa_true"]
         kappa_pred_calib = out_deepmass_calib["kappa_pred"]
@@ -198,20 +246,36 @@ def run_deepmass_batch(
         deepmass: wldinv.BaseOptim, deepmass_uq: wldinv.BaseOptim,
         dataloader,
         rmse_fn: wldinv.RMSE | None = None,
+        starlet_debiaser: wldinv.BaseOptim | None = None,
+        starlet: wlmcalens.Starlet2d | None = None,
+        physics: wldinv.MassMapping | None = None,
+        callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
     listof_kappa_pred = []
     listof_var = []
     listof_rmse = []
+    listof_rmse_starlet_debiaser = []
     listof_l2norm = []
 
+    if callbacks is None:
+        callbacks = wlcallbacks.BaseCallback()
+
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
-    for kappa_true, gamma_noisy in pbar:
+    for i, (kappa_true, gamma_noisy) in enumerate(pbar):
+        callbacks.on_batch_begin(i)
         kappa_true = kappa_true.to(device)
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             kappa_pred = deepmass(gamma_noisy)
+            if starlet_debiaser is not None:
+                starlet_debiaser.custom_init.X_init = (kappa_pred,)
+                starlet.x_prev = kappa_pred
+                kappa_pred, metrics_starlet_debiaser = starlet_debiaser(
+                    gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+                )
+
             if deepmass_uq is not None:
                 var = deepmass_uq(gamma_noisy)
             else:
@@ -223,20 +287,29 @@ def run_deepmass_batch(
                 rmse = None
                 l2norm = None
 
-            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-            listof_rmse.append(rmse) # Shape = (batch_size,)
-            listof_l2norm.append(l2norm) # Shape = (batch_size,)
+        listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
+        listof_rmse.append(rmse) # Shape = (batch_size,)
+        if starlet_debiaser is not None:
+            listof_rmse_starlet_debiaser.append(
+                metrics_starlet_debiaser["rmse"]
+            ) # Shape = (batch_size, niter_debiaser)
+        listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
     kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
+        if starlet_debiaser is not None:
+            rmse_starlet_debiaser = torch.cat(listof_rmse_starlet_debiaser, dim=0) # Shape = (nimgs, niter_debiaser)
+        else:
+            rmse_starlet_debiaser = None
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
     except TypeError:
         rmse = None
+        rmse_starlet_debiaser = None
         l2norm = None
 
     out = {
@@ -244,6 +317,7 @@ def run_deepmass_batch(
         "kappa_pred": kappa_pred,
         "var": var,
         "rmse": rmse,
+        "rmse_starlet_debiaser": rmse_starlet_debiaser,
         "l2norm": l2norm,
     }
     return out
@@ -256,6 +330,7 @@ if __name__ == "__main__":
     _add_arguments.model_uq(parser, deepmass=True)
     _add_arguments.checkpoint(parser)
     _add_arguments.gaussian_extractor(parser, wiener=True)
+    _add_arguments.starlet_debiasing(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_FILENAME)
