@@ -173,6 +173,7 @@ def main(
                 starlet_detection_threshold=starlet_detection_threshold,
                 device=device, verbose=verbose
             )
+            init_starlet_debiaser = wlpnp.ManualInit()
             starlet_debiaser, _, step_size_starlet_debiasing = \
                         _commons.get_pnpmass(
                 starlet, denoiser_uq=None,
@@ -180,7 +181,9 @@ def main(
                 step_size=step_size_starlet_debiasing,
                 multfact_step_size=multfact_step_size_starlet_debiasing,
                 eps_sup_step_size=eps_sup_step_size,
-                niter=niter_starlet_debiasing, mode="regular",
+                niter=niter_starlet_debiasing,
+                custom_init=init_starlet_debiaser,
+                mode="regular",
                 device=device, verbose=verbose
             )
         else:
