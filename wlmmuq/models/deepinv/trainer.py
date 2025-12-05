@@ -20,7 +20,8 @@ class Trainer(dinv.Trainer):
 
     def __init__(
             self, *args, scale_as_input=False, pbar_logs=True,
-            preproc_for_residual: dinv.optim.BaseOptim=None, **kwargs
+            preproc_for_residual: dinv.optim.BaseOptim | None = None,
+            **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.scale_as_input = scale_as_input
