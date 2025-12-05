@@ -112,12 +112,6 @@ def main(
         imgsize=imgsize, device=device, verbose=verbose, **kwargs
     )
 
-    # Get step size
-    if not isinstance(multfact_step_size, list):
-        multfact_step_size = [multfact_step_size]
-    if not isinstance(step_size, list):
-        step_size = len(multfact_step_size) * [step_size]
-
     # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     rmse_fn = wlpnp.RMSE(mask=mask).to(device)
@@ -127,6 +121,11 @@ def main(
             hyperparam_precalib,
             find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib
         )
+
+    # Get step size
+    multfact_step_size, step_size = _commons.convert_into_lists(
+        multfact_step_size, step_size
+    )
 
     for tau, alph in zip(step_size, multfact_step_size):
         beg_time = time.time()

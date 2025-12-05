@@ -704,25 +704,57 @@ def get_inference_time(beg_time, which="inference", verbose=False):
     return inference_time
 
 
-def convert_into_list(value):
-    if not isinstance(value, list):
-        value = [value]
-    return value
+def _convert_into_list[T](
+        val: T | list[T],
+        mult: int = 1
+) -> list[T]:
+    if not isinstance(val, list):
+        val = [val for _ in range(mult)]
+    else:
+        assert len(val) == mult
+    return val
 
 
-def convert_into_list_cqr_mode(mode_cqr, scaling_factor_chisqcqr):
-    mode_cqr = convert_into_list(mode_cqr)
-    scaling_factor_chisqcqr = convert_into_list(scaling_factor_chisqcqr)
+def _get_multiplicity(*args) -> int:
+    mult = None
+    for val in args:
+        if isinstance(val, list):
+            if mult is not None:
+                assert len(val) == mult
+            else:
+                mult = len(val)
+    if mult is None:
+        mult = 1
+    return mult
+
+
+def convert_into_lists(*args) -> tuple[list, ...]:
+    mult = _get_multiplicity(*args)
+    out = tuple([
+        _convert_into_list(val, mult=mult) for val in args
+    ])
+    return out
+
+
+def convert_into_list_cqr_mode(
+        mode_cqr: str | list[str],
+        scaling_factor_chisqcqr: float | None | list[float | None]
+) -> tuple[list[str], list[float | None]]:
+
+    mode_cqr, scaling_factor_chisqcqr = convert_into_lists(
+        mode_cqr, scaling_factor_chisqcqr
+    )
     for i, mcqr in enumerate(mode_cqr):
         if mcqr != "chisqcqr":
             scaling_factor_chisqcqr[i] = None
-    return mode_cqr,scaling_factor_chisqcqr
+
+    return mode_cqr, scaling_factor_chisqcqr
 
 
 def convert_into_hyperparam_list(
         hyperparam, find_optimal_hyperparam_precalib=False
 ):
-    hyperparam = convert_into_list(hyperparam)
+    hyperparam = _convert_into_list(hyperparam)
     if find_optimal_hyperparam_precalib and None not in hyperparam:
         hyperparam.append(None)
 
