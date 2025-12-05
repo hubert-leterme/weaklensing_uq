@@ -17,7 +17,7 @@ from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, KEY_REPLACEMENT_DICT
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.models.deepinv.preproc_models import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
@@ -245,7 +245,6 @@ def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
         additional_outlayer=None,
-        key_replacement_dict=KEY_REPLACEMENT_DICT,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
         niter_wiener=NITER_WIENER, model_specs=None,
@@ -273,14 +272,9 @@ def load_trained_model(
         path_to_checkpoint = get_path_to_checkpoint(
             save_path, timestamp, epoch
         )
-    checkpoint = torch.load(path_to_checkpoint, map_location=device)
-    state_dict = checkpoint['state_dict']
-    if key_replacement_dict is not None:
-        for old_key, new_key in key_replacement_dict.items():
-            if old_key in state_dict:
-                if verbose:
-                    print(f"Replacing key '{old_key}' with '{new_key}'")
-                state_dict[new_key] = state_dict.pop(old_key)
+    state_dict = wlutils.load_checkpoint_state_dict(
+        path_to_checkpoint, verbose=verbose
+    )
     model.load_state_dict(state_dict)
     model.eval()
 

@@ -12,6 +12,7 @@ import deepinv as dinv
 from lenspack.utils import bin2d
 
 from . import ks93
+from . import KEY_REPLACEMENT_DICT
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
 
@@ -1148,3 +1149,19 @@ def fft2(
     else:
         out = np.fft.fft2(arr, **kwargs)
     return out
+
+
+def load_checkpoint_state_dict(
+        filename: str,
+        key_replacement_dict: dict[str, str] | None = KEY_REPLACEMENT_DICT,
+        verbose: bool = False
+) -> dict:
+    checkpoint = torch.load(filename, map_location="cpu")
+    state_dict = checkpoint["state_dict"]
+    if key_replacement_dict is not None:
+        for old_key, new_key in key_replacement_dict.items():
+            if old_key in state_dict:
+                if verbose:
+                    print(f"Replacing key '{old_key}' with '{new_key}'")
+                state_dict[new_key] = state_dict.pop(old_key)
+    return state_dict
