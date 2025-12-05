@@ -49,7 +49,7 @@ class ModelMixin:
 
     def __init__(
             self, map_size=None, in_channels=1, out_channels=1,
-            order2: bool=False, additional_outlayer: str | None=None,
+            order2: bool = False, additional_outlayer: str | None = None,
             **kwargs
     ):
         kwargs = self._preprocess_kwargs(
@@ -206,9 +206,9 @@ class DRUNet(ModelMixin, dinv.models.DRUNet):
         )
 
     def _preprocess_kwargs(
-            self, map_size=None, model_size: str=None,
-            act_mode: str=ACT_MODE_DRUNET,
-            downsample_mode: str=DOWNSAMPLE_MODE_DRUNET,
+            self, map_size=None, model_size: str | None = None,
+            act_mode: str = ACT_MODE_DRUNET,
+            downsample_mode: str = DOWNSAMPLE_MODE_DRUNET,
             pretrained=False, **kwargs
     ):
         # map_size is discarded

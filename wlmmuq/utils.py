@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import typing
 import numpy as np
 import tqdm
 from scipy import ndimage, signal, stats, sparse, linalg
@@ -78,8 +79,8 @@ def ngal_per_pixel(ra, dec, width, extent):
 
 
 def _get_shear_fromto_convergence(
-        func: callable, inp1: np.ndarray | torch.Tensor,
-        inp2: np.ndarray | torch.Tensor=None,
+        func: typing.Callable, inp1: np.ndarray | torch.Tensor,
+        inp2: np.ndarray | torch.Tensor | None = None,
         complexconjugate=False, return_complex=False
 ):
     if inp2 is None:
@@ -211,11 +212,11 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
-        mask: np.ndarray | torch.Tensor=None,
-        inpainting: bool=False,
-        output_shape_wider: tuple[int, int]=None,
-        std_noise_wider: np.ndarray | torch.Tensor=None,
-        mask_wider: np.ndarray | torch.Tensor=None,
+        mask: np.ndarray | torch.Tensor = None,
+        inpainting: bool = False,
+        output_shape_wider: tuple[int, int] = None,
+        std_noise_wider: np.ndarray | torch.Tensor = None,
+        mask_wider: np.ndarray | torch.Tensor = None,
         device=None
 ):
     """
@@ -588,7 +589,7 @@ def check_mask(mask: np.ndarray | torch.Tensor):
 
 def meancenter(
         arr: np.ndarray | torch.Tensor, axis: int | tuple=(-2, -1),
-        mask: np.ndarray | torch.Tensor=None
+        mask: np.ndarray | torch.Tensor = None
 ) -> np.ndarray | torch.Tensor:
 
     if torch.is_tensor(arr):
@@ -700,8 +701,8 @@ def plot_means_errs(
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, imgsize: int | tuple[int]=None,
-        extent: list[float]=None, **kwargs
+        printxticks=True, printyticks=True, imgsize: int | tuple[int] = None,
+        extent: list[float] = None, **kwargs
 ):
     if imgsize is not None:
         if isinstance(imgsize, int):
@@ -856,7 +857,7 @@ class KappamapVisualizer:
 
 class KappamapVisualizerCompact(KappamapVisualizer):
 
-    def visualize(self, showstd: bool=False, **kwargs):
+    def visualize(self, showstd: bool = False, **kwargs):
         plt.figure(figsize=(8, 6))
         plt.subplot(221)
         self.skyshow_pointestimate(title="Point estimate", **kwargs)
@@ -886,8 +887,8 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
 
     def visualize(
-            self, title: str=None, filename: str=None,
-            showvar: bool=False, showstd: bool=False, **kwargs
+            self, title: str | None = None, filename: str | None = None,
+            showvar: bool = False, showstd: bool = False, **kwargs
     ):
         if self.showinp:
             plt.figure(figsize=(5, 3))

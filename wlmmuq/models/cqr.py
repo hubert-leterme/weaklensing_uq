@@ -232,7 +232,7 @@ class GenCQR(BaseCQR):
     """
     def __init__(
             self, alpha, map_size, in_channels=1,
-            eps=1e-9, mask: torch.Tensor=None
+            eps=1e-9, mask: torch.Tensor = None
     ):
         super().__init__(alpha, map_size, in_channels=in_channels)
         self.eps = eps
@@ -306,7 +306,7 @@ class ChisqCQR(GenCQR):
     """
     def __init__(
             self, alpha, map_size, in_channels=1,
-            eps=1e-9, a=1., df=3, mask: torch.Tensor=None
+            eps=1e-9, a=1., df=3, mask: torch.Tensor = None
     ):
         super().__init__(alpha, map_size, in_channels=in_channels, eps=eps, mask=mask)
         self.a = a

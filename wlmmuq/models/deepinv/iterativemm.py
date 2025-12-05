@@ -37,8 +37,8 @@ class MahalanobisDistance(dinv.optim.Distance):
     """
 
     def __init__(
-            self, param_vector: float | torch.Tensor=None,
-            sigma: float | torch.Tensor=None
+            self, param_vector: float | torch.Tensor = None,
+            sigma: float | torch.Tensor = None
     ):
         super().__init__()
         if sigma is not None:
@@ -91,8 +91,8 @@ class MahalanobisDistance(dinv.optim.Distance):
 class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
 
     def __init__(
-            self, param_vector: float | torch.Tensor=None,
-            sigma: float | torch.Tensor=None
+            self, param_vector: float | torch.Tensor = None,
+            sigma: float | torch.Tensor = None
     ):
         super().__init__()
         self.d = MahalanobisDistance(
@@ -105,7 +105,7 @@ class ComplexGaussianNoise(dinv.physics.GaussianNoise):
     Proper complex Gaussian noise model.
     """
     # TODO: check whether __add__ and __mul__ must be redefined
-    def __init__(self, sigma_real: float | torch.Tensor=0., **kwargs):
+    def __init__(self, sigma_real: float | torch.Tensor = 0., **kwargs):
         super().__init__(sigma=sigma_real, **kwargs)
 
     def forward(self, x, sigma_real=None, seed=None, **kwargs):
@@ -177,7 +177,7 @@ class ProximalWiener(nn.Module):
 class MeancenterMaskMixin:
 
     def __init__(
-            self, mask: torch.Tensor=None, meancentering: bool=True,
+            self, mask: torch.Tensor = None, meancentering: bool = True,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -315,7 +315,7 @@ class BaseOptim(dinv.optim.BaseOptim):
 
 
     def _update_metrics(
-            self, metrics: MetricDict, x: torch.Tensor, x_gt: torch.Tensor=None
+            self, metrics: MetricDict, x: torch.Tensor, x_gt: torch.Tensor = None
     ):
         if self.metric_dict is not None:
             for metric_name, metric_fn in self.metric_dict.items():

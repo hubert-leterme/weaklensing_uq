@@ -14,7 +14,7 @@ class KS(dinv.models.Reconstructor):
         Standard deviation of the Gaussian filter to apply to the output convergence map.
         Default is None.
     """
-    def __init__(self, std_gaussianfilter: float=None):
+    def __init__(self, std_gaussianfilter: float | None = None):
 
         super().__init__()
         self.std_gaussianfilter = std_gaussianfilter

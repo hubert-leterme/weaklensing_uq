@@ -31,9 +31,9 @@ class MCAIteration(nn.Module):
             self,
             iterator_g: dinv.optim.OptimIterator,
             iterator_ng: dinv.optim.OptimIterator,
-            niter_per_step_g: int=NITER_PER_STEP_G,
-            niter_per_step_ng: int=NITER_PER_STEP_NG,
-            update_ng_first: bool=False
+            niter_per_step_g: int = NITER_PER_STEP_G,
+            niter_per_step_ng: int = NITER_PER_STEP_NG,
+            update_ng_first: bool = False
     ):
         # Switch arguments if required
         if update_ng_first:
@@ -137,7 +137,7 @@ class BaseMCALens(iterativemm.BaseOptim):
             prior_g=None, prior_ng=None,
             custom_init=iterativemm.zero_init,
             set_output=lambda x: {"est": (x,)},
-            update_ng_first=False, output_mode: str=None, **kwargs
+            update_ng_first=False, output_mode: str | None = None, **kwargs
     ):
         iterator = MCAIteration(
             iterator_g, iterator_ng,
@@ -211,17 +211,17 @@ class BaseMCALens(iterativemm.BaseOptim):
 class Starlet2d(nn.Module):
 
     def __init__(
-            self, in_channels, nx, ny, ns: int | None=None,
-            kernel1d: torch.Tensor=STARLET_KERNEL1D,
-            first_detect_scale: int=STARLET_FIRST_DETECT_SCALE,
+            self, in_channels, nx, ny, ns: int | None = None,
+            kernel1d: torch.Tensor = STARLET_KERNEL1D,
+            first_detect_scale: int = STARLET_FIRST_DETECT_SCALE,
             last_scale_detection: int | None=STARLET_LAST_SCALE_DETECTION,
-            detection_threshold: float=STARLET_DETECTION_THRESHOLD,
-            l2norm: bool=STARLET_L2NORM,
-            only_positive: bool=STARLET_ONLY_POSITIVE,
-            gen2: bool=STARLET_GEN2,
-            enforce_gen1_tabnorm: bool=STARLET_ENFORCE_GEN1_TABNORM,
-            retain_previous_rec: bool=STARLET_RETAIN_PREVIOUS_REC,
-            meancentering: bool=True
+            detection_threshold: float = STARLET_DETECTION_THRESHOLD,
+            l2norm: bool = STARLET_L2NORM,
+            only_positive: bool = STARLET_ONLY_POSITIVE,
+            gen2: bool = STARLET_GEN2,
+            enforce_gen1_tabnorm: bool = STARLET_ENFORCE_GEN1_TABNORM,
+            retain_previous_rec: bool = STARLET_RETAIN_PREVIOUS_REC,
+            meancentering: bool = True
     ):
         super().__init__()
 

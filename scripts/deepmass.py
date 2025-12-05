@@ -16,35 +16,35 @@ OUTPUT_DIR = ""
 OUTPUT_FILENAME = "results_deepmass"
 
 def main(
-        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str=wlmmuq.MODEL_DIR,
-        checkpoint_subdir: str=None, checkpoint_subdir_uq: str=None,
-        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str=wlmmuq.PATH_TO_MASK,
-        path_to_ps: str=wlmmuq.PATH_TO_PS,
-        arch: str=None, timestamp: str=None, epoch: int=_commons.EPOCH,
-        model_specs: str | None=None,
-        load_model_uq: bool=False,
-        arch_uq: str=None, timestamp_uq: str=None, epoch_uq: int=None,
-        model_specs_uq: str | None=None,
-        cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_DEEPMASS,
-        nimgs_test: int=_commons.NIMGS_TEST,
-        cqr: bool=False,
-        nimgs_calib: int=_commons.NIMGS_CALIB,
-        min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
-        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
-        num_workers: int=NUM_WORKERS,
-        niter_wiener: int=_commons.NITER_WIENER,
-        eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
-        mode_cqr: str=_commons.MODE_CQR,
-        scaling_factor_chisqcqr: float | None=None,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
-        hyperparam_precalib: list[float] | None=None,
-        find_optimal_hyperparam_precalib: bool=False,
-        save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
-        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
-        seed: int=None, verbose: bool=False, **kwargs
+        path_to_test_dataset: str = wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str = wlmmuq.PATH_TO_CALIB_DATASET,
+        checkpoint_dir: str = wlmmuq.MODEL_DIR,
+        checkpoint_subdir: str | None = None, checkpoint_subdir_uq: str | None = None,
+        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_ps: str = wlmmuq.PATH_TO_PS,
+        arch: str | None = None, timestamp: str | None = None, epoch: int = _commons.EPOCH,
+        model_specs: str | None = None,
+        load_model_uq: bool = False,
+        arch_uq: str | None = None, timestamp_uq: str | None = None, epoch_uq: int | None = None,
+        model_specs_uq: str | None = None,
+        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_DEEPMASS,
+        nimgs_test: int = _commons.NIMGS_TEST,
+        cqr: bool = False,
+        nimgs_calib: int = _commons.NIMGS_CALIB,
+        min_idx_filename_ori_calib: str | int = _commons.MIN_IDX_FILENAME_ORI_CALIB,
+        imgsize: int = _commons.IMGSIZE, batch_size: int = _commons.BATCH_SIZE,
+        num_workers: int = NUM_WORKERS,
+        niter_wiener: int = _commons.NITER_WIENER,
+        eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
+        mode_cqr: str | list[str] = _commons.MODE_CQR,
+        scaling_factor_chisqcqr: float | None | list[float | None] = None,
+        confidence_uq: int | float = _commons.CONFIDENCE_UQ,
+        hyperparam_precalib: list[float] | None = None,
+        find_optimal_hyperparam_precalib: bool = False,
+        save_tensors: bool = False, nimgs_save: int = _commons.NIMGS_SAVE,
+        output_dir: str = OUTPUT_DIR, output_filename: str = OUTPUT_FILENAME,
+        seed: int | None = None, verbose: bool = False, **kwargs
 ):
     _commons.set_seed(seed)
 
@@ -197,7 +197,7 @@ def main(
 def run_deepmass_batch(
         deepmass: wldinv.BaseOptim, deepmass_uq: wldinv.BaseOptim,
         dataloader,
-        rmse_fn: wldinv.RMSE | None=None,
+        rmse_fn: wldinv.RMSE | None = None,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []

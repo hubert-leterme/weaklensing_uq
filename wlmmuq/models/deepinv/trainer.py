@@ -146,7 +146,8 @@ class Trainer(dinv.Trainer):
 
 
     def compute_loss(
-            self, physics, x, y, train=True, epoch: int = None, callbacks: BaseCallback=None
+            self, physics, x, y, train=True, epoch: int | None = None,
+            callbacks: BaseCallback | None = None
     ):
         r"""
         Compute the loss and perform the backward pass.
@@ -222,7 +223,7 @@ class Trainer(dinv.Trainer):
 
 
     def compute_metrics(
-        self, x, x_net, y, physics, logs, train=True, epoch: int = None
+        self, x, x_net, y, physics, logs, train=True, epoch: int | None = None
     ):
         r"""
         Compute the metrics.

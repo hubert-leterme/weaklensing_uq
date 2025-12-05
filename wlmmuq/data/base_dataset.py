@@ -1,6 +1,7 @@
 import os
 import re
 import warnings
+import typing
 import numpy as np
 import h5py
 import torch
@@ -173,7 +174,7 @@ class BaseHDF5Dataset:
         return out
 
 
-    def _load_maps(self, idx, transform: callable = None):
+    def _load_maps(self, idx, transform: typing.Callable | None = None):
 
         # TODO: use `with self.open():`
         if self.close_after_batch:
@@ -379,7 +380,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
     def __init__(
             self, *args, inpainting=False,
             complexconjugate=False, return_complex=False,
-            output_shape_wider: int | tuple[int, int]=None, **kwargs
+            output_shape_wider: int | tuple[int, int] = None, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.

@@ -17,28 +17,28 @@ OUTPUT_DIR = os.path.join(wlmmuq.MODEL_DIR, "wiener")
 OUTPUT_FILENAME = "results_wiener"
 
 def main(
-        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
-        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str=wlmmuq.PATH_TO_MASK,
-        path_to_ps: str=wlmmuq.PATH_TO_PS,
-        niter_wiener: int=_commons.NITER_WIENER,
-        cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_WIENER,
-        nimgs_test: int=_commons.NIMGS_TEST,
-        cqr: bool=False,
-        nimgs_calib: int=_commons.NIMGS_CALIB,
-        min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
-        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
-        num_workers: int=NUM_WORKERS,
-        eps_sup_step_size: float=_commons.EPS_SUP_STEP_SIZE,
-        mode_cqr: list[str]=_commons.MODE_CQR,
-        scaling_factor_chisqcqr: list[float] | None=None,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
-        get_initial_bounds: bool=False,
-        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
-        save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
-        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
-        seed: int=None, verbose: bool=False
+        path_to_test_dataset: str = wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str = wlmmuq.PATH_TO_CALIB_DATASET,
+        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_ps: str = wlmmuq.PATH_TO_PS,
+        niter_wiener: int = _commons.NITER_WIENER,
+        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_WIENER,
+        nimgs_test: int = _commons.NIMGS_TEST,
+        cqr: bool = False,
+        nimgs_calib: int = _commons.NIMGS_CALIB,
+        min_idx_filename_ori_calib: str | int = _commons.MIN_IDX_FILENAME_ORI_CALIB,
+        imgsize: int = _commons.IMGSIZE, batch_size: int = _commons.BATCH_SIZE,
+        num_workers: int = NUM_WORKERS,
+        eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
+        mode_cqr: str | list[str] = _commons.MODE_CQR,
+        scaling_factor_chisqcqr: list[float] | None = None,
+        confidence_uq: int | float = _commons.CONFIDENCE_UQ,
+        get_initial_bounds: bool = False,
+        n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
+        save_tensors: bool = False, nimgs_save: int = _commons.NIMGS_SAVE,
+        output_dir: str = OUTPUT_DIR, output_filename: str = OUTPUT_FILENAME,
+        seed: int | None = None, verbose: bool = False
 ):
     _commons.set_seed(seed)
 
@@ -177,9 +177,9 @@ def main(
 def run_wiener_batch(
         wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
         dataloader,
-        rmse_fn: wlpnp.RMSE | None=None,
-        get_initial_bounds: bool=False,
-        n_noise_reals_per_img: int=_commons.N_NOISE_REALS_UQ,
+        rmse_fn: wlpnp.RMSE | None = None,
+        get_initial_bounds: bool = False,
+        n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []

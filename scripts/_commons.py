@@ -2,6 +2,8 @@ import os
 import warnings
 import time
 import random
+import typing
+
 import numpy as np
 from scipy.optimize import minimize
 import torch
@@ -123,8 +125,8 @@ def get_stdnoise_mask(
 
 
 def create_dataset_from_kappatng(
-        func:callable, path_to_saved_dataset:str, idx_lp: int | str,
-        openingangle: float, ninpimgs: int, verbose: bool=False, **kwargs
+        func: typing.Callable, path_to_saved_dataset:str, idx_lp: int | str,
+        openingangle: float, ninpimgs: int, verbose: bool = False, **kwargs
 ):
     """
     Create a dataset from the KappaTNG simulation.
@@ -674,7 +676,7 @@ def variance_estimation_through_noise_propagation(
         method: wlpnp.BaseOptim,
         physics: wlpnp.MassMapping,
         output_shape: tuple | torch.Size,
-        n_noise_reals: int=N_NOISE_REALS_UQ,
+        n_noise_reals: int = N_NOISE_REALS_UQ,
         device="cpu", verbose=False, **kwargs
 ):
     noise_outputs = torch.zeros(
@@ -730,7 +732,7 @@ def convert_into_hyperparam_list(
 def apply_calibration_and_get_metrics(
         kappa_pred, var, kappa_true,
         kappa_pred_calib, var_calib, kappa_true_calib,
-        confidence_uq=CONFIDENCE_UQ,
+        confidence_uq: int | float = CONFIDENCE_UQ,
         imgsize=IMGSIZE, mode=MODE_CQR,
         hyperparam_precalib=None,
         find_optimal_hyperparam_precalib=False,
@@ -814,7 +816,7 @@ def _get_optimal_hyperparam_precalib(
         var_calib: torch.Tensor,
         kappa_true_calib: torch.Tensor,
         predinterv_metric: wlpnp.PredInterv,
-        confidence_uq: int | float=CONFIDENCE_UQ,
+        confidence_uq: int | float = CONFIDENCE_UQ,
         verbose=False
 ):
     if verbose:
@@ -867,8 +869,8 @@ def _get_residuals_cqr(
         kappa_pred_calib: torch.Tensor,
         var_calib:torch.Tensor,
         kappa_true_calib: torch.Tensor,
-        confidence_uq: int | float=CONFIDENCE_UQ,
-        hyperparam_precalib: float | None=None
+        confidence_uq: int | float = CONFIDENCE_UQ,
+        hyperparam_precalib: float | None = None
 ):
     cqr.reset()
     cqr.hyperparam_precalib = hyperparam_precalib

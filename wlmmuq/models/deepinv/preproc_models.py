@@ -16,8 +16,8 @@ class WienerInit(nn.Module):
     def __init__(
             self, step_size: float,
             powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor=None, niter: int=NITER_WIENER,
-            noise_whitening: bool=False
+            mask:torch.Tensor | None = None, niter: int = NITER_WIENER,
+            noise_whitening: bool = False
     ):
         super().__init__()
         if not noise_whitening:
@@ -43,7 +43,7 @@ class WienerInit(nn.Module):
 class KSInit(nn.Module):
 
     def __init__(
-            self, std_noise: torch.Tensor, mask:torch.Tensor=None
+            self, std_noise: torch.Tensor, mask:torch.Tensor | None = None
     ):
         super().__init__()
         self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)

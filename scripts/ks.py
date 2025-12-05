@@ -18,25 +18,25 @@ OUTPUT_DIR = os.path.join(wlmmuq.MODEL_DIR, "ks")
 OUTPUT_FILENAME = "results_ks"
 
 def main(
-        path_to_test_dataset: str=wlmmuq.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str=wlmmuq.PATH_TO_CALIB_DATASET,
-        path_to_std_noise: str=wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str=wlmmuq.PATH_TO_MASK,
-        std_gaussianfilter: float | None=None,
-        cosmos_include_faint: bool=False, inpainting: bool=_commons.INPAINTING_DEEPMASS,
-        nimgs_test: int=_commons.NIMGS_TEST,
-        cqr: bool=False,
-        nimgs_calib: int=_commons.NIMGS_CALIB,
-        min_idx_filename_ori_calib: str=_commons.MIN_IDX_FILENAME_ORI_CALIB,
-        imgsize: int=_commons.IMGSIZE, batch_size: int=_commons.BATCH_SIZE,
-        num_workers: int=NUM_WORKERS,
-        mode_cqr: str=_commons.MODE_CQR,
-        scaling_factor_chisqcqr: float | None=None,
-        confidence_uq: int | float=_commons.CONFIDENCE_UQ,
-        get_initial_bounds: bool=False,
-        save_tensors: bool=False, nimgs_save: int=_commons.NIMGS_SAVE,
-        output_dir: str=OUTPUT_DIR, output_filename: str=OUTPUT_FILENAME,
-        seed: int=None, verbose: bool=False, **kwargs
+        path_to_test_dataset: str = wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str = wlmmuq.PATH_TO_CALIB_DATASET,
+        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        std_gaussianfilter: float | None = None,
+        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_DEEPMASS,
+        nimgs_test: int = _commons.NIMGS_TEST,
+        cqr: bool = False,
+        nimgs_calib: int = _commons.NIMGS_CALIB,
+        min_idx_filename_ori_calib: str | int = _commons.MIN_IDX_FILENAME_ORI_CALIB,
+        imgsize: int = _commons.IMGSIZE, batch_size: int = _commons.BATCH_SIZE,
+        num_workers: int = NUM_WORKERS,
+        mode_cqr: str | list[str] = _commons.MODE_CQR,
+        scaling_factor_chisqcqr: float | None = None,
+        confidence_uq: int | float = _commons.CONFIDENCE_UQ,
+        get_initial_bounds: bool = False,
+        save_tensors: bool = False, nimgs_save: int = _commons.NIMGS_SAVE,
+        output_dir: str = OUTPUT_DIR, output_filename: str = OUTPUT_FILENAME,
+        seed: int | None = None, verbose: bool = False, **kwargs
 ):
     _commons.set_seed(seed)
 
@@ -163,8 +163,8 @@ def run_ks_batch(
         ks: wldinv.ks.KS,
         physics: wldinv.iterativemm.MassMapping,
         dataloader: wlds.HDF5DatasetMassMapping,
-        rmse_fn: wldinv.iterativemm.RMSE | None=None,
-        get_initial_bounds: bool=False,
+        rmse_fn: wldinv.iterativemm.RMSE | None = None,
+        get_initial_bounds: bool = False,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
