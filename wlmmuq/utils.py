@@ -1094,7 +1094,8 @@ def quantile(
 
 def _min_max(
         which: str,
-        inp: np.ndarray | torch.Tensor, other: float | np.ndarray | torch.Tensor,
+        inp: np.ndarray | torch.Tensor,
+        other: float | np.ndarray | torch.Tensor,
         *args, **kwargs
 ) -> np.ndarray | torch.Tensor:
     if torch.is_tensor(inp):
@@ -1106,7 +1107,8 @@ def _min_max(
     return fn(inp, other, *args, **kwargs)
 
 def maximum(
-        inp: np.ndarray | torch.Tensor, other: float | np.ndarray | torch.Tensor,
+        inp: np.ndarray | torch.Tensor,
+        other: float | np.ndarray | torch.Tensor,
         *args, **kwargs
 ) -> np.ndarray | torch.Tensor:
     return _min_max(
@@ -1114,7 +1116,8 @@ def maximum(
     )
 
 def minimum(
-        inp: np.ndarray | torch.Tensor, other: np.ndarray | torch.Tensor,
+        inp: np.ndarray | torch.Tensor,
+        other: np.ndarray | torch.Tensor,
         *args, **kwargs
 ) -> np.ndarray | torch.Tensor:
     return _min_max(
