@@ -442,11 +442,12 @@ class ParamsAlgoUpdater(callbacks.BaseCallback):
 
 class StarletResetter(callbacks.BaseCallback):
 
-    def __init__(self, starlet: Starlet2d):
-        self.starlet = starlet
+    def __init__(self, *starlet: Starlet2d):
+        self.starlet: list[Starlet2d] = list(starlet)
 
     def on_batch_begin(self, batch):
-        self.starlet.reset_buffers()
+        for starlet in self.starlet:
+            starlet.reset_buffers()
 
 
 class _ComponentWrapper:
