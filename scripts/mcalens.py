@@ -24,8 +24,8 @@ def main(
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps: str = wlmmuq.PATH_TO_PS,
-        step_size: float | list[float] = None,
-        multfact_step_size: float | list[float] = None,
+        step_size: float | list[float] | None = None,
+        multfact_step_size: float | list[float] | None = None,
         niter: int = _commons.NITER_MCALENS,
         cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_PNPMASS,
         nimgs_test: int = _commons.NIMGS_TEST,
@@ -88,7 +88,7 @@ def main(
     starlet, callback_starlet_denoiser = \
             _commons.instantiate_starlet_denoiser(
         imgsize=imgsize,
-        starlet_detection_threshold=starlet_detection_threshold,
+        detection_threshold=starlet_detection_threshold,
         device=device, verbose=verbose, **kwargs
     )
 

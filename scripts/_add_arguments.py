@@ -475,7 +475,9 @@ def step_size_niter(parser, default_niter):
         "-alph", "--multfact-step-size", type=float, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            "Multiplicative factor for the step size. Several values can be provided."
+            "Multiplicative factor for the step size. "
+            "Several values can be provided. "
+            "Default = 1."
         )
     )
     parser.add_argument(
@@ -546,7 +548,16 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
         additional_msg = (
             "Works with `--mode residual --which-gaussian-extractor mcalens`. "
         ) if verbose else ""
-        _starlet_detection_threshold(parser, additional_msg=additional_msg)
+        parser.add_argument(
+            "-thresh", "--starlet-detection-threshold", type=float,
+            default=argparse.SUPPRESS,
+            help=(
+                "Detection threshold for computing the support of active "
+                "starlet coefficients. "
+                f"{additional_msg}"
+                f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
+            )
+        )
 
 
 def starlet_debiasing(parser):
@@ -561,10 +572,11 @@ def starlet_debiasing(parser):
         )
     )
     parser.add_argument(
-        "--step-size-starlet-debiasing", type=float,
+        "--step-size-starlet-debiasing", type=float, nargs='+',
         default=argparse.SUPPRESS,
         help=(
             "Step size for the starlet debiasing postprocessing step. "
+            "Several values can be provided. "
             "If not provided or set to 0, the step size will be computed as "
             f"Default = (1 - {_commons.EPS_SUP_STEP_SIZE:.1e}) * upper_bound, "
             "where upper_bound is estimated from the noise standard deviation "
@@ -572,10 +584,12 @@ def starlet_debiasing(parser):
         )
     )
     parser.add_argument(
-        "--multfact-step-size-starlet-debiasing", type=float,
+        "--multfact-step-size-starlet-debiasing", type=float, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            "Multiplicative factor for the step size."
+            "Multiplicative factor for the step size. "
+            "Several values can be provided. "
+            "Default = 1."
         )
     )
     parser.add_argument(
@@ -586,19 +600,12 @@ def starlet_debiasing(parser):
             f"Default = {_commons.NITER_STARLET_DEBIASING}"
         )
     )
-    if not _argument_exists(parser, "--starlet-detection-threshold"):
-        _starlet_detection_threshold(parser)
-
-
-def _starlet_detection_threshold(parser, additional_msg=""):
-
     parser.add_argument(
-        "-thresh", "--starlet-detection-threshold", type=float,
+        "--detection-threshold-starlet-debiasing", type=float, nargs='+',
         default=argparse.SUPPRESS,
         help=(
             "Detection threshold for computing the support of active "
-            "starlet coefficients. "
-            f"{additional_msg}"
+            "starlet coefficients (starlet debiasing). "
             f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )

@@ -200,8 +200,8 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
 def update_kwargs_model(
         kwargs_model,
         std_noise=None, mask=None, path_to_ps=None,
-        eps_sup_step_size_wiener=None,
-        niter_wiener=None, device="cpu", verbose=False
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER, device="cpu", verbose=False
 ):
     try:
         mode_preproc = kwargs_model["mode_preproc"]
@@ -339,19 +339,23 @@ def load_trained_models(
 
 def instantiate_starlet_denoiser(
         imgsize=IMGSIZE,
-        starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
+        detection_threshold=STARLET_DETECTION_THRESHOLD,
+        callback: wlpnpmcalens.StarletResetter | None = None,
         device="cpu", verbose=False
 ):
     denoiser = wlpnpmcalens.Starlet2d(
         in_channels=1, nx=imgsize, ny=imgsize,
-        detection_threshold=starlet_detection_threshold
+        detection_threshold=detection_threshold
     ).to(device)
     if verbose:
         print(
             f"Starlet denoiser instantiated with {denoiser.ns} scales and "
-            f"a {int(starlet_detection_threshold)}-sigma detection threshold."
+            f"a {detection_threshold:.1f}-sigma detection threshold."
         )
-    callback = wlpnpmcalens.StarletResetter(denoiser)
+    if callback is None:
+        callback = wlpnpmcalens.StarletResetter(denoiser)
+    else:
+        callback.starlet.append(denoiser)
 
     return denoiser, callback
 
@@ -471,6 +475,7 @@ def _get_step_size_param_mahalanobis(
         device="cpu", verbose=False
 ):
     if not white_noise:
+        assert std_noise is not None
         param_mahalanobis = wlutils.get_g_param(std_noise, noise_whitening)
         if step_size is None or step_size <= 0:
             step_size = wlutils.get_sup_step_size(
@@ -560,9 +565,9 @@ def get_gaussian_extractor(
     elif which == "mcalens":
         if verbose:
             print("MCALens used as Gaussian extractor")
-        denoiser_ng, _, callback = instantiate_starlet_denoiser(
+        denoiser_ng, callback = instantiate_starlet_denoiser(
             imgsize=imgsize,
-            starlet_detection_threshold=starlet_detection_threshold,
+            detection_threshold=starlet_detection_threshold,
             device=device, verbose=verbose
         )
         data_fidelity_ng, prior_ng, _, params_algo_ng = \
@@ -613,7 +618,7 @@ def get_pnpmass(
         eps_sup_step_size=eps_sup_step_size,
         device=device, verbose=verbose
     )
-    step_size = params_algo["stepsize"]
+    step_size: float = params_algo["stepsize"]
     kwargs = {}
     if rmse_fn is not None:
         kwargs.update(metric_dict={"rmse": rmse_fn})
@@ -762,13 +767,18 @@ def convert_into_hyperparam_list(
 
 
 def apply_calibration_and_get_metrics(
-        kappa_pred, var, kappa_true,
-        kappa_pred_calib, var_calib, kappa_true_calib,
+        kappa_pred: torch.Tensor,
+        var: torch.Tensor,
+        kappa_true: torch.Tensor,
+        kappa_pred_calib: torch.Tensor,
+        var_calib: torch.Tensor,
+        kappa_true_calib: torch.Tensor,
         confidence_uq: int | float = CONFIDENCE_UQ,
-        imgsize=IMGSIZE, mode=MODE_CQR,
-        hyperparam_precalib=None,
-        find_optimal_hyperparam_precalib=False,
-        mask=None, save_tensors=False, nimgs_save=NIMGS_SAVE,
+        imgsize: int = IMGSIZE, mode: str = MODE_CQR,
+        hyperparam_precalib: float | None = None,
+        find_optimal_hyperparam_precalib: bool = False,
+        mask: torch.Tensor | None = None,
+        save_tensors: bool = False, nimgs_save: int = NIMGS_SAVE,
         device="cpu", verbose=False, **kwargs
 ):
     err_metric = wlpnp.MiscoverageRate(meancentering=False, mask=mask).to(device)
@@ -826,7 +836,8 @@ def apply_calibration_and_get_metrics(
 
 
 def _instantiate_cqr(
-        confidence_uq=CONFIDENCE_UQ, imgsize=IMGSIZE,
+        confidence_uq: int | float = CONFIDENCE_UQ,
+        imgsize=IMGSIZE,
         mode=MODE_CQR, a=None, mask=None, device="cpu", **kwargs
 ):
     cqr_class = wlnn.CQR_CLASSES[mode]
@@ -850,7 +861,7 @@ def _get_optimal_hyperparam_precalib(
         predinterv_metric: wlpnp.PredInterv,
         confidence_uq: int | float = CONFIDENCE_UQ,
         verbose=False
-):
+) -> float:
     if verbose:
         print("Find optimal hyperparameters for CQR")
     if isinstance(cqr, wlcqr.AddCQR):
