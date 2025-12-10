@@ -21,7 +21,7 @@ optional_args_cleaned=$(echo "$optional_args" \
     { printf " %s", $0 }
     END { printf "\n" }
   ' \
-  | grep -E '^(-e|-c0|-e0|--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|--mode|--which-gaussian-extractor|--update-ng-first|--starlet|-thresh|-ig|-ing|--niter-wiener)' \
+  | grep -E '^(-e|-c0|-e0|--nimgs-test|--nimgs-calib|--imgsize|-b|--cqr|--mode-cqr|--confidence-uq|-i|--mode|--which-gaussian-extractor|--update-ng-first|-thresh|-ig|-ing|--niter-wiener|-sd|--niter-starlet-debiasing)' \
   | sed -E 's/^-e($| )/--epoch\1/' \
   | sed 's/-c0 [^ ]\+/alternativemn/g' \
   | sed -E 's/^-e0($| )/--epoch-uq\1/' \
@@ -30,6 +30,7 @@ optional_args_cleaned=$(echo "$optional_args" \
   | sed -E 's/^-thresh($| )/--starlet-detection-threshold\1/' \
   | sed -E 's/^-ig($| )/--niter-per-step-g\1/' \
   | sed -E 's/^-ing($| )/--niter-per-step-ng\1/' \
+  | sed -E 's/^-sd($| )/--starlet-debiasing\1/' \
   | xargs \
   | sed 's/--//g' \
   | sed 's/ /_/g')
