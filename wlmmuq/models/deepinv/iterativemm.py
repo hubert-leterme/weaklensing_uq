@@ -37,8 +37,8 @@ class MahalanobisDistance(dinv.optim.Distance):
     """
 
     def __init__(
-            self, param_vector: float | torch.Tensor = None,
-            sigma: float | torch.Tensor = None
+            self, param_vector: float | torch.Tensor | None = None,
+            sigma: float | torch.Tensor | None = None
     ):
         super().__init__()
         if sigma is not None:
@@ -91,8 +91,8 @@ class MahalanobisDistance(dinv.optim.Distance):
 class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
 
     def __init__(
-            self, param_vector: float | torch.Tensor = None,
-            sigma: float | torch.Tensor = None
+            self, param_vector: float | torch.Tensor | None = None,
+            sigma: float | torch.Tensor | None = None
     ):
         super().__init__()
         self.d = MahalanobisDistance(
@@ -177,8 +177,8 @@ class ProximalWiener(nn.Module):
 class MeancenterMaskMixin:
 
     def __init__(
-            self, mask: torch.Tensor = None, meancentering: bool = True,
-            **kwargs
+            self, mask: torch.Tensor | None = None,
+            meancentering: bool = True, **kwargs
     ):
         super().__init__(**kwargs)
         if mask is not None:

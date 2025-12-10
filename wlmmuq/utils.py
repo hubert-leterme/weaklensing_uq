@@ -957,6 +957,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
 def get_sup_step_size(
         param_mahalanobis: float | torch.Tensor, its=ITS_POWER_ITERATION,
+        nx: int | None = None, ny: int | None = None,
         physics=None, device: str | torch.device = "cpu"
 ):
     """
@@ -977,7 +978,9 @@ def get_sup_step_size(
     # TODO: retrieve `param_mahalanobis` from `physics`
     if torch.is_tensor(param_mahalanobis):
         param_mahalanobis = param_mahalanobis.to(device)
-    nx, ny = param_mahalanobis.shape
+        nx, ny = param_mahalanobis.shape
+    else:
+        assert nx is not None and ny is not None
 
     if physics is None:
         physics = dinv.physics.LinearPhysics().to(device) # Identity
