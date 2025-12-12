@@ -269,7 +269,9 @@ def main(
         }
 
         if starlet_debiasing:
-            cpu = lambda x: x.cpu()
+            out_dict.update({
+                "niter_starlet_debiasing": niter_starlet_debiasing
+            })
             out_dict.update({
                 "dict_detection_threshold_starlet_debiasing": \
                     dict_detection_threshold_starlet_debiasing,
@@ -280,7 +282,7 @@ def main(
             }) # For (key, value) correspondance (threshold or step size)
             out_dict.update({
                 "dict_rmse_debiased": _apply_fn_inside_dict_debiasing(
-                    cpu, dict_rmse_debiased
+                    lambda x: x.cpu(), dict_rmse_debiased
                 ),
             })
         if save_tensors:
@@ -485,13 +487,12 @@ def run_pnpmass_batch(
                 dict_var_debiased = None
 
             if gaussian_extractor is not None:
-                add_kappa_g = lambda x: x + kappa_g
-                kappa_pred = add_kappa_g(kappa_pred)
+                kappa_pred = kappa_pred + kappa_g
                 if dict_kappa_pred_debiased is not None:
                     dict_kappa_pred_debiased = _apply_fn_inside_dict_debiasing(
-                        add_kappa_g, dict_kappa_pred_debiased
+                        lambda x: x + kappa_g, dict_kappa_pred_debiased
                     )
-                kappa_true = add_kappa_g(kappa_true)
+                kappa_true = kappa_true + kappa_g
 
             if rmse_fn is not None:
                 l2norm = rmse_fn(kappa_true, 0)
