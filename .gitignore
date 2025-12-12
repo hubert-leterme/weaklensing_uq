@@ -8,5 +8,7 @@
 **/.old/*
 **/csv/.~lock.*
 *.egg-info/
+*.vscode
+build_and_install.sh
 dist/
 build/
