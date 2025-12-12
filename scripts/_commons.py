@@ -896,7 +896,7 @@ def _get_optimal_hyperparam_precalib(
     if verbose:
         print(results_optim)
 
-    return results_optim.x[0]
+    return float(results_optim.x[0])
 
 
 def _get_bounds(kappa_pred, res):
