@@ -284,9 +284,9 @@ class Starlet2d(nn.Module):
 
 
     def reset_buffers(self):
-        self.tabnorm = None
-        self.active_coefs = None
-        self.x_prev = None
+        self.tabnorm: torch.Tensor | None = None
+        self.active_coefs: torch.Tensor | None = None
+        self.x_prev: torch.Tensor | None = None
 
 
     def forward(
@@ -297,6 +297,7 @@ class Starlet2d(nn.Module):
             # See Algorithm 1 in Starck et al. (2021) (MCALens)
             x -= self.x_prev
         wt = self.dec(x) # Wavelet decomposition
+
         if self.active_coefs is None:
             if torch.is_tensor(sigma):
                 # The current shape of sigma is exptected to be (nimgs, 1, 1, 1).
@@ -304,6 +305,8 @@ class Starlet2d(nn.Module):
                 # match the shape of the wavelet coefficients.
                 sigma = sigma.unsqueeze(-3) # Shape = (nimgs, 1, 1, 1, 1)
             self._set_active_coefs(wt, sigma) # Set for all subsequent forward passes
+        assert self.active_coefs is not None
+
         wt *= self.active_coefs # Projection onto the support of active coefficients
         x_denoised = self.rec(wt) # Wavelet reconstruction
         if self.only_positive:
@@ -320,11 +323,12 @@ class Starlet2d(nn.Module):
         return x_denoised
 
 
-    def dec(self, x):
+    def dec(self, x: torch.Tensor) -> torch.Tensor:
         wt = self._star2d(x, gen2=self.gen2)
         if self.l2norm:
             if self.tabnorm is None:
                 self._set_tabnorm()
+            assert self.tabnorm is not None
             wt /= self.tabnorm
         return wt
 
