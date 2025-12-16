@@ -50,6 +50,7 @@ def main(
         niter_per_step_g: int = _commons.NITER_PER_STEP_G,
         niter_per_step_ng: int = _commons.NITER_PER_STEP_NG,
         starlet_debiasing: bool = False,
+        mode_starlet_debiasing: str = _commons.MODE_STARLET_DEBIASING,
         step_size_starlet_debiasing: float | list[float] | None = None,
         multfact_step_size_starlet_debiasing: float | list[float] | None = None,
         niter_starlet_debiasing: int = _commons.NITER_STARLET_DEBIASING,
@@ -201,6 +202,21 @@ def main(
                         callback=callback_starlet_denoiser,
                         device=device, verbose=verbose
                     )
+                    kwargs_starlet_debiaser = {}
+                    if mode_starlet_debiasing == "glimpse2d":
+                        kwargs_starlet_debiaser.update(
+                            mode="regular"
+                        )
+                    elif mode_starlet_debiasing == "mcalens":
+                        kwargs_starlet_debiaser.update(
+                            mode="pnpmcalens",
+                            custom_init_g=wlpnp.ManualInit()
+                        )
+                    else:
+                        raise ValueError(
+                            "Accepted values for `mode_starlet_debiasing`: "
+                            "'glimpse2d' or 'mcalens'"
+                        )
                     starlet_debiaser, _, tau_debiaser = \
                                 _commons.get_pnpmass(
                         starlet, denoiser_uq=None,
@@ -210,8 +226,10 @@ def main(
                         eps_sup_step_size=eps_sup_step_size,
                         niter=niter_starlet_debiasing,
                         custom_init=wlpnp.ManualInit(),
-                        mode="regular",
-                        device=device, verbose=verbose
+                        update_ng_first=update_ng_first, # Only used if `mode_starlet_debiasing == 'mcalens'`
+                        path_to_ps=path_to_ps, # Only used if `mode_starlet_debiasing == 'mcalens'`
+                        device=device, verbose=verbose,
+                        **kwargs_starlet_debiaser
                     )
                     dict_starlet[i].update({j: starlet})
                     dict_starlet_debiaser[i].update({j: starlet_debiaser})
@@ -459,8 +477,18 @@ def run_pnpmass_batch(
                         starlet_debiaser = dict_starlet_debiaser[thresh][tau_debiaser]
                         starlet = dict_starlet[thresh][tau_debiaser]
 
-                        assert starlet_debiaser.custom_init is not None
-                        starlet_debiaser.custom_init.X_init = (kappa_pred,)
+                        assert isinstance(
+                            starlet_debiaser.custom_init,
+                            wlpnp.ManualInit | wlmcalens.CustomInitWrapper
+                        )
+                        if isinstance(
+                                starlet_debiaser.custom_init, wlpnp.ManualInit
+                        ):
+                            starlet_debiaser.custom_init.X_init = (kappa_pred,)
+                        else:
+                            starlet_debiaser.custom_init.custom_init_ng.X_init = (kappa_pred,)
+                            # TODO: unfinished
+
                         starlet.x_prev = kappa_pred
                         kappa_pred_debiased, metrics_starlet_debiaser = \
                                 starlet_debiaser(

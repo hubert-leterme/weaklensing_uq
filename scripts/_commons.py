@@ -45,6 +45,7 @@ EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
 WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
+MODE_STARLET_DEBIASING = "glimpse2d" # "glimpse2d", or "mcalens"
 NITER_PNPMASS = 8
 NITER_MCALENS = 32
 NITER_STARLET_DEBIASING = 32
@@ -582,7 +583,7 @@ def get_gaussian_extractor(
             params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo_ng.copy(),
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
             prior_g=prior_g, prior_ng=prior_ng,
-            early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
+            early_stop=False, max_iter=niter,
             update_ng_first=mcalens_update_ng_first,
             output_mode="discard_ng", verbose=verbose
         ).to(device)
@@ -602,8 +603,9 @@ def get_pnpmass(
         step_size=None, multfact_step_size=None,
         eps_sup_step_size=EPS_SUP_STEP_SIZE,
         niter=NITER_PNPMASS,
-        custom_init=wlpnp.zero_init,
         mode=MODE_PNPMASS,
+        custom_init=wlpnp.zero_init,
+        custom_init_g=None, # Only if `mode == "pnpmcalens"`
         update_ng_first=False,
         path_to_ps=PATH_TO_PS,
         niter_per_step_g=NITER_PER_STEP_G,
@@ -647,13 +649,16 @@ def get_pnpmass(
             eps_sup_step_size=eps_sup_step_size,
             device=device, verbose=verbose
         )
+        if custom_init_g is None:
+            custom_init_g = custom_init
         pnpmass = wlpnpmcalens.optim_builder_mcalens(
             iteration_g="PGD", iteration_ng="PGD",
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             params_algo_g=params_algo_g.copy(), params_algo_ng=params_algo.copy(),
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
-            early_stop=False, max_iter=niter, custom_init=custom_init,
+            custom_init_g=custom_init_g, custom_init_ng=custom_init,
+            early_stop=False, max_iter=niter,
             update_ng_first=update_ng_first,
             output_mode="add_components", verbose=True, **kwargs
         ).to(device)

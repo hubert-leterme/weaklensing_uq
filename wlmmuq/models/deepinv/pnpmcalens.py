@@ -135,7 +135,8 @@ class BaseMCALens(iterativemm.BaseOptim):
             params_algo_g=PARAMS_ALGO.copy(), params_algo_ng=PARAMS_ALGO.copy(),
             data_fidelity_g=None, data_fidelity_ng=None,
             prior_g=None, prior_ng=None,
-            custom_init=iterativemm.zero_init,
+            custom_init_g=iterativemm.zero_init,
+            custom_init_ng=iterativemm.zero_init,
             set_output=lambda x: {"est": (x,)},
             update_ng_first=False, output_mode: str | None = None, **kwargs
     ):
@@ -148,8 +149,14 @@ class BaseMCALens(iterativemm.BaseOptim):
         params_algo = _merge_dict(params_algo_g, params_algo_ng)
         data_fidelity = _ModuleWrapper(data_fidelity_g, data_fidelity_ng)
         prior = _ModuleWrapper(prior_g, prior_ng)
-        if custom_init is not None:
-            custom_init = _wrap_custom_init(custom_init, custom_init)
+        if custom_init_g is not None and custom_init_ng is not None:
+            custom_init = CustomInitWrapper(custom_init_g, custom_init_ng)
+        else:
+            assert custom_init_g is None and custom_init_ng is None, (
+                "Either both or none of the arguments "
+                "`custom_init_g` and `custom_init_ng` must be None"
+            )
+            custom_init = None
         super().__init__(
             iterator,
             params_algo=params_algo,
@@ -530,16 +537,18 @@ def add_tensor_components(x):
     return torch.sum(x, dim=1)
 
 
-def _wrap_custom_init(custom_init_g, custom_init_ng):
+class CustomInitWrapper:
 
-    def fn(y, physics):
-        x_g, z_g = custom_init_g(y, physics)["est"]
-        x_ng, z_ng = custom_init_ng(y, physics)["est"]
+    def __init__(self, custom_init_g, custom_init_ng):
+        self.custom_init_g = custom_init_g
+        self.custom_init_ng = custom_init_ng
+
+    def __call__(self, y, physics):
+        x_g, z_g = self.custom_init_g(y, physics)["est"]
+        x_ng, z_ng = self.custom_init_ng(y, physics)["est"]
         x = stack_tensor_components(x_g, x_ng)
         z = stack_tensor_components(z_g, z_ng)
         return {"est": (x, z)}
-
-    return fn
 
 
 def optim_builder_mcalens(
