@@ -122,7 +122,7 @@ def main(
         starlet, callback_starlet_denoiser = \
                 _commons.instantiate_starlet_denoiser(
             imgsize=imgsize,
-            starlet_detection_threshold=starlet_detection_threshold,
+            detection_threshold=starlet_detection_threshold,
             device=device, verbose=verbose
         )
         physics = wldinv.MassMapping(sigma=std_noise, mask=mask).to(device)
