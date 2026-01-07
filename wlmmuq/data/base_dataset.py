@@ -64,9 +64,10 @@ class BaseHDF5Dataset:
         min_idx_filename_ori: int, optional
             Filter images by filenames with indices equal or larger than this value.
             Default is None.
-        newaxis: bool, optional
+        newaxis: bool, optional, DEPRECATED
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
             for training purpose. Default is False.
+            The channel dimension is now assumed to be included by default.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp', or None.
@@ -416,9 +417,10 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
-        newaxis: bool, optional
+        newaxis: bool, optional, DEPRECATED
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
             for training purpose. Default is False.
+            The channel dimension is now assumed to be included by default.
         complexconjugate (bool, default=True)   
             Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
         return_complex (bool, default=False)
@@ -561,9 +563,10 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
-        newaxis: bool, optional
+        newaxis: bool, optional, DEPRECATED
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
             for training purpose. Default is False.
+            The channel dimension is now assumed to be included by default.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
@@ -681,9 +684,10 @@ class InputTargetMixin:
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
-        newaxis: bool, optional
+        newaxis: bool, optional, DEPRECATED
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
             for training purpose. Default is False.
+            The channel dimension is now assumed to be included by default.
         close_after_batch: bool, optional
             Default is False.
         verbose : bool, optional

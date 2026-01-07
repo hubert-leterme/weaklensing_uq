@@ -69,24 +69,24 @@ def get_patches(imgs0, rows, cols, imgsize):
     Crop kappa_rot according to rows and cols
 
     """
-    nimgs, _, _ = imgs0.shape
+    nimgs = imgs0.shape[0]
     assert rows.shape == (nimgs,)
     assert cols.shape == (nimgs,)
 
     # Get 2D sliding windows for each element
-    # Shape = (nimgs, 1024-imgsize, 1024-imgsize, 1, imgsize, imgsize)
-    imgs0_window = view_as_windows(imgs0, (1, imgsize, imgsize))
+    # Shape = (nimgs, nbins, 1024-imgsize, 1024-imgsize, 1, 1, imgsize, imgsize)
+    imgs0_window = view_as_windows(imgs0, (1, 1, imgsize, imgsize))
 
     # Use fancy/advanced indexing to select the required ones
-    # Shape = (nimgs, imgsize, imgsize)
-    out = imgs0_window[np.arange(nimgs), rows, cols, 0]
+    # Shape = (nimgs, nbins, imgsize, imgsize)
+    out = imgs0_window[np.arange(nimgs), :, rows, cols, 0, 0, :, :]
 
     return out
 
 
 def rotate_and_crop(kappa, angle, imgsize, niter=1):
 
-    nimgs, imgsize0, _ = kappa.shape
+    nimgs, _, imgsize0, _ = kappa.shape
 
     # Rotate kappa
     kappa_rot = ndimage.rotate(kappa, angle, axes=(-2, -1)) # Shape = (nimgs, 1024+, 1024+)

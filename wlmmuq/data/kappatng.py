@@ -3,7 +3,9 @@ import random
 import numpy as np
 import h5py
 import tqdm
+import typing
 import torch
+import astropy.table as aptable
 
 from . import cosmos, dataaugm
 from .. import utils
@@ -119,13 +121,17 @@ class KappaTNG(BaseKappaTNG):
 
     """
     def __init__(
-            self, *args, idx_lp=None, weights=None, idx_redshift=None, **kwargs
+            self, *args, idx_lp: int | None = None,
+            weights: np.ndarray | None = None,
+            zbins: list[float] | None = None,
+            idx_redshift: int | None = None, **kwargs
     ):
         if idx_lp is not None:
             self.idx_lp = str(idx_lp).zfill(3)
         else:
             self.idx_lp = "001"
         self.weights = weights
+        self.zbins = zbins
         if idx_redshift is not None:
             self.idx_redshift = f'z{str(idx_redshift + 1).zfill(2)}'
         else:
@@ -133,10 +139,15 @@ class KappaTNG(BaseKappaTNG):
         super().__init__(*args, **kwargs)
 
 
-    def _get_kappa_from_file(self, idx_run):
+    def _get_kappa_from_file(self, idx_run: str) -> np.ndarray:
 
-        def _get_kappa_oneredshift(file, idx_redshift):
-            return file[os.path.join(idx_redshift, 'kappa')][:]
+        def _get_kappa_oneredshift(
+                file: h5py.File, idx_redshift: str
+        ) -> np.ndarray:
+            path = os.path.join(idx_redshift, 'kappa')
+            obj = file[path]
+            assert isinstance(obj, h5py.Dataset)
+            return obj[:]
 
         fname = os.path.join(
             self.ktng_dir,
@@ -144,25 +155,81 @@ class KappaTNG(BaseKappaTNG):
             f"LP{self.idx_lp}_run{idx_run}_maps.hdf5"
         )
         with h5py.File(fname, 'r', swmr=True) as file:
-            list_of_idx_redshift = sorted(file.keys())[1:]
-            nredshifts = len(list_of_idx_redshift)
+
             if self.weights is not None:
+                list_of_idx_redshift = sorted(file.keys())[1:]
+                nredshifts = len(list_of_idx_redshift)
                 if len(self.weights) != nredshifts:
                     raise AttributeError(
                         f"Attribute `weights` must have {nredshifts} elements"
                     )
-                kappa = sum([
-                    weight * _get_kappa_oneredshift(file, idx_redshift) \
-                        for idx_redshift, weight in zip(list_of_idx_redshift, self.weights)
-                ])
+                
+                list_of_weights = _get_list_per_zbin(
+                    self.weights, self.zbins
+                )
+                list_of_weights = [
+                    w / np.sum(w) for w in list_of_weights
+                ] # In each bin, the weights must sum to 1
+                list_of_idx_redshift_per_zbin = _get_list_per_zbin(
+                    list_of_idx_redshift, self.zbins
+                )
+                list_of_kappa = [
+                    np.stack([
+                        _get_kappa_oneredshift(file, i) for i in l
+                    ], axis=-1) for l in list_of_idx_redshift_per_zbin # Shape = (nx, ny, nz)
+                ]
+                list_of_kappa = [
+                    np.sum(w * kappa, axis=-1) \
+                        for w, kappa in zip(list_of_weights, list_of_kappa) # Shape = (nx, ny)
+                ]
+                kappa = np.stack(list_of_kappa) # Shape = (nbins, nx, ny)
+
             elif self.idx_redshift is not None:
-                kappa = _get_kappa_oneredshift(file, self.idx_redshift)
+                kappa = _get_kappa_oneredshift(
+                    file, self.idx_redshift
+                )[np.newaxis, ...] # Shape = (1, nx, ny)
+
             else:
                 raise AttributeError(
                     "Either the attribute `weights` or `idx_redshift` must be provided"
                 )
 
         return kappa
+    
+
+@typing.overload
+def _get_list_per_zbin[T](
+        inp: list[T],
+        zbins: list[float] | None = None
+) -> list[list[T]]: ...
+
+@typing.overload
+def _get_list_per_zbin(
+        inp: np.ndarray,
+        zbins: list[float] | None = None
+) -> list[np.ndarray]: ...
+    
+def _get_list_per_zbin(inp, zbins=None):
+
+    assert LIST_OF_Z is not None
+    out = [[]]
+    j = 0
+    for i, z in enumerate(LIST_OF_Z):
+        try:
+            assert zbins is not None
+            new_zbin = z >= zbins[j]
+        except (AssertionError, IndexError):
+            new_zbin = False
+        if new_zbin:
+            out.append([])
+            j += 1
+        assert isinstance(out[j], list)
+        out[j].append(inp[i])
+
+    if isinstance(inp, np.ndarray):
+        out = [np.array(l) for l in out]
+
+    return out
 
 
 class KappaTNGFromSamples(BaseKappaTNG):
@@ -194,7 +261,7 @@ class KappaTNGFromSamples(BaseKappaTNG):
             _ = np.fromfile(f, dtype="int32", count=1)
             kappa = np.fromfile(f, dtype="float", count=WIDTH_ORI*WIDTH_ORI)
             _ = np.fromfile(f, dtype="int32", count=1)
-        kappa = kappa.reshape((WIDTH_ORI, WIDTH_ORI))
+        kappa = kappa.reshape((1, WIDTH_ORI, WIDTH_ORI))
 
         return kappa
 
@@ -257,8 +324,10 @@ def get_weights(redshifts):
     return out
 
 
-def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
-
+def get_data_from_cosmos_ktng(
+        cat_cosmos: aptable.Table, imgsize: int,
+        zbins: list[float] | None = None
+):
     openingangle = get_openingangle(imgsize)
     data_cosmos = cosmos.get_data_from_cosmos(
         cat_cosmos, openingangle
@@ -267,10 +336,25 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
     dec_cosmos_median = data_cosmos['dec_cosmos_median']
     extent = data_cosmos['extent']
     shapedisp = data_cosmos["shapedisp"]
-    ngal = utils.ngal_per_pixel(
-        cat_cosmos['Ra'], cat_cosmos['Dec'],
-        imgsize, extent
-    )
+    if zbins is None:
+        ngal = utils.ngal_per_pixel(
+            cat_cosmos['Ra'], cat_cosmos['Dec'],
+            imgsize, extent
+        ) # Shape = (imgsize, imgsize)
+    else:
+        zbins = sorted(zbins + [0., MAX_Z])
+        ngal_per_zbin = []
+        for z_inf, z_sup in zip(zbins[:-1], zbins[1:]):
+            cat_cosmos_sliced = cat_cosmos[
+                (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
+            ]
+            ngal_per_zbin.append(utils.ngal_per_pixel(
+                cat_cosmos_sliced['Ra'], cat_cosmos_sliced['Dec'],
+                imgsize, extent
+            ))
+        
+        ngal = np.stack(ngal_per_zbin) # Shape = (nbins, imgsize, imgsize)
+
     mask = ngal > 0
 
     ngal = torch.tensor(ngal, dtype=torch.float32)
@@ -289,16 +373,18 @@ def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
 
 
 def create_cropped_dataset(
-        hdf5_filepath, idx_lp, ninpimgs, weights_redshift, imgsize, batch_size=None,
-        verbose=False, **kwargs
+        hdf5_filepath, idx_lp, ninpimgs, weights_redshift, imgsize,
+        zbins=None, batch_size=None, verbose=False, **kwargs
 ):
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
     """
+    nbins = _get_nbins(zbins)
+
     # Create HDF5 file structure
     with h5py.File(hdf5_filepath, 'w') as f:
         f.create_dataset(
-            "kappa", shape=(0, imgsize, imgsize), maxshape=(None, imgsize, imgsize),
+            "kappa", shape=(0, nbins, imgsize, imgsize), maxshape=(None, nbins, imgsize, imgsize),
             dtype='float32'
         ) # Convergence maps
         # f.create_dataset(
@@ -312,7 +398,8 @@ def create_cropped_dataset(
 
     openingangle = get_openingangle(imgsize)
     ktng = KappaTNG(
-        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle, **kwargs
+        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle,
+        zbins=zbins, **kwargs
     )
 
     if batch_size is None:
@@ -334,21 +421,25 @@ def create_cropped_dataset(
         # Update the HDF5 file
         with h5py.File(hdf5_filepath, 'r+') as f:
             new_size = f['kappa'].shape[0] + nimgs
-            f['kappa'].resize((new_size, imgsize, imgsize))
+            f['kappa'].resize((new_size, nbins, imgsize, imgsize))
             f['kappa'][-nimgs:] = kappa
 
 
 def create_augmented_dataset(
-        hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize, batch_size=50,
+        hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
+        zbins=None, batch_size=50,
         angle_batch_size=36, angle_step=5, niter_per_angle=1, verbose=False
 ):  
     """
     Create an augmented dataset from kappaTNG by rotating and randomly cropping images.
     """
+    nbins = _get_nbins(zbins)
+
     # Create HDF5 file structure
     with h5py.File(hdf5_filepath, 'w') as f:
         f.create_dataset(
-            "kappa", shape=(0, imgsize, imgsize), maxshape=(None, imgsize, imgsize),
+            "kappa", shape=(0, nbins, imgsize, imgsize),
+            maxshape=(None, nbins, imgsize, imgsize),
             dtype='float32'
         ) # Convergence maps
         f.create_dataset(
@@ -364,7 +455,9 @@ def create_augmented_dataset(
             dtype='int'
         ) # Top-left coordinates
 
-    ktng = KappaTNG(idx_lp=idx_lp, weights=weights_redshift, crop_maps=False)
+    ktng = KappaTNG(
+        idx_lp=idx_lp, weights=weights_redshift, crop_maps=False, zbins=zbins
+    )
 
     end_idx = 0
     while end_idx < nimgs:
@@ -408,7 +501,7 @@ def create_augmented_dataset(
             with h5py.File(hdf5_filepath, 'r+') as f:
                 new_size = f['kappa'].shape[0] + nimgs_batch
 
-                f['kappa'].resize((new_size, imgsize, imgsize))
+                f['kappa'].resize((new_size, nbins, imgsize, imgsize))
                 f['kappa'][-nimgs_batch:] = kappa_rot
 
                 f['filename_ori'].resize((new_size,))
@@ -428,3 +521,11 @@ def create_augmented_dataset(
                 f['top_left_coord'].resize((new_size, 2))
                 f['top_left_coord'][-nimgs_batch:, 0] = rows
                 f['top_left_coord'][-nimgs_batch:, 1] = cols
+
+
+def _get_nbins(zbins):
+    if zbins is None:
+        nbins = 1
+    else:
+        nbins = len(zbins) + 1
+    return nbins
