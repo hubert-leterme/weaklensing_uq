@@ -40,6 +40,15 @@ def create_dataset(parser, path_to_output, idx_lp):
         )
     )
     parser.add_argument(
+        "--zbins", type=float, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Redshift values delimitating the redshift bins (excluding 0 and z_max). "
+            "If none are given, then only one redshift bin will be considered. "
+            "Default = None"
+        )
+    )
+    parser.add_argument(
         "-b", "--batch-size", type=int,
         default=argparse.SUPPRESS,
         help=(

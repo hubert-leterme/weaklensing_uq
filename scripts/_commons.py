@@ -125,7 +125,7 @@ def get_stdnoise_mask(
 
 
 def create_dataset_from_kappatng(
-        func: typing.Callable, path_to_saved_dataset:str, idx_lp: int | str,
+        func: typing.Callable, path_to_saved_dataset: str, idx_lp: int | str,
         openingangle: float, ninpimgs: int, verbose: bool = False, **kwargs
 ):
     """
