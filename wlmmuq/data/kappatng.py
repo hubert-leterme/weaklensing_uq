@@ -46,7 +46,7 @@ class BaseKappaTNG:
         self.verbose = verbose
 
 
-    def get_kappa(self, ninpimgs, start_idx=0):
+    def get_kappa(self, ninpimgs, start_idx=0, centermean=True):
         """
         Parameters
         ----------
@@ -62,11 +62,8 @@ class BaseKappaTNG:
         list_of_kappa = []
         for idx_run in list_of_idx_run:
             self.print(f"Processing dataset {idx_run}...")
-            kappa = self._get_kappa_from_file(idx_run)
-            if self.crop_maps:
-                list_of_kappa += self._split_map(kappa)
-            else:
-                list_of_kappa.append(kappa)
+            kappa = self._get_kappa_from_file(idx_run, centermean=centermean)
+            list_of_kappa.append(kappa)
 
         list_of_idx = list(range(len(list_of_kappa)))
         if self.shuffle:
@@ -75,18 +72,35 @@ class BaseKappaTNG:
         kappa = np.stack(list_of_kappa)
         self.list_of_idx = list_of_idx
 
+        if self.crop_maps:
+            kappa = self._split_map(kappa, centermean=centermean)
+
         return kappa
 
 
-    def _get_kappa_from_file(self, idx_run):
+    def _get_kappa_from_file(self, idx_run, centermean=True):
         raise NotImplementedError
 
 
-    def _split_map(self, kappa):
+    def _split_map(self, kappa, centermean=True):
 
-        return utils.patchify(
-            kappa, self.width, self.n_samples_per_side, inpsize=WIDTH_ORI,
-            centermean=True
+        nimgs, _, nx, ny = kappa.shape
+
+        step_x = (nx - self.width) // (self.n_samples_per_side - 1)
+        step_y = (ny - self.width) // (self.n_samples_per_side - 1)
+
+        rows = np.arange(0, nx, step=step_x)[:self.n_samples_per_side]
+        cols = np.arange(0, ny, step=step_y)[:self.n_samples_per_side]
+
+        rows = np.repeat(rows, self.n_samples_per_side)
+        cols = np.tile(cols, self.n_samples_per_side)
+
+        rows = np.tile(rows, nimgs)
+        cols = np.tile(cols, nimgs)
+
+        return dataaugm.get_patches(
+            kappa, rows, cols, self.width,
+            ncrops_per_imgs=self.n_samples_per_side**2, centermean=centermean
         )
 
 
@@ -139,7 +153,9 @@ class KappaTNG(BaseKappaTNG):
         super().__init__(*args, **kwargs)
 
 
-    def _get_kappa_from_file(self, idx_run: str) -> np.ndarray:
+    def _get_kappa_from_file(
+            self, idx_run: str, centermean: bool = True
+    ) -> np.ndarray:
 
         def _get_kappa_oneredshift(
                 file: h5py.File, idx_redshift: str
@@ -147,7 +163,10 @@ class KappaTNG(BaseKappaTNG):
             path = os.path.join(idx_redshift, 'kappa')
             obj = file[path]
             assert isinstance(obj, h5py.Dataset)
-            return obj[:]
+            kappa = obj[:]
+            if centermean:
+                kappa = kappa - np.mean(kappa)
+            return kappa
 
         fname = os.path.join(
             self.ktng_dir,
@@ -167,9 +186,6 @@ class KappaTNG(BaseKappaTNG):
                 list_of_weights = _get_list_per_zbin(
                     self.weights, self.zbins
                 )
-                list_of_weights = [
-                    w / np.sum(w) for w in list_of_weights
-                ] # In each bin, the weights must sum to 1
                 list_of_idx_redshift_per_zbin = _get_list_per_zbin(
                     list_of_idx_redshift, self.zbins
                 )
@@ -254,7 +270,7 @@ class KappaTNGFromSamples(BaseKappaTNG):
         super().__init__(*args, **kwargs)
 
 
-    def _get_kappa_from_file(self, idx_run):
+    def _get_kappa_from_file(self, idx_run, centermean=True):
 
         fname = os.path.join(self.ktng_dir, f"run{idx_run}", self.bin_file)
         with open(fname, 'rb') as f:
@@ -262,6 +278,8 @@ class KappaTNGFromSamples(BaseKappaTNG):
             kappa = np.fromfile(f, dtype="float", count=WIDTH_ORI*WIDTH_ORI)
             _ = np.fromfile(f, dtype="int32", count=1)
         kappa = kappa.reshape((1, WIDTH_ORI, WIDTH_ORI))
+        if centermean:
+            kappa = kappa - np.mean(kappa)
 
         return kappa
 
@@ -395,6 +413,8 @@ def create_cropped_dataset(
         #     "top_left_coord", shape=(0, 2), maxshape=(None, 2),
         #     dtype='int'
         # ) # Top-left coordinates
+        if zbins is not None:
+            f.create_dataset("zbins", data=zbins)
 
     openingangle = get_openingangle(imgsize)
     ktng = KappaTNG(
@@ -454,6 +474,8 @@ def create_augmented_dataset(
             "top_left_coord", shape=(0, 2), maxshape=(None, 2),
             dtype='int'
         ) # Top-left coordinates
+        if zbins is not None:
+            f.create_dataset("zbins", data=zbins)
 
     ktng = KappaTNG(
         idx_lp=idx_lp, weights=weights_redshift, crop_maps=False, zbins=zbins
