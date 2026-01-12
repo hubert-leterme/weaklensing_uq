@@ -214,9 +214,6 @@ def get_masked_and_noisy_shear(
         std_noise: np.ndarray | torch.Tensor,
         mask: np.ndarray | torch.Tensor = None,
         inpainting: bool = False,
-        output_shape_wider: tuple[int, int] = None,
-        std_noise_wider: np.ndarray | torch.Tensor = None,
-        mask_wider: np.ndarray | torch.Tensor = None,
         device=None
 ):
     """
@@ -229,15 +226,11 @@ def get_masked_and_noisy_shear(
         Array of masked data.
     inpainting (bool, default=False)
         If True, apply noise to the masked regions.
-    output_shape_wider (tuple, default=None)
-        If provided, also compute wider images with zero-padding.
-    std_noise_wider (numpy.ndarray, shape = output_shape_wider, default=None)
-    mask_wider (numpy.ndarray, shape = output_shape_wider, default=None)
     device
 
     Returns
     -------
-    gamma_noisy, gamma_noisy_wider (numpy.ndarray | torch.Tensor)
+    gamma_noisy (numpy.ndarray | torch.Tensor)
         Noisy shear maps, affected by argument `inpainting`.
     
     """
@@ -272,25 +265,9 @@ def get_masked_and_noisy_shear(
             noise[..., ~mask] = 0.
         return gamma_masked + noise
 
-    if output_shape_wider is None:
-        gamma_noisy = _get_noisy_shear(gamma_masked, std_noise, mask, shape)
-        gamma_noisy_wider = None
+    gamma_noisy = _get_noisy_shear(gamma_masked, std_noise, mask, shape)
 
-    else:
-        gamma_masked_wider, (beg_x, beg_y) = pad_arr(
-            gamma_masked, new_shape=output_shape_wider
-        )
-        shape_wider = (*shape0, *output_shape_wider)
-        gamma_noisy_wider = _get_noisy_shear(
-            gamma_masked_wider, std_noise_wider, mask_wider, shape_wider
-        )
-        gamma_noisy = crop_arr(
-            gamma_noisy_wider,
-            beg_x, beg_x + nx,
-            beg_y, beg_y + ny
-        )
-
-    return gamma_noisy, gamma_noisy_wider
+    return gamma_noisy
 
 
 def get_std_ks(
@@ -491,54 +468,6 @@ def crop_arr(arr, beg_idx_x, end_idx_x, *args):
         end_idx_y = end_idx_x
 
     return arr[..., beg_idx_x:end_idx_x, beg_idx_y:end_idx_y]
-
-
-def pad_arr(
-        inp: np.ndarray | torch.Tensor, new_shape: tuple[int, int], **kwargs
-) -> tuple[
-    np.ndarray | torch.Tensor,
-    tuple[int, int]
-]:
-    """
-    Pad an array of shape (..., nx, ny) to (..., new_nx, new_ny).
-    
-    Parameters
-    ----------
-    inp: np.ndarray or torch.Tensor, shape = (..., nx, ny)
-    new_shape: tuple (new_nx, new_ny)
-        Desired spatial dimensions after padding
-    **kwargs
-        Additional arguments to be passed to `torch.nn.functional.pad`
-    
-    Returns
-    -------
-    out: np.ndarray or torch.Tensor, shape (..., new_nx, new_ny)
-    beg_x, beg_y: int
-        Number of pixels added to the beginning of the x and y axes, respectively.
-    """
-    nx, ny = inp.shape[-2:]
-    new_nx, new_ny = new_shape
-
-    if new_nx < nx or new_ny < ny:
-        raise ValueError(
-            "New shape must be greater than or equal to the original shape in both dimensions"
-        )
-
-    pad_x = new_nx - nx
-    pad_y = new_ny - ny
-    beg_x = pad_x // 2
-    beg_y = pad_y // 2
-
-    # Compute padding: (left, right, top, bottom)
-    pad_width = (
-        beg_y, pad_y - beg_y,  # left, right
-        beg_x, pad_x - beg_x   # top, bottom
-    )
-
-    # F.pad expects padding in the order (left, right, top, bottom)
-    out = pad(inp, pad_width, mode='constant', **kwargs)
-
-    return out, (beg_x, beg_y)
 
 
 def get_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:

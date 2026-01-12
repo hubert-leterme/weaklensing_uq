@@ -380,8 +380,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
             self, *args, inpainting=False,
-            complexconjugate=False, return_complex=False,
-            output_shape_wider: int | tuple[int, int] = None, **kwargs
+            complexconjugate=False, return_complex=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -412,8 +411,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             Whether to shuffle the indices. Default is True.
         output_shape : int or tuple, optional
             Shape to crop the output images. Default is None.
-        output_shape_wider : int or tuple, optional
-            If provided, the dataset will also contain wider images with zero-padding.
         sort_by_filename_ori: bool, optional
             If True, sort `kappa` elements by ascending order of `filename_ori`.
             Default is True.
@@ -443,25 +440,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         self.inpainting = inpainting
         self.complexconjugate = complexconjugate
         self.return_complex = return_complex
-        if output_shape_wider is not None:
-            if isinstance(output_shape_wider, int):
-                output_shape_wider = (output_shape_wider, output_shape_wider)
-            self.output_shape_wider = output_shape_wider
-            self.std_noise_wider, (beg_x, beg_y) = utils.pad_arr(
-                self.std_noise, new_shape=output_shape_wider,
-                value=self.std_noise[0, 0] # Extend noise standard devation in the mask
-            )
-            self.mask_wider, _ = utils.pad_arr(
-                self.mask, new_shape=output_shape_wider, value=False
-            )
-            self.beg_x = beg_x
-            self.beg_y = beg_y
-        else:
-            self.output_shape_wider = None
-            self.std_noise_wider = None
-            self.mask_wider = None
-            self.beg_x = None
-            self.beg_y = None
 
 
     def _postprocess(self, out_dict, idx):
@@ -473,19 +451,9 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         gamma = utils.get_shear_from_convergence(
             kappa_true, complexconjugate=self.complexconjugate, return_complex=True
         )
-        if self.output_shape_wider is not None:
-            kappa_true_wider, _ = utils.pad_arr(
-                kappa_true, new_shape=self.output_shape_wider
-            )
-            out_dict.update({
-                "kappa_true_wider": kappa_true_wider
-            })
-        gamma_noisy, gamma_noisy_wider = utils.get_masked_and_noisy_shear(
+        gamma_noisy = utils.get_masked_and_noisy_shear(
             gamma, std_noise=self.std_noise,
             mask=self.mask, inpainting=self.inpainting,
-            output_shape_wider=self.output_shape_wider,
-            std_noise_wider=self.std_noise_wider,
-            mask_wider=self.mask_wider
         )
         if not self.return_complex:
             out_dict.update({
@@ -494,21 +462,11 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
                 "gamma1_noisy": gamma_noisy.real,
                 "gamma2_noisy": gamma_noisy.imag
             })
-            if self.output_shape_wider is not None:
-                out_dict.update({
-                    "gamma1_noisy_wider": gamma_noisy_wider.real,
-                    "gamma2_noisy_wider": gamma_noisy_wider.imag
-                })
         else:
             out_dict.update({
                 "gamma": gamma,
                 "gamma_noisy": gamma_noisy,
-                "gamma_noisy_wider": gamma_noisy_wider
             })
-            if self.output_shape_wider is not None:
-                out_dict.update({
-                    "gamma_noisy_wider": gamma_noisy_wider
-                })
 
         return out_dict
 
