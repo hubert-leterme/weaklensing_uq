@@ -83,7 +83,7 @@ def main(
     ks = wldinv.ks.KS(std_gaussianfilter=std_gaussianfilter).to(device)
 
     # Run KS for each batch
-    test_dataloader = iter(test_dataset)
+    test_dataloader = iter(test_dataset.to_dataloader())
     if verbose:
         print(f"Compute Kaiser-Squires on the test set ({nimgs_test} images)")
     out_ks = run_ks_batch(
@@ -118,7 +118,7 @@ def main(
     if calib_dataset is not None:
         beg_time = time.time()
 
-        calib_dataloader = iter(calib_dataset)
+        calib_dataloader = iter(calib_dataset.to_dataloader())
         if verbose:
             print(f"Compute DeepMass on the calibration set ({nimgs_calib} images)")
         out_ks_calib = run_ks_batch(

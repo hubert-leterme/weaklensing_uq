@@ -111,7 +111,8 @@ def main(
         load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
         arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
         model_specs_uq=model_specs_uq,
-        imgsize=imgsize, device=device, verbose=verbose, **kwargs
+        imgsize=imgsize, nbins=test_dataset.nbins,
+        device=device, verbose=verbose, **kwargs
     )
 
     # Instantiate physics (forward model) and RMSE metric
@@ -230,7 +231,7 @@ def main(
         callbacks = wlcallbacks.CallbackList(callback_list)
 
         # Run PnPMass for each batch
-        test_dataloader = iter(test_dataset)
+        test_dataloader = iter(test_dataset.to_dataloader())
         if verbose:
             print(f"Compute PnPMass on the test set ({nimgs_test} images)")
         out_pnpmass = run_pnpmass_batch(
@@ -307,7 +308,7 @@ def main(
             # TODO: starlet debiasing
             beg_time = time.time()
 
-            calib_dataloader = iter(calib_dataset)
+            calib_dataloader = iter(calib_dataset.to_dataloader())
             if verbose:
                 print(f"Compute PnPMass on the calibration set ({nimgs_calib} images)")
             out_pnpmass_calib = run_pnpmass_batch(

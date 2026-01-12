@@ -104,7 +104,7 @@ def main(
         imgsize=imgsize,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size,
-        niter_wiener=niter_wiener,
+        niter_wiener=niter_wiener, nbins=test_dataset.nbins,
         device=device, verbose=verbose, **kwargs
     )
 
@@ -153,7 +153,7 @@ def main(
     beg_time = time.time()
 
     # Run DeepMass for each batch
-    test_dataloader = iter(test_dataset)
+    test_dataloader = iter(test_dataset.to_dataloader())
     if verbose:
         print(f"Compute DeepMass on the test set ({nimgs_test} images)")
     out_deepmass = run_deepmass_batch(

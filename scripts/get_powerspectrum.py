@@ -36,10 +36,10 @@ def get_powerspectrum_from_dataset(
 ):
     if verbose:
         print(f"Compute the power spectrum of {nimgs} images")
-    dataloader = wlbl.HDF5DatasetKappa(
+    dataset = wlbl.HDF5DatasetKappa(
         hdf5_filepath, nimgs=nimgs, shuffle=True, **kwargs
-    ).to_dataloader()
-    dataloader = iter(dataloader)
+    )
+    dataloader = iter(dataset.to_dataloader())
 
     list_of_powerspectrum = []
     while True:

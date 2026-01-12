@@ -87,20 +87,35 @@ def get_device(verbose=False):
 
 
 def get_stdnoise_mask(
-        path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
-        imgsize=IMGSIZE,
-        cosmos_include_faint=False,
-        inpainting=False, verbose=False
+        path_to_std_noise: str | None = PATH_TO_STD_NOISE,
+        path_to_mask: str | None = PATH_TO_MASK,
+        imgsize: int = IMGSIZE,
+        cosmos_include_faint: bool = False,
+        zbins: list[float] | None = None,
+        inpainting: bool = False, verbose: bool = False
 ):
     if path_to_std_noise is not None:
         assert path_to_mask is not None, (
             "If `path_to_std_noise` is provided, `path_to_mask` must also be provided."
         )
-        if verbose:
-            print("Load noise standard deviation and mask from files")
-        std_noise = torch.load(path_to_std_noise)
-        mask = torch.load(path_to_mask)
+        if zbins is not None:
+            warnings.warn(
+                "Mass mapping per redshift bin; noise and mask are computed from the COSMOS "
+                "shape catalog accordingly. Arguments `path_to_std_noise` and `path_to_mask` "
+                "will be discarded."
+            )
+            compute_std_noise_mask_from_cosmos = True
+        else:
+            if verbose:
+                print("Load noise standard deviation and mask from files")
+            std_noise: torch.Tensor = torch.load(path_to_std_noise)
+            mask: torch.Tensor = torch.load(path_to_mask)
+            compute_std_noise_mask_from_cosmos = False
+
     else:
+        compute_std_noise_mask_from_cosmos = True
+
+    if compute_std_noise_mask_from_cosmos:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
         cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
@@ -111,14 +126,16 @@ def get_stdnoise_mask(
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
-        shapedisp = data_dict["shapedisp"]
-        ngal = data_dict["ngal"]
-        mask = data_dict["mask"]
-        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
+        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize, zbins=zbins)
+        shapedisp: float = data_dict["shapedisp"]
+        ngal: torch.Tensor = data_dict["ngal"]
+        mask: torch.Tensor = data_dict["mask"]
+        std_noise: torch.Tensor = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
 
     if inpainting:
         # Set the noise standard deviation for masked data
+        assert isinstance(std_noise, torch.Tensor)
+        assert isinstance(mask, torch.Tensor)
         std_noise[~mask] = std_noise.max()
 
     return std_noise, mask
@@ -201,7 +218,8 @@ def update_kwargs_model(
         kwargs_model,
         std_noise=None, mask=None, path_to_ps=None,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, device="cpu", verbose=False
+        niter_wiener=NITER_WIENER, nbins=None,
+        device="cpu", verbose=False
 ):
     try:
         mode_preproc = kwargs_model["mode_preproc"]
@@ -224,23 +242,30 @@ def update_kwargs_model(
                 "Supported modes are 'wiener' and 'ks'."
             )
         kwargs_model.update(args_preproc=args_preproc)
+    if nbins is not None:
+        kwargs_model.update(in_channels=nbins)
 
 
-def instantiate_model(
-        arch, imgsize=IMGSIZE,
-        device="cpu", verbose=False, **kwargs
-):
+def get_model_class(arch):
 
     if arch is None:
         raise ValueError(
             "Model architecture must be provided with -a or --arch"
         )
-    cnn_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
-    model = cnn_class(map_size=imgsize, **kwargs).to(device)
+    model_class, scale_as_input = wlnn.MODEL_CLASSES[arch]
+
+    return model_class, scale_as_input
+
+
+def instantiate_model(
+        model_class, imgsize=IMGSIZE,
+        device="cpu", verbose=False, **kwargs
+):
+    model = model_class(map_size=imgsize, **kwargs).to(device)
     if verbose:
         model.summary()
 
-    return model, scale_as_input
+    return model
 
 
 def load_trained_model(
@@ -249,18 +274,19 @@ def load_trained_model(
         additional_outlayer=None,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, model_specs=None,
+        niter_wiener=NITER_WIENER, model_specs=None, nbins=None,
         device="cpu", verbose=False, **kwargs
 ):
+    model_class, _ = get_model_class(arch)
     update_kwargs_model(
         kwargs,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener,
+        niter_wiener=niter_wiener, nbins=nbins,
         device=device, verbose=verbose
     )
-    model, _ = instantiate_model(
-        arch, imgsize=imgsize, order2=order2,
+    model = instantiate_model(
+        model_class, imgsize=imgsize, order2=order2,
         additional_outlayer=additional_outlayer,
         device=device, verbose=verbose, **kwargs
     )
@@ -292,7 +318,7 @@ def load_trained_models(
         imgsize=IMGSIZE,
         std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER,
+        niter_wiener=NITER_WIENER, nbins=None,
         device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
@@ -304,7 +330,7 @@ def load_trained_models(
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
         niter_wiener=niter_wiener, model_specs=model_specs,
-        device=device, verbose=verbose,
+        nbins=nbins, device=device, verbose=verbose,
         **kwargs_model
     )
     if load_model_uq:
@@ -328,7 +354,7 @@ def load_trained_models(
             std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
             eps_sup_step_size_wiener=eps_sup_step_size_wiener,
             niter_wiener=niter_wiener, model_specs=model_specs_uq,
-            device=device, verbose=verbose,
+            nbins=nbins, device=device, verbose=verbose,
             **kwargs_model_uq
         )
     else:
@@ -367,8 +393,8 @@ def get_dataloader_massmapping(
     test_dataloader = wlbl.HDF5DatasetMassMapping(
         hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
         std_noise=std_noise, mask=mask, output_shape=imgsize,
-        newaxis=True, num_workers=num_workers, **kwargs
-    ).to_dataloader()
+        num_workers=num_workers, **kwargs
+    )
 
     return test_dataloader
 

@@ -82,6 +82,28 @@ def main(
             sigma=std_noise, mask=mask
         )
 
+    # Initialize data loaders
+    if verbose:
+        print("Initialize batch generators for training and validation")
+    model_class, scale_as_input = _commons.get_model_class(arch)
+    kwargs.update(scale_as_input=scale_as_input)
+    train_dataset = dataset_class(
+        hdf5_filepath=path_to_train_val_dataset,
+        nimgs=nimgs_train, batch_size=batch_size,
+        output_shape=imgsize,
+        nreal_per_img=nreal_per_img,
+        num_workers=num_workers, **kwargs
+    )
+    train_dataloader = train_dataset.to_dataloader()
+    val_dataset = dataset_class(
+        hdf5_filepath=path_to_train_val_dataset,
+        nimgs=nimgs_val, batch_size=batch_size,
+        beg_idx=nimgs_train, shuffle=False,
+        output_shape=imgsize,
+        num_workers=num_workers, **kwargs
+    )
+    val_dataloader = val_dataset.to_dataloader()
+
     # Initialize model
     if verbose:
         print("Initialize model")
@@ -90,10 +112,11 @@ def main(
         kwargs_model,
         std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener, device=device, verbose=verbose
+        niter_wiener=niter_wiener, nbins=train_dataset.nbins,
+        device=device, verbose=verbose
     )
-    model, scale_as_input = _commons.instantiate_model(
-        arch, imgsize=imgsize, order2=order2,
+    model = _commons.instantiate_model(
+        model_class, imgsize=imgsize, order2=order2,
         additional_outlayer=additional_outlayer,
         device=device, verbose=verbose, **kwargs_model
     )
@@ -113,15 +136,11 @@ def main(
                 k1 = f"{k}_order1"
                 if k1 in kwargs:
                     kwargs_model_order1.update({k: kwargs.pop(k1)})
-            _commons.update_kwargs_model(
-                kwargs_model_order1,
-                std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-                eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-                niter_wiener=niter_wiener, device=device, verbose=verbose
-            )
+        assert epoch_order1 is not None
         order1_model = _commons.load_trained_model(
             checkpoint_dir, arch_order1, timestamp_order1, epoch_order1,
             model_specs=model_specs_order1, imgsize=imgsize, order2=False,
+            nbins=train_dataset.nbins,
             device=device, verbose=verbose, **kwargs_model_order1
         )
         loss_fun = wlnn.torch.Order2SupLoss(
@@ -129,27 +148,6 @@ def main(
         )
     else:
         loss_fun = dinv.loss.SupLoss(metric=metric)
-
-    # Initialize data loaders
-    if verbose:
-        print("Initialize batch generators for training and validation")
-    kwargs.update(scale_as_input=scale_as_input)
-    train_dataset = dataset_class(
-        hdf5_filepath=path_to_train_val_dataset,
-        nimgs=nimgs_train, batch_size=batch_size,
-        output_shape=imgsize,
-        newaxis=True, nreal_per_img=nreal_per_img,
-        num_workers=num_workers, **kwargs
-    )
-    train_dataloader = train_dataset.to_dataloader()
-    val_dataset = dataset_class(
-        hdf5_filepath=path_to_train_val_dataset,
-        nimgs=nimgs_val, batch_size=batch_size,
-        beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, newaxis=True,
-        num_workers=num_workers, **kwargs
-    )
-    val_dataloader = val_dataset.to_dataloader()
 
     # Set optimizer and learning rate scheduler
     optimizer = torch.optim.Adam(
