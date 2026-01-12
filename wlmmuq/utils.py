@@ -212,7 +212,7 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
-        mask: np.ndarray | torch.Tensor = None,
+        mask: np.ndarray | torch.Tensor | None = None,
         inpainting: bool = False,
         device=None
 ):
@@ -244,12 +244,13 @@ def get_masked_and_noisy_shear(
             mask = torch.ones_like(std_noise, dtype=torch.bool)
         else:
             mask = np.ones_like(std_noise, dtype=bool)
+    assert mask is not None
 
     if device is not None:
+        assert torch.is_tensor(mask)
         mask = mask.to(device)
 
     shape = test_array_shape([gamma, std_noise, mask])
-    *shape0, nx, ny = shape
 
     # Set masked values to 0
     check_mask(mask)
@@ -259,6 +260,7 @@ def get_masked_and_noisy_shear(
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
         noise = randn(*shape) + 1j * randn(*shape)
         if device is not None:
+            assert torch.is_tensor(noise)
             noise = noise.to(device)
         noise *= std_noise
         if not inpainting:
