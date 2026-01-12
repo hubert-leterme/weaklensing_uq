@@ -454,7 +454,7 @@ def get_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch.Te
         Set of square images. CAUTION: `imgsize` must be even.
 
     """
-    _, imgsize, imgsize0 = kappa.shape
+    imgsize, imgsize0 = kappa.shape[-2:]
     assert imgsize0 == imgsize
     powerspectrum = absolute(fft2(kappa) / imgsize)**2
     powerspectrum = powerspectrum.mean(axis=0)
@@ -472,7 +472,7 @@ def get_1d_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch
         Set of square images. CAUTION: `imgsize` must be even.
 
     """
-    _, imgsize, imgsize0 = kappa.shape
+    imgsize, imgsize0 = kappa.shape[-2:]
     assert imgsize0 == imgsize
     powerspectrum = get_powerspectrum(kappa)
     powerspectrum = powerspectrum[:imgsize//2, :imgsize//2] # Only positive frequencies, by symmetry
