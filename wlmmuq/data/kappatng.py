@@ -7,7 +7,7 @@ import typing
 import torch
 import astropy.table as aptable
 
-from . import cosmos, dataaugm
+from . import cosmos, dataaugm, base_dataset
 from .. import utils
 from .. import KTNG_DIR
 
@@ -397,7 +397,7 @@ def create_cropped_dataset(
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
     """
-    nbins = _get_nbins(zbins)
+    nbins = base_dataset.get_nbins(zbins)
 
     # Create HDF5 file structure
     with h5py.File(hdf5_filepath, 'w') as f:
@@ -453,7 +453,7 @@ def create_augmented_dataset(
     """
     Create an augmented dataset from kappaTNG by rotating and randomly cropping images.
     """
-    nbins = _get_nbins(zbins)
+    nbins = base_dataset.get_nbins(zbins)
 
     # Create HDF5 file structure
     with h5py.File(hdf5_filepath, 'w') as f:
@@ -543,11 +543,3 @@ def create_augmented_dataset(
                 f['top_left_coord'].resize((new_size, 2))
                 f['top_left_coord'][-nimgs_batch:, 0] = rows
                 f['top_left_coord'][-nimgs_batch:, 1] = cols
-
-
-def _get_nbins(zbins):
-    if zbins is None:
-        nbins = 1
-    else:
-        nbins = len(zbins) + 1
-    return nbins

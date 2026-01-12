@@ -4,6 +4,7 @@ import warnings
 import typing
 import numpy as np
 import h5py
+from contextlib import contextmanager
 import torch
 
 from .. import utils
@@ -104,16 +105,16 @@ class BaseHDF5Dataset:
         self.nreal_per_img = nreal_per_img
         self.verbose = verbose
 
-        self.idx = None  # Will hold the shuffled indices
-        self.file = None  # HDF5 file object
-        self.file_pred = None # HDF5 file object
-        self.ds_kappa_inp = None
-        self.ds_kappa_true = None
-        self.ds_kappa_pred = None
-        self.current_idx = 0  # To track the batch number
-        self.current_real = 0 # Useful when self.nreal_per_img > 1
-        self.nx = None
-        self.ny = None
+        self.idx: np.ndarray | None = None  # Will hold the shuffled indices
+        self.file: h5py.File | None = None  # HDF5 file object
+        self.file_pred: h5py.File | None = None # HDF5 file object
+        self.ds_kappa_inp: h5py.Dataset | None = None
+        self.ds_kappa_true: h5py.Dataset | None = None
+        self.ds_kappa_pred: h5py.Dataset | None = None
+        self.current_idx: int = 0  # To track the batch number
+        self.current_real: int = 0 # Useful when self.nreal_per_img > 1
+        self.nx: int | None = None
+        self.ny: int | None = None
 
         if self.list_of_outputs is not None:
             self.noutputs = len(self.list_of_outputs)
@@ -123,14 +124,44 @@ class BaseHDF5Dataset:
         self._initialize_dataset()
 
 
-    def _open_and_get_dataset(self):
-        self.file = h5py.File(self.hdf5_filepath, 'r', swmr=True)  # Keep file open
-        self.ds_kappa_true = self.file['kappa']
+    @contextmanager
+    def open(self):
+        if self.file is None or not self.file.id.valid:
+            self.file = h5py.File(self.hdf5_filepath, 'r', swmr=True) # Keep file open
+            ds_kappa_true = self.file['kappa']
+            assert isinstance(ds_kappa_true, h5py.Dataset)
+            self.ds_kappa_true = ds_kappa_true
 
         # Load dataset of predictions (for order-2 moment networks)
         if self.pred_filepath is not None:
-            self.file_pred = h5py.File(self.pred_filepath, 'r', swmr=True) # Keep file open
-            self.ds_kappa_pred = self.file_pred['kappa_pred']
+            if self.file_pred is None or not self.file_pred.id.valid:
+                self.file_pred = h5py.File(self.pred_filepath, 'r', swmr=True) # Keep file open
+                ds_kappa_pred = self.file_pred['kappa_pred']
+                assert isinstance(ds_kappa_pred, h5py.Dataset)
+                self.ds_kappa_pred = ds_kappa_pred
+
+        try:
+            yield self.file, self.file_pred
+        finally:
+            if self.close_after_batch:
+                self.close()
+
+
+    @property
+    def zbins(self) -> h5py.Dataset | None:
+        with self.open():
+            assert self.file is not None
+            try:
+                out = self.file["zbins"]
+                assert isinstance(out, h5py.Dataset)
+            except KeyError:
+                out = None
+        return out
+
+
+    @property
+    def nbins(self) -> int:
+        return get_nbins(self.zbins)
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
@@ -144,6 +175,7 @@ class BaseHDF5Dataset:
         else:
             end_idx = max_idx
 
+        assert self.idx is not None, "The dataset has not been properly initialized."
         batch_idx = self.idx[beg_idx:end_idx]
 
         # Sort batch_idx to ensure increasing order for HDF5 access
@@ -177,16 +209,14 @@ class BaseHDF5Dataset:
 
     def _load_maps(self, idx, transform: typing.Callable | None = None):
 
-        # TODO: use `with self.open():`
-        if self.close_after_batch:
-            self._open_and_get_dataset()
-        kappa_true = self.ds_kappa_true[idx]
-        if self.pred_filepath is not None:
-            kappa_pred = self.ds_kappa_pred[idx]
-        else:
-            kappa_pred = None
-        if self.close_after_batch:
-            self.close()
+        with self.open():
+            assert self.ds_kappa_true is not None
+            kappa_true = self.ds_kappa_true[idx]
+            if self.pred_filepath is not None:
+                assert self.ds_kappa_pred is not None
+                kappa_pred = self.ds_kappa_pred[idx]
+            else:
+                kappa_pred = None
 
         transforms = []
 
@@ -288,69 +318,72 @@ class BaseHDF5Dataset:
 
     def _initialize_dataset(self):
         """Load the HDF5 file and initialize the dataset."""
-        self._open_and_get_dataset()
-        try:
-            filename_ori = self.file['filename_ori']
-        except KeyError:
-            warnings.warn(
-                "The 'filename_ori' dataset is missing; input images will not be sorted "
-                "or filtered by filename."
-            )
-            self.sort_by_filename_ori = False
-            self.pattern_filename_ori = None
-            self.min_idx_filename_ori = None
-        nimgs_tot, nx, ny = self.ds_kappa_true.shape
-
-        # Initialize list of indices
-        if self.sort_by_filename_ori:
-            idx = np.argsort(filename_ori)  # Sort indices of `filename_ori`
-        else:
-            idx = np.arange(nimgs_tot)
-        if self.pattern_filename_ori is not None:
-            pattern = re.compile(self.pattern_filename_ori)
-            unique_filename_ori = np.unique(filename_ori)
-            def keep_filename(s):
-                if isinstance(s, bytes):
-                    s = s.decode('utf-8')
-                match = pattern.match(s)
-                out = bool(match)
-                if out and self.min_idx_filename_ori is not None:
-                    # Filter by file indice
-                    run_num = int(match.group(1))
-                    if run_num < self.min_idx_filename_ori:
-                        out = False
-                return out
-            match_dict = {s: keep_filename(s) for s in unique_filename_ori}
-            mask = np.array([match_dict[filename_ori[i]] for i in idx])
-            idx = idx[mask]
-        self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
-
-        # Check if requested number of images exceeds total available
-        if self.beg_idx + self.nimgs > len(idx):
-            self.file.close()  # Close the file in case of error
-            raise ValueError("The requested size exceeds the size of the dataset.")
-
-        # Get crop indices, if required
-        if self.output_shape is not None:
+        with self.open():
+            assert self.file is not None
+            assert self.ds_kappa_true is not None
             try:
-                nx_out, ny_out = self.output_shape
-            except TypeError:
-                nx_out = self.output_shape
-                ny_out = self.output_shape
-            self._beg_idx_x, self._end_idx_x = utils.get_beg_end_idx(nx, nx_out)
-            self._beg_idx_y, self._end_idx_y = utils.get_beg_end_idx(ny, ny_out)
-            self.nx = nx_out
-            self.ny = ny_out
-        else:
-            self.nx = nx
-            self.ny = ny
-        if self.std_noise is not None:
-            assert self.std_noise.shape[-2:] == (self.nx, self.ny)
-        if self.mask is not None:
-            assert self.mask.shape[-2:] == (self.nx, self.ny)
+                filename_ori = self.file['filename_ori']
+            except KeyError:
+                warnings.warn(
+                    "The 'filename_ori' dataset is missing; input images will not be sorted "
+                    "or filtered by filename."
+                )
+                filename_ori = None
+                self.sort_by_filename_ori = False
+                self.pattern_filename_ori = None
+                self.min_idx_filename_ori = None
+            nimgs_tot, nx, ny = self.ds_kappa_true.shape
 
-        if self.close_after_batch:
-            self.close()
+            # Initialize list of indices
+            if self.sort_by_filename_ori:
+                assert isinstance(filename_ori, h5py.Dataset)
+                idx = np.argsort(filename_ori)  # Sort indices of `filename_ori`
+            else:
+                idx = np.arange(nimgs_tot)
+            if self.pattern_filename_ori is not None:
+                assert isinstance(filename_ori, h5py.Dataset)
+                pattern = re.compile(self.pattern_filename_ori)
+                unique_filename_ori = np.unique(filename_ori)
+                def keep_filename(s):
+                    if isinstance(s, bytes):
+                        s = s.decode('utf-8')
+                    match = pattern.match(s)
+                    out = bool(match)
+                    if out and self.min_idx_filename_ori is not None:
+                        # Filter by file indice
+                        assert match is not None
+                        run_num = int(match.group(1))
+                        if run_num < self.min_idx_filename_ori:
+                            out = False
+                    return out
+                match_dict = {s: keep_filename(s) for s in unique_filename_ori}
+                mask = np.array([match_dict[filename_ori[i]] for i in idx])
+                idx = idx[mask]
+            self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
+
+            # Check if requested number of images exceeds total available
+            if self.beg_idx + self.nimgs > len(idx):
+                self.file.close()  # Close the file in case of error
+                raise ValueError("The requested size exceeds the size of the dataset.")
+
+            # Get crop indices, if required
+            if self.output_shape is not None:
+                try:
+                    nx_out, ny_out = self.output_shape
+                except TypeError:
+                    nx_out = self.output_shape
+                    ny_out = self.output_shape
+                self._beg_idx_x, self._end_idx_x = utils.get_beg_end_idx(nx, nx_out)
+                self._beg_idx_y, self._end_idx_y = utils.get_beg_end_idx(ny, ny_out)
+                self.nx = nx_out
+                self.ny = ny_out
+            else:
+                self.nx = nx
+                self.ny = ny
+            if self.std_noise is not None:
+                assert self.std_noise.shape[-2:] == (self.nx, self.ny)
+            if self.mask is not None:
+                assert self.mask.shape[-2:] == (self.nx, self.ny)
 
 
     def close(self):
@@ -715,3 +748,11 @@ def _pipeline(inp, *transforms):
 
 def _pipe(*transforms):
     return lambda x: _pipeline(x, *transforms)
+
+
+def get_nbins(zbins: list[float] | h5py.Dataset | None):
+    if zbins is None:
+        nbins = 1
+    else:
+        nbins = len(zbins) + 1
+    return nbins
