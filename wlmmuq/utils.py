@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import typing
+import math
 import numpy as np
 import tqdm
 from scipy import ndimage, signal, stats, sparse, linalg
@@ -859,7 +860,7 @@ class KappamapVisualizerSavefig(KappamapVisualizer):
 
 def get_sup_step_size(
         param_mahalanobis: float | torch.Tensor, its=ITS_POWER_ITERATION,
-        nx: int | None = None, ny: int | None = None,
+        dims: tuple[int, ...] | None = None,
         physics=None, device: str | torch.device = "cpu"
 ):
     """
@@ -880,15 +881,17 @@ def get_sup_step_size(
     # TODO: retrieve `param_mahalanobis` from `physics`
     if torch.is_tensor(param_mahalanobis):
         param_mahalanobis = param_mahalanobis.to(device)
-        nx, ny = param_mahalanobis.shape
+        dims = param_mahalanobis.shape
+        nelts = param_mahalanobis.numel()
     else:
-        assert nx is not None and ny is not None
+        assert dims is not None
+        nelts = math.prod(dims)
 
     if physics is None:
         physics = dinv.physics.LinearPhysics().to(device) # Identity
 
     def matvec(kappa_flattened):
-        kappa = kappa_flattened.reshape(nx, ny)
+        kappa = kappa_flattened.reshape(*dims)
         kappa = torch.tensor(
             kappa, dtype=torch.float32, device=device
         )
@@ -898,7 +901,7 @@ def get_sup_step_size(
         return out.cpu().numpy().astype(np.float64).flatten()
 
     linearop = sparse.linalg.LinearOperator(
-        shape=(nx*ny, nx*ny), matvec=matvec, rmatvec=matvec
+        shape=(nelts, nelts), matvec=matvec, rmatvec=matvec
     )
     spectrnorm = linalg.interpolative.estimate_spectral_norm(linearop, its=its)
 
