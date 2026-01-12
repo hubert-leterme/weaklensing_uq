@@ -64,14 +64,15 @@ class Rotation:
         return vmin_j, vmax_j
 
 
-def get_patches(imgs0, rows, cols, imgsize):
+def get_patches(imgs0, rows, cols, imgsize, ncrops_per_imgs=1, centermean=True):
     """
     Crop kappa_rot according to rows and cols
 
     """
     nimgs = imgs0.shape[0]
-    assert rows.shape == (nimgs,)
-    assert cols.shape == (nimgs,)
+    ncrops = ncrops_per_imgs * nimgs
+    assert rows.shape == (ncrops,)
+    assert cols.shape == (ncrops,)
 
     # Get 2D sliding windows for each element
     # Shape = (nimgs, nbins, 1024-imgsize, 1024-imgsize, 1, 1, imgsize, imgsize)
@@ -79,7 +80,11 @@ def get_patches(imgs0, rows, cols, imgsize):
 
     # Use fancy/advanced indexing to select the required ones
     # Shape = (nimgs, nbins, imgsize, imgsize)
-    out = imgs0_window[np.arange(nimgs), :, rows, cols, 0, 0, :, :]
+    imgs = np.repeat(np.arange(nimgs), ncrops_per_imgs) # Shape = (ncrops,)
+    out = imgs0_window[imgs, :, rows, cols, 0, 0, :, :]
+
+    if centermean:
+        out = out - np.mean(out, axis=(1, 2, 3), keepdims=True)
 
     return out
 
