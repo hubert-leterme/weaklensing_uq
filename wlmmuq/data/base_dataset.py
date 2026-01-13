@@ -11,6 +11,7 @@ from .. import utils
 
 SCALE = 1.
 PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing potential 001
+MSG_NOT_INITIALIZED = "The dataset has not been properly initialized."
 
 # TODO: Update docstrings
 
@@ -122,6 +123,7 @@ class BaseHDF5Dataset:
         else:
             self.noutputs = None
 
+        self.initialized: bool = False
         self._initialize_dataset()
 
 
@@ -144,7 +146,7 @@ class BaseHDF5Dataset:
         try:
             yield self.file, self.file_pred
         finally:
-            if self.close_after_batch:
+            if not self.initialized or self.close_after_batch:
                 self.close()
 
 
@@ -172,7 +174,7 @@ class BaseHDF5Dataset:
         else:
             end_idx = max_idx
 
-        assert self.idx is not None, "The dataset has not been properly initialized."
+        assert self.idx is not None, MSG_NOT_INITIALIZED
         batch_idx = self.idx[beg_idx:end_idx]
 
         # Sort batch_idx to ensure increasing order for HDF5 access
@@ -205,7 +207,8 @@ class BaseHDF5Dataset:
 
 
     def _load_maps(self, idx, transform: typing.Callable | None = None):
-
+        
+        assert self.initialized, MSG_NOT_INITIALIZED
         with self.open():
             assert self.ds_kappa_true is not None
             kappa_true = self.ds_kappa_true[idx]
@@ -364,7 +367,6 @@ class BaseHDF5Dataset:
 
             # Check if requested number of images exceeds total available
             if self.beg_idx + self.nimgs > len(idx):
-                self.file.close()  # Close the file in case of error
                 raise ValueError("The requested size exceeds the size of the dataset.")
 
             # Get crop indices, if required
@@ -386,6 +388,8 @@ class BaseHDF5Dataset:
                 assert self.std_noise.shape[-2:] == (self.nx, self.ny)
             if self.mask is not None:
                 assert self.mask.shape[-2:] == (self.nx, self.ny)
+
+            self.initialized = True
 
 
     def close(self):
