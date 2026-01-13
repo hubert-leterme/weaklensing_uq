@@ -115,6 +115,7 @@ class BaseHDF5Dataset:
         self.current_real: int = 0 # Useful when self.nreal_per_img > 1
         self.nx: int | None = None
         self.ny: int | None = None
+        self.nbins: int | None = None
 
         if self.list_of_outputs is not None:
             self.noutputs = len(self.list_of_outputs)
@@ -156,12 +157,8 @@ class BaseHDF5Dataset:
                 assert isinstance(out, h5py.Dataset)
             except KeyError:
                 out = None
+        assert get_nbins(out) == self.nbins
         return out
-
-
-    @property
-    def nbins(self) -> int:
-        return get_nbins(self.zbins)
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):
@@ -332,7 +329,11 @@ class BaseHDF5Dataset:
                 self.sort_by_filename_ori = False
                 self.pattern_filename_ori = None
                 self.min_idx_filename_ori = None
-            nimgs_tot, nx, ny = self.ds_kappa_true.shape
+            if len(self.ds_kappa_true.shape) == 3: # Shape = (nimgs, nx, ny) (deprecated)
+                nimgs_tot, nx, ny = self.ds_kappa_true.shape
+                nbins = 1
+            elif len(self.ds_kappa_true.shape) == 4: # Shape = (nimgs, nbins, nx, ny)
+                nimgs_tot, nbins, nx, ny = self.ds_kappa_true.shape
 
             # Initialize list of indices
             if self.sort_by_filename_ori:
@@ -380,6 +381,7 @@ class BaseHDF5Dataset:
             else:
                 self.nx = nx
                 self.ny = ny
+            self.nbins = nbins
             if self.std_noise is not None:
                 assert self.std_noise.shape[-2:] == (self.nx, self.ny)
             if self.mask is not None:
