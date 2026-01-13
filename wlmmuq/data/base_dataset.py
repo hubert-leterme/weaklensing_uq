@@ -155,7 +155,7 @@ class BaseHDF5Dataset:
         with self.open():
             assert self.file is not None
             try:
-                out = self.file["zbins"]
+                out = self.file["kappa"].attrs["zbins"]
                 assert isinstance(out, h5py.Dataset)
             except KeyError:
                 out = None

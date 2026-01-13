@@ -405,6 +405,8 @@ def create_cropped_dataset(
             "kappa", shape=(0, nbins, imgsize, imgsize), maxshape=(None, nbins, imgsize, imgsize),
             dtype='float32'
         ) # Convergence maps
+        if zbins is not None:
+            f["kappa"].attrs["zbins"] = zbins
         # f.create_dataset(
         #     "filename_ori", shape=(0,), maxshape=(None,),
         #     dtype=np.dtype('S17') # TODO: use regular strings instead
@@ -413,8 +415,6 @@ def create_cropped_dataset(
         #     "top_left_coord", shape=(0, 2), maxshape=(None, 2),
         #     dtype='int'
         # ) # Top-left coordinates
-        if zbins is not None:
-            f.create_dataset("zbins", data=zbins)
 
     openingangle = get_openingangle(imgsize)
     ktng = KappaTNG(
@@ -470,6 +470,8 @@ def create_augmented_dataset(
                 maxshape=(None, nbins, imgsize, imgsize),
                 dtype='float32'
             )
+            if zbins is not None:
+                f["kappa"].attrs["zbins"] = zbins
             f.create_dataset(
                 "filename_ori", shape=(0,),
                 maxshape=(None,), dtype=np.dtype('S17')
@@ -482,9 +484,6 @@ def create_augmented_dataset(
                 "top_left_coord", shape=(0, 2),
                 maxshape=(None, 2), dtype='int'
             )
-
-            if zbins is not None:
-                f.create_dataset("zbins", data=zbins)
 
             # Progress metadata
             prog = f.create_group("progress")
