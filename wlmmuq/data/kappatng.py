@@ -448,7 +448,7 @@ def create_cropped_dataset(
 def create_augmented_dataset(
     hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
     zbins=None, batch_size=50,
-    angle_batch_size=36, angle_step=5, niter_per_angle=1,
+    angle_batch_size=1, angle_step=5, niter_per_angle=1,
     resume=False, verbose=False
 ):
     """
