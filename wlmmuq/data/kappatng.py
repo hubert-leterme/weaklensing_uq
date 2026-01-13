@@ -446,61 +446,84 @@ def create_cropped_dataset(
 
 
 def create_augmented_dataset(
-        hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
-        zbins=None, batch_size=50,
-        angle_batch_size=36, angle_step=5, niter_per_angle=1, verbose=False
-):  
+    hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
+    zbins=None, batch_size=50,
+    angle_batch_size=36, angle_step=5, niter_per_angle=1,
+    resume=False, verbose=False
+):
     """
-    Create an augmented dataset from kappaTNG by rotating and randomly cropping images.
+    Create or resume an augmented dataset from kappaTNG
+    by rotating and randomly cropping images.
     """
+
     nbins = base_dataset.get_nbins(zbins)
 
-    # Create HDF5 file structure
-    with h5py.File(hdf5_filepath, 'w') as f:
-        f.create_dataset(
-            "kappa", shape=(0, nbins, imgsize, imgsize),
-            maxshape=(None, nbins, imgsize, imgsize),
-            dtype='float32'
-        ) # Convergence maps
-        f.create_dataset(
-            "filename_ori", shape=(0,), maxshape=(None,),
-            dtype=np.dtype('S17') # TODO: use regular strings instead
-        ) # Original data realizations (list of filenames)
-        f.create_dataset(
-            "angle", shape=(0,), maxshape=(None,),
-            dtype='float32'
-        ) # Rotation angles
-        f.create_dataset(
-            "top_left_coord", shape=(0, 2), maxshape=(None, 2),
-            dtype='int'
-        ) # Top-left coordinates
-        if zbins is not None:
-            f.create_dataset("zbins", data=zbins)
+    # --------------------------------------------------
+    # Create or open HDF5 file
+    # --------------------------------------------------
+    if not resume:
+        if os.path.exists(hdf5_filepath):
+            raise FileExistsError
+        with h5py.File(hdf5_filepath, 'w') as f:
+            f.create_dataset(
+                "kappa", shape=(0, nbins, imgsize, imgsize),
+                maxshape=(None, nbins, imgsize, imgsize),
+                dtype='float32'
+            )
+            f.create_dataset(
+                "filename_ori", shape=(0,),
+                maxshape=(None,), dtype=np.dtype('S17')
+            )
+            f.create_dataset(
+                "angle", shape=(0,),
+                maxshape=(None,), dtype='float32'
+            )
+            f.create_dataset(
+                "top_left_coord", shape=(0, 2),
+                maxshape=(None, 2), dtype='int'
+            )
+
+            if zbins is not None:
+                f.create_dataset("zbins", data=zbins)
+
+            # Progress metadata
+            prog = f.create_group("progress")
+            prog.attrs["last_img_idx"] = 0
+            prog.attrs["last_angle_block"] = 0
+
+    # --------------------------------------------------
+    # Read resume state
+    # --------------------------------------------------
+    with h5py.File(hdf5_filepath, 'r') as f:
+        last_img_idx = f["progress"].attrs["last_img_idx"]
+        last_angle_block = f["progress"].attrs["last_angle_block"]
 
     ktng = KappaTNG(
-        idx_lp=idx_lp, weights=weights_redshift, crop_maps=False, zbins=zbins
+        idx_lp=idx_lp, weights=weights_redshift,
+        crop_maps=False, zbins=zbins
     )
 
-    end_idx = 0
+    end_idx = last_img_idx
     while end_idx < nimgs:
         beg_idx = end_idx
         end_idx = min(beg_idx + batch_size, nimgs)
 
-        # Load $\kappa$-TNG dataset and combine redshifts
         kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
-        imgsize0 = kappa.shape[-1]
-        assert kappa.shape[-2] == imgsize0
 
         pbar = tqdm.tqdm(
             range(int(np.ceil(360 / (angle_batch_size * angle_step)))),
             disable=not verbose,
         )
+
         for i in pbar:
+            # Resume logic
+            if beg_idx == last_img_idx and i < last_angle_block:
+                continue
+
             beg_angle = i * angle_batch_size * angle_step
             end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
-            nangles = int((end_angle - beg_angle) / angle_step)
-            angles = beg_angle + angle_step * np.arange(nangles)
-            nimgs_batch = nangles * niter_per_angle * (end_idx - beg_idx)
+            angles = np.arange(beg_angle, end_angle, angle_step)
+            nimgs_batch = len(angles) * niter_per_angle * (end_idx - beg_idx)
 
             list_of_kappa_rot = []
             list_of_idx_rows = []
@@ -519,7 +542,9 @@ def create_augmented_dataset(
             rows = np.concatenate(list_of_idx_rows, axis=0)
             cols = np.concatenate(list_of_idx_cols, axis=0)
 
-            # Update the HDF5 file
+            # --------------------------------------------------
+            # Write data + update progress atomically
+            # --------------------------------------------------
             with h5py.File(hdf5_filepath, 'r+') as f:
                 new_size = f['kappa'].shape[0] + nimgs_batch
 
@@ -527,7 +552,7 @@ def create_augmented_dataset(
                 f['kappa'][-nimgs_batch:] = kappa_rot
 
                 f['filename_ori'].resize((new_size,))
-                f['filename_ori'][-nimgs_batch:] = nangles * niter_per_angle * [
+                f['filename_ori'][-nimgs_batch:] = len(angles) * niter_per_angle * [
                     f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
                         np.arange(beg_idx, end_idx) + 1
                     )
@@ -536,10 +561,17 @@ def create_augmented_dataset(
 
                 f['angle'].resize((new_size,))
                 f['angle'][-nimgs_batch:] = np.repeat(
-                    np.arange(beg_angle, end_angle, angle_step),
-                    niter_per_angle * (end_idx - beg_idx)
+                    angles, niter_per_angle * (end_idx - beg_idx)
                 )
 
                 f['top_left_coord'].resize((new_size, 2))
                 f['top_left_coord'][-nimgs_batch:, 0] = rows
                 f['top_left_coord'][-nimgs_batch:, 1] = cols
+
+                # Update progress
+                f["progress"].attrs["last_angle_block"] = i + 1
+
+        # Reset angle block after full batch
+        with h5py.File(hdf5_filepath, 'r+') as f:
+            f["progress"].attrs["last_img_idx"] = end_idx
+            f["progress"].attrs["last_angle_block"] = 0

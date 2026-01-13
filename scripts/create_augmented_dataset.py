@@ -51,6 +51,13 @@ if __name__ == "__main__":
             "Default = 1"
         )
     )
+    parser.add_argument(
+        "-r", "--resume", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Resume process, if started but not complete."
+        )
+    )
     _add_arguments.seed_verbose(parser)
 
     args = parser.parse_args()
