@@ -8,6 +8,8 @@ from _commons import NINPIMGS
 import wlmmuq
 import wlmmuq.data.kappatng as wlktng
 
+from wlmmuq.data import NUM_WORKERS
+
 IDX_LP = "002" # Lensing potential used for training/validation
 
 def main(
@@ -49,6 +51,14 @@ if __name__ == "__main__":
         help=(
             "Number of random crops for each rotation angle. "
             "Default = 1"
+        )
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int,
+        default=argparse.SUPPRESS,
+        help=(
+            "Number of workers for parallel processing. "
+            f"Default = {NUM_WORKERS}"
         )
     )
     parser.add_argument(

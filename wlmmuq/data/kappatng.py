@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 import tqdm
 import typing
+from concurrent.futures import ThreadPoolExecutor
 import torch
 import astropy.table as aptable
 
@@ -454,7 +455,7 @@ def create_augmented_dataset(
     hdf5_filepath, idx_lp, nimgs, weights_redshift, imgsize,
     zbins=None, batch_size=50,
     angle_batch_size=1, angle_step=5, niter_per_angle=1,
-    resume=False, verbose=False
+    num_workers=0, resume=False, verbose=False
 ):
     """
     Create or resume an augmented dataset from kappaTNG
@@ -515,75 +516,83 @@ def create_augmented_dataset(
         crop_maps=False, zbins=zbins
     )
 
-    end_idx = last_img_idx
-    while end_idx < nimgs:
-        beg_idx = end_idx
-        end_idx = min(beg_idx + batch_size, nimgs)
+    if num_workers <= 0:
+        num_workers = 1
+    if verbose:
+        print(f"Processing images with {num_workers} workers")
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        end_idx = last_img_idx
+        while end_idx < nimgs:
+            beg_idx = end_idx
+            end_idx = min(beg_idx + batch_size, nimgs)
 
-        kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
+            kappa = ktng.get_kappa(end_idx - beg_idx, start_idx=beg_idx)
 
-        pbar = tqdm.tqdm(
-            range(int(np.ceil(360 / (angle_batch_size * angle_step)))),
-            disable=not verbose,
-        )
+            pbar = tqdm.tqdm(
+                range(int(np.ceil(360 / (angle_batch_size * angle_step)))),
+                disable=not verbose,
+            )
+            pbar.set_description(
+                f"Images {beg_idx + 1}-{end_idx}/{nimgs}"
+            )
+            for i in pbar:
+                # Resume logic
+                if beg_idx == last_img_idx and i < last_angle_block:
+                    continue
 
-        for i in pbar:
-            # Resume logic
-            if beg_idx == last_img_idx and i < last_angle_block:
-                continue
+                beg_angle = i * angle_batch_size * angle_step
+                end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
+                pbar.set_postfix(
+                    {"angles": f"{beg_angle:.0f}-{(end_angle-1):.0f}"}
+                )
 
-            beg_angle = i * angle_batch_size * angle_step
-            end_angle = min(beg_angle + angle_batch_size * angle_step, 360)
-            angles = np.arange(beg_angle, end_angle, angle_step)
-            nimgs_batch = len(angles) * niter_per_angle * (end_idx - beg_idx)
+                angles = np.arange(beg_angle, end_angle, angle_step)
+                nimgs_batch = len(angles) * niter_per_angle * (end_idx - beg_idx)
 
-            list_of_kappa_rot = []
-            list_of_idx_rows = []
-            list_of_idx_cols = []
-            for angle in angles:
-                pbar.set_description(f"Images {beg_idx + 1}-{end_idx}/{nimgs}, Angle = {angle:.1f}")
-                kappa_rot, rows, cols = dataaugm.rotate_and_crop(
+                process_angle = lambda angle: dataaugm.rotate_and_crop(
                     kappa, angle, imgsize, niter=niter_per_angle
                 )
-                list_of_kappa_rot.append(kappa_rot)
-                list_of_idx_rows.append(rows)
-                list_of_idx_cols.append(cols)
+                results = list(executor.map(process_angle, angles))
 
-            # Shape = (angle_batch_size * nimgs, imgsize, imgsize)
-            kappa_rot = np.concatenate(list_of_kappa_rot, axis=0)
-            rows = np.concatenate(list_of_idx_rows, axis=0)
-            cols = np.concatenate(list_of_idx_cols, axis=0)
+                list_of_kappa_rot = [r[0] for r in results]
+                list_of_idx_rows = [r[1] for r in results]
+                list_of_idx_cols = [r[2] for r in results]
 
-            # --------------------------------------------------
-            # Write data + update progress atomically
-            # --------------------------------------------------
-            with h5py.File(hdf5_filepath, 'r+') as f:
-                new_size = f['kappa'].shape[0] + nimgs_batch
+                # Shape = (angle_batch_size * nimgs, imgsize, imgsize)
+                kappa_rot = np.concatenate(list_of_kappa_rot, axis=0)
+                rows = np.concatenate(list_of_idx_rows, axis=0)
+                cols = np.concatenate(list_of_idx_cols, axis=0)
 
-                f['kappa'].resize((new_size, nbins, imgsize, imgsize))
-                f['kappa'][-nimgs_batch:] = kappa_rot
+                # --------------------------------------------------
+                # Write data + update progress atomically
+                # --------------------------------------------------
+                with h5py.File(hdf5_filepath, 'r+') as f:
+                    new_size = f['kappa'].shape[0] + nimgs_batch
 
-                f['filename_ori'].resize((new_size,))
-                f['filename_ori'][-nimgs_batch:] = len(angles) * niter_per_angle * [
-                    f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
-                        np.arange(beg_idx, end_idx) + 1
+                    f['kappa'].resize((new_size, nbins, imgsize, imgsize))
+                    f['kappa'][-nimgs_batch:] = kappa_rot
+
+                    f['filename_ori'].resize((new_size,))
+                    f['filename_ori'][-nimgs_batch:] = len(angles) * niter_per_angle * [
+                        f"LP001_run{idx}_maps.hdf5" for idx in vectorized_zfill(
+                            np.arange(beg_idx, end_idx) + 1
+                        )
+                    ] # TODO: improve this by loading the original filenames from the KTNG dataset
+                    # In particular, "LP001" should be adaptive.
+
+                    f['angle'].resize((new_size,))
+                    f['angle'][-nimgs_batch:] = np.repeat(
+                        angles, niter_per_angle * (end_idx - beg_idx)
                     )
-                ] # TODO: improve this by loading the original filenames from the KTNG dataset
-                # In particular, "LP001" should be adaptive.
 
-                f['angle'].resize((new_size,))
-                f['angle'][-nimgs_batch:] = np.repeat(
-                    angles, niter_per_angle * (end_idx - beg_idx)
-                )
+                    f['top_left_coord'].resize((new_size, 2))
+                    f['top_left_coord'][-nimgs_batch:, 0] = rows
+                    f['top_left_coord'][-nimgs_batch:, 1] = cols
 
-                f['top_left_coord'].resize((new_size, 2))
-                f['top_left_coord'][-nimgs_batch:, 0] = rows
-                f['top_left_coord'][-nimgs_batch:, 1] = cols
+                    # Update progress
+                    f["progress"].attrs["last_angle_block"] = i + 1
 
-                # Update progress
-                f["progress"].attrs["last_angle_block"] = i + 1
-
-        # Reset angle block after full batch
-        with h5py.File(hdf5_filepath, 'r+') as f:
-            f["progress"].attrs["last_img_idx"] = end_idx
-            f["progress"].attrs["last_angle_block"] = 0
+            # Reset angle block after full batch
+            with h5py.File(hdf5_filepath, 'r+') as f:
+                f["progress"].attrs["last_img_idx"] = end_idx
+                f["progress"].attrs["last_angle_block"] = 0
