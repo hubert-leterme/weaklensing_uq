@@ -592,6 +592,10 @@ def create_augmented_dataset(
                     # Update progress
                     f["progress"].attrs["last_angle_block"] = i + 1
 
+            pbar.set_postfix(
+                {"angles": f"{0}-{(end_angle-1):.0f}"}
+            )
+
             # Reset angle block after full batch
             with h5py.File(hdf5_filepath, 'r+') as f:
                 f["progress"].attrs["last_img_idx"] = end_idx
