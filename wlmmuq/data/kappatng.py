@@ -401,12 +401,17 @@ def create_cropped_dataset(
 
     # Create HDF5 file structure
     with h5py.File(hdf5_filepath, 'w') as f:
+
+        # Metadata
+        f.attrs["idx_lp"] = idx_lp
+        f.attrs["weights_redshift"] = weights_redshift
+        if zbins is not None:
+            f.attrs["zbins"] = zbins
+
         f.create_dataset(
             "kappa", shape=(0, nbins, imgsize, imgsize), maxshape=(None, nbins, imgsize, imgsize),
             dtype='float32'
         ) # Convergence maps
-        if zbins is not None:
-            f["kappa"].attrs["zbins"] = zbins
         # f.create_dataset(
         #     "filename_ori", shape=(0,), maxshape=(None,),
         #     dtype=np.dtype('S17') # TODO: use regular strings instead
@@ -465,13 +470,20 @@ def create_augmented_dataset(
         if os.path.exists(hdf5_filepath):
             raise FileExistsError
         with h5py.File(hdf5_filepath, 'w') as f:
+
+            # Metadata
+            f.attrs["idx_lp"] = idx_lp
+            f.attrs["weights_redshift"] = weights_redshift
+            f.attrs["angle_step"] = angle_step
+            f.attrs["niter_per_angle"] = niter_per_angle
+            if zbins is not None:
+                f.attrs["zbins"] = zbins
+
             f.create_dataset(
                 "kappa", shape=(0, nbins, imgsize, imgsize),
                 maxshape=(None, nbins, imgsize, imgsize),
                 dtype='float32'
             )
-            if zbins is not None:
-                f["kappa"].attrs["zbins"] = zbins
             f.create_dataset(
                 "filename_ori", shape=(0,),
                 maxshape=(None,), dtype=np.dtype('S17')
@@ -489,6 +501,7 @@ def create_augmented_dataset(
             prog = f.create_group("progress")
             prog.attrs["last_img_idx"] = 0
             prog.attrs["last_angle_block"] = 0
+            prog.attrs["angle_batch_size"] = angle_batch_size
 
     # --------------------------------------------------
     # Read resume state
