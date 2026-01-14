@@ -13,3 +13,4 @@ build_and_install.sh
 dist/
 build/
 log/
+slurm/out/
