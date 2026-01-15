@@ -8,11 +8,6 @@ from .. import utils
 
 from .. import LEARNLETS_PRETRAINED_WEIGHTS_DIR
 
-METRIC_DICT = {
-    'mse': dinv.metric.MSE(),
-    'mae': dinv.metric.MAE()
-}
-
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
     'tiny': [8, 16, 32, 64],

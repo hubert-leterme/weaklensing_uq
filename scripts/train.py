@@ -13,6 +13,11 @@ from wlmmuq.data import SCALE, NUM_WORKERS
 import _commons
 import _add_arguments
 
+METRIC_DICT = {
+    'mse': wlnn.deepinv.iterativemm.MSE,
+    'mae': wlnn.deepinv.iterativemm.MAE,
+}
+
 NREAL_PER_IMG = 1
 LOSS = 'mse'
 LEARNING_RATE = 1e-4
@@ -123,7 +128,8 @@ def main(
     model.train()
 
     # Set loss function
-    metric = wlnn.torch.METRIC_DICT[loss]
+    kwargs_metric = {k: kwargs.pop(k) for k in _commons.KEYS_METRIC if k in kwargs}
+    metric = METRIC_DICT[loss](**kwargs_metric)
     if order2:
         if verbose:
             print("Load trained order-1 moment network")

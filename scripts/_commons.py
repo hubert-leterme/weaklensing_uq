@@ -41,6 +41,7 @@ KEYS_MODEL = [
     "no_bias", "model_size", "mode_preproc",
     "args_preproc", "additional_outlayer"
 ] # Arguments passed to the model's constructor
+KEYS_METRIC = [] # TODO: update
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
 WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
