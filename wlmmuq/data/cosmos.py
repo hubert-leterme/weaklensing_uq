@@ -2,6 +2,8 @@
 Data available at https://archive.stsci.edu/hlsp/candels/cosmos-catalogs
 
 """
+__level__ = 1
+
 import numpy as np
 import matplotlib.path as mpath
 

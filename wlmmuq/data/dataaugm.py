@@ -1,3 +1,5 @@
+__level__ = 1
+
 import numpy as np
 from scipy import ndimage
 from skimage.util.shape import view_as_windows

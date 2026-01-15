@@ -1,3 +1,5 @@
+__level__ = 2
+
 from . import torch
 from . import deepinv
 from . import cqr, rcps

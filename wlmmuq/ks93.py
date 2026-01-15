@@ -4,6 +4,8 @@
 # The functions `ks93` and `ks93inv` can take as input arrays of shape (nimgs, nx, ny).
 # Either torch or numpy arrays can be used as input.
 
+__level__ = 0
+
 import numpy as np
 import torch
 

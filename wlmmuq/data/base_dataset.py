@@ -1,3 +1,5 @@
+__level__ = 1
+
 import os
 import re
 import warnings

@@ -1,3 +1,5 @@
+__level__ = 1
+
 import warnings
 
 from scipy import stats, optimize

@@ -1,3 +1,5 @@
+__level__ = 1
+
 """
 Code adapted from https://github.com/aangelopoulos/im2im-uq.git
 

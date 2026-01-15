@@ -1,3 +1,5 @@
+__level__ = 2
+
 import os
 import random
 import numpy as np

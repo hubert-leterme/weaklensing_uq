@@ -1,3 +1,5 @@
+__level__ = 0
+
 import os
 import warnings
 import yaml

@@ -1,3 +1,5 @@
+__level__ = 1
+
 import os
 import warnings
 import time

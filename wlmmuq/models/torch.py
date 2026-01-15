@@ -1,3 +1,5 @@
+__level__ = 1
+
 import torch
 from torch import nn
 import torchinfo

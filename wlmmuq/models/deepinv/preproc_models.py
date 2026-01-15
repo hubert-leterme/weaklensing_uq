@@ -1,3 +1,5 @@
+__level__ = 2
+
 import torch
 from torch import nn
 import deepinv as dinv
