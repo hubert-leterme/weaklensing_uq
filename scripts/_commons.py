@@ -243,7 +243,7 @@ def update_kwargs_model(
             )
         kwargs_model.update(args_preproc=args_preproc)
     if nbins is not None:
-        kwargs_model.update(in_channels=nbins)
+        kwargs_model.update(in_channels=nbins, out_channels=nbins)
 
 
 def get_model_class(arch):
