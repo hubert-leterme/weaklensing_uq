@@ -151,12 +151,12 @@ class BaseHDF5Dataset:
 
 
     @property
-    def zbins(self) -> h5py.Dataset | None:
+    def zbins(self) -> np.ndarray | None:
         with self.open():
             assert self.file is not None
             try:
-                out = self.file["kappa"].attrs["zbins"]
-                assert isinstance(out, h5py.Dataset)
+                out = self.file.attrs["zbins"]
+                assert isinstance(out, np.ndarray)
             except KeyError:
                 out = None
         assert get_nbins(out) == self.nbins
@@ -756,7 +756,7 @@ def _pipe(*transforms):
     return lambda x: _pipeline(x, *transforms)
 
 
-def get_nbins(zbins: list[float] | h5py.Dataset | None):
+def get_nbins(zbins: list[float] | np.ndarray | None) -> int:
     if zbins is None:
         nbins = 1
     else:

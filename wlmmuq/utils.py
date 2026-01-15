@@ -1077,3 +1077,39 @@ def load_checkpoint_state_dict(
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
     return state_dict
+
+
+@typing.overload
+def get_list_per_zbin[T](
+        inp: list[T],
+        list_of_z: list[float],
+        zbins: list[float] | None = None
+) -> list[list[T]]: ...
+
+@typing.overload
+def get_list_per_zbin(
+        inp: np.ndarray,
+        list_of_z: list[float],
+        zbins: list[float] | None = None
+) -> list[np.ndarray]: ...
+    
+def get_list_per_zbin(inp, list_of_z, zbins=None):
+
+    out = [[]]
+    j = 0
+    for i, z in enumerate(list_of_z):
+        try:
+            assert zbins is not None
+            new_zbin = z >= zbins[j]
+        except (AssertionError, IndexError):
+            new_zbin = False
+        if new_zbin:
+            out.append([])
+            j += 1
+        assert isinstance(out[j], list)
+        out[j].append(inp[i])
+
+    if isinstance(inp, np.ndarray):
+        out = [np.array(l) for l in out]
+
+    return out

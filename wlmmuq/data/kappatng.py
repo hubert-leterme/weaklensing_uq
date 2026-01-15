@@ -3,7 +3,6 @@ import random
 import numpy as np
 import h5py
 import tqdm
-import typing
 from concurrent.futures import ThreadPoolExecutor
 import torch
 import astropy.table as aptable
@@ -141,17 +140,41 @@ class KappaTNG(BaseKappaTNG):
             zbins: list[float] | None = None,
             idx_redshift: int | None = None, **kwargs
     ):
+        super().__init__(*args, **kwargs)
+
         if idx_lp is not None:
             self.idx_lp = str(idx_lp).zfill(3)
         else:
             self.idx_lp = "001"
-        self.weights = weights
         self.zbins = zbins
+        first_idx_run = "001"
+        fname_first_idx_run = self._get_fname(first_idx_run)
+        if weights is not None:
+            with h5py.File(fname_first_idx_run, 'r', swmr=True) as file:
+                idx_redshifts = sorted(file.keys())[1:]
+                nredshifts = len(idx_redshifts)
+                assert len(weights) == nredshifts, (
+                    f"Argument `weights` must have {nredshifts} elements, "
+                    f"but {len(weights)} were provided."
+                )
+                self.weights = weights
+                assert LIST_OF_Z is not None
+                list_of_z = list(LIST_OF_Z)
+                self.list_of_weights_redshifts = utils.get_list_per_zbin(
+                    weights, list_of_z, zbins
+                )
+                self.idx_redshifts = idx_redshifts
+                self.list_of_idx_redshifts = utils.get_list_per_zbin(
+                    idx_redshifts, list_of_z, zbins
+                )
+        else:
+            self.list_of_weights_redshifts = None
+            self.list_of_idx_redshifts = None
+
         if idx_redshift is not None:
             self.idx_redshift = f'z{str(idx_redshift + 1).zfill(2)}'
         else:
             self.idx_redshift = None
-        super().__init__(*args, **kwargs)
 
 
     def _get_kappa_from_file(
@@ -169,35 +192,20 @@ class KappaTNG(BaseKappaTNG):
                 kappa = kappa - np.mean(kappa)
             return kappa
 
-        fname = os.path.join(
-            self.ktng_dir,
-            f"LP{self.idx_lp}",
-            f"LP{self.idx_lp}_run{idx_run}_maps.hdf5"
-        )
+        fname = self._get_fname(idx_run)
         with h5py.File(fname, 'r', swmr=True) as file:
 
-            if self.weights is not None:
-                list_of_idx_redshift = sorted(file.keys())[1:]
-                nredshifts = len(list_of_idx_redshift)
-                if len(self.weights) != nredshifts:
-                    raise AttributeError(
-                        f"Attribute `weights` must have {nredshifts} elements"
-                    )
-                
-                list_of_weights = _get_list_per_zbin(
-                    self.weights, self.zbins
-                )
-                list_of_idx_redshift_per_zbin = _get_list_per_zbin(
-                    list_of_idx_redshift, self.zbins
-                )
+            if self.list_of_weights_redshifts is not None:
+                assert self.list_of_idx_redshifts is not None
+
                 list_of_kappa = [
                     np.stack([
                         _get_kappa_oneredshift(file, i) for i in l
-                    ], axis=-1) for l in list_of_idx_redshift_per_zbin # Shape = (nx, ny, nz)
+                    ], axis=-1) for l in self.list_of_idx_redshifts # Shape = (nx, ny, nz)
                 ]
                 list_of_kappa = [
                     np.sum(w * kappa, axis=-1) \
-                        for w, kappa in zip(list_of_weights, list_of_kappa) # Shape = (nx, ny)
+                        for w, kappa in zip(self.list_of_weights_redshifts, list_of_kappa) # Shape = (nx, ny)
                 ]
                 kappa = np.stack(list_of_kappa) # Shape = (nbins, nx, ny)
 
@@ -212,42 +220,14 @@ class KappaTNG(BaseKappaTNG):
                 )
 
         return kappa
-    
 
-@typing.overload
-def _get_list_per_zbin[T](
-        inp: list[T],
-        zbins: list[float] | None = None
-) -> list[list[T]]: ...
 
-@typing.overload
-def _get_list_per_zbin(
-        inp: np.ndarray,
-        zbins: list[float] | None = None
-) -> list[np.ndarray]: ...
-    
-def _get_list_per_zbin(inp, zbins=None):
-
-    assert LIST_OF_Z is not None
-    out = [[]]
-    j = 0
-    for i, z in enumerate(LIST_OF_Z):
-        try:
-            assert zbins is not None
-            new_zbin = z >= zbins[j]
-        except (AssertionError, IndexError):
-            new_zbin = False
-        if new_zbin:
-            out.append([])
-            j += 1
-        assert isinstance(out[j], list)
-        out[j].append(inp[i])
-
-    if isinstance(inp, np.ndarray):
-        out = [np.array(l) for l in out]
-
-    return out
-
+    def _get_fname(self, idx_run: str):
+        return os.path.join(
+            self.ktng_dir,
+            f"LP{self.idx_lp}",
+            f"LP{self.idx_lp}_run{idx_run}_maps.hdf5"
+        )
 
 class KappaTNGFromSamples(BaseKappaTNG):
     """
@@ -398,6 +378,11 @@ def create_cropped_dataset(
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
     """
+    openingangle = get_openingangle(imgsize)
+    ktng = KappaTNG(
+        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle,
+        zbins=zbins, **kwargs
+    )
     nbins = base_dataset.get_nbins(zbins)
 
     # Create HDF5 file structure
@@ -405,7 +390,11 @@ def create_cropped_dataset(
 
         # Metadata
         f.attrs["idx_lp"] = idx_lp
-        f.attrs["weights_redshift"] = weights_redshift
+        if ktng.weights is not None:
+            f.attrs["weights_redshifts"] = ktng.weights
+        if ktng.idx_redshifts is not None:
+            f.attrs["idx_redshifts"] = ktng.idx_redshifts
+            
         if zbins is not None:
             f.attrs["zbins"] = zbins
 
@@ -421,12 +410,6 @@ def create_cropped_dataset(
         #     "top_left_coord", shape=(0, 2), maxshape=(None, 2),
         #     dtype='int'
         # ) # Top-left coordinates
-
-    openingangle = get_openingangle(imgsize)
-    ktng = KappaTNG(
-        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle,
-        zbins=zbins, **kwargs
-    )
 
     if batch_size is None:
         batch_size = ninpimgs
@@ -461,7 +444,11 @@ def create_augmented_dataset(
     Create or resume an augmented dataset from kappaTNG
     by rotating and randomly cropping images.
     """
-
+    openingangle = get_openingangle(imgsize)
+    ktng = KappaTNG(
+        idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle,
+        crop_maps=False, zbins=zbins
+    )
     nbins = base_dataset.get_nbins(zbins)
 
     # --------------------------------------------------
@@ -474,11 +461,15 @@ def create_augmented_dataset(
 
             # Metadata
             f.attrs["idx_lp"] = idx_lp
-            f.attrs["weights_redshift"] = weights_redshift
-            f.attrs["angle_step"] = angle_step
-            f.attrs["niter_per_angle"] = niter_per_angle
+            if ktng.weights is not None:
+                f.attrs["weights_redshifts"] = ktng.weights
+            if ktng.idx_redshifts is not None:
+                f.attrs["idx_redshifts"] = ktng.idx_redshifts
+                
             if zbins is not None:
                 f.attrs["zbins"] = zbins
+            f.attrs["angle_step"] = angle_step
+            f.attrs["niter_per_angle"] = niter_per_angle
 
             f.create_dataset(
                 "kappa", shape=(0, nbins, imgsize, imgsize),
@@ -510,11 +501,6 @@ def create_augmented_dataset(
     with h5py.File(hdf5_filepath, 'r') as f:
         last_img_idx = f["progress"].attrs["last_img_idx"]
         last_angle_block = f["progress"].attrs["last_angle_block"]
-
-    ktng = KappaTNG(
-        idx_lp=idx_lp, weights=weights_redshift,
-        crop_maps=False, zbins=zbins
-    )
 
     if num_workers <= 0:
         num_workers = 1
