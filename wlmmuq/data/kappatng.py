@@ -9,7 +9,7 @@ import astropy.table as aptable
 
 from . import cosmos, dataaugm, base_dataset
 from .. import utils
-from .. import KTNG_DIR
+from ..config import KTNG_DIR
 
 try:
     LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))

@@ -7,7 +7,7 @@ import matplotlib.path as mpath
 
 import astropy.table as aptable
 
-from .. import COSMOS_DIR
+from ..config import COSMOS_DIR
 
 COSMOS_VERTICES = [(149.508, 2.880),
                    (149.767, 2.836),

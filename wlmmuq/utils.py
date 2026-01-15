@@ -14,7 +14,7 @@ import deepinv as dinv
 from lenspack.utils import bin2d
 
 from . import ks93
-from . import KEY_REPLACEMENT_DICT
+from .config import KEY_REPLACEMENT_DICT
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
 

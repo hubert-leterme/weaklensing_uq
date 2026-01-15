@@ -6,7 +6,7 @@ import deepinv as dinv
 from .sunet import sunet
 from .. import utils
 
-from .. import LEARNLETS_PRETRAINED_WEIGHTS_DIR
+from ..config import LEARNLETS_PRETRAINED_WEIGHTS_DIR
 
 # Default parameters for DRUNet
 MODEL_SIZE_DRUNET = {
