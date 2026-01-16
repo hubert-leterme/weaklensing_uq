@@ -7,8 +7,8 @@ import yaml
 # Look for configuration file
 CONFIG_DIRLIST = [
     os.getcwd(), # Project-local directory
-    os.path.join(os.path.expanduser("~"), ".config", __name__), # User-specific config directory
-    os.path.join("/etc", __name__), # System-wide config directory
+    os.path.join(os.path.expanduser("~"), ".config", __package__), # User-specific config directory
+    os.path.join("/etc", __package__), # System-wide config directory
     os.path.dirname(__file__), # Package-default directory
 ]
 
