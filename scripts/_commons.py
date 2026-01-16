@@ -176,7 +176,7 @@ def create_dataset_from_kappatng(
         print("Computing redshift weights from COSMOS...")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
     cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
-    weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
+    weights_redshift = wlktng.get_weights_redshifts(cat_cosmos_bright['zphot'])
 
     # Get nb of pixels in output images and adjust opening angle accordingly
     imgsize, openingangle = wlktng.get_npixels_openingangle(openingangle)
