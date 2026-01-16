@@ -293,6 +293,7 @@ def get_weights(redshifts):
         List of redshifts, for each measured galaxy. 1D array of shape (ngals,)
     
     """
+    assert LIST_OF_Z is not None
     idxs_sup = np.digitize(redshifts, LIST_OF_Z) # shape = (ngals,)
     idxs_inf = idxs_sup - 1 # shape = (ngals,)
 
