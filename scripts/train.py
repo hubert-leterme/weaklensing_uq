@@ -129,6 +129,9 @@ def main(
 
     # Set loss function
     kwargs_metric = {k: kwargs.pop(k) for k in _commons.KEYS_METRIC if k in kwargs}
+    if train_dataset.nbins > 1: # Tomographic mass mapping
+        normfact_zbins = torch.Tensor(train_dataset.normfact_zbins)
+        kwargs_metric.update(channelwise_normfact=normfact_zbins)
     metric = METRIC_DICT[loss](**kwargs_metric)
     if order2:
         if verbose:
