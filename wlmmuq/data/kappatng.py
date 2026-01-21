@@ -13,11 +13,13 @@ from . import cosmos, dataaugm, base_dataset
 from .. import utils
 from ..config import KTNG_DIR
 
-try:
-    LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
-except (TypeError, FileNotFoundError):
-    LIST_OF_Z = None
 MAX_Z = 2.6
+try:
+    Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
+    CDIST = utils.cdist(Z, MAX_Z)
+except (TypeError, FileNotFoundError):
+    Z = None
+    CDIST = None
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
 LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 
@@ -26,6 +28,8 @@ SIZE_ORI = 5. # opening angle of the simulated convergence maps (deg)
 N_SAMPLES_PER_SIDE = 3
 RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 OPENINGANGLE = 1.875 # opening angle of the target convergence maps (deg)
+
+ANGLE_BATCH_SIZE = 1
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 
@@ -138,6 +142,8 @@ class KappaTNG(BaseKappaTNG):
     """
     def __init__(
             self, *args, idx_lp: int | None = None,
+            z: np.ndarray | None = Z,
+            cdist: np.ndarray | None = CDIST,
             weights_redshifts: np.ndarray | None = None,
             zbins: list[float] | None = None,
             zidx: int | None = None, **kwargs
@@ -153,25 +159,59 @@ class KappaTNG(BaseKappaTNG):
         fname_first_idx_run = self._get_fname(first_idx_run)
         if weights_redshifts is not None:
             with h5py.File(fname_first_idx_run, 'r', swmr=True) as file:
-                idx_redshifts = sorted(file.keys())[1:]
+                idx_redshifts = np.array(sorted(file.keys()))[1:]
                 nredshifts = len(idx_redshifts)
-                assert len(weights_redshifts) == nredshifts, (
-                    f"Argument `weights_redshifts` must have {nredshifts} elements, "
-                    f"but {len(weights_redshifts)} were provided."
+                assert z is not None
+                assert cdist is not None
+
+                msg = (
+                    "Argument `{}` must have {} elements, "
+                    "but {} were provided."
                 )
+                assert len(z) == nredshifts, \
+                    msg.format("z", nredshifts, len(z))
+                assert len(cdist) == nredshifts, \
+                    msg.format("cdist", nredshifts, len(cdist))
+                assert len(weights_redshifts) == nredshifts, \
+                    msg.format("weights_redshifts", nredshifts, len(weights_redshifts))
+
+                self.z = z
+                self.cdist = cdist
                 self.weights_redshifts = weights_redshifts
-                assert LIST_OF_Z is not None
-                list_of_z = list(LIST_OF_Z)
-                self.list_of_weights_redshifts = utils.get_list_per_zbin(
-                    weights_redshifts, list_of_z, zbins
-                )
                 self.idx_redshifts = idx_redshifts
-                self.list_of_idx_redshifts = utils.get_list_per_zbin(
-                    idx_redshifts, list_of_z, zbins
+
+                self.list_of_z = utils.get_list_per_zbin(
+                    z, z, zbins
                 )
+                self.list_of_cdist = utils.get_list_per_zbin(
+                    cdist, z, zbins
+                )
+                self.list_of_weights_redshifts = utils.get_list_per_zbin(
+                    weights_redshifts, z, zbins
+                )
+                self.list_of_idx_redshifts = utils.get_list_per_zbin(
+                    idx_redshifts, z, zbins
+                )
+
+                list_of_weights_mseloss = [
+                    np.sum(cdist0 * w0) for cdist0, w0 in zip(
+                        self.list_of_cdist, self.list_of_weights_redshifts
+                    )
+                ]
+                self.weights_mseloss = np.array(list_of_weights_mseloss)
+
         else:
+            self.z = None
+            self.cdist = None
+            self.weights_redshifts = None
+            self.idx_redshifts = None
+            
+            self.list_of_z = None
+            self.list_of_cdist = None
             self.list_of_weights_redshifts = None
             self.list_of_idx_redshifts = None
+
+            self.weights_mseloss = None
 
         if zidx is not None:
             self.zidx = f'z{str(zidx + 1).zfill(2)}'
@@ -285,7 +325,7 @@ def get_npixels_openingangle(openingangle, make_even=True):
     return width, openingangle
 
 
-def get_weights_redshifts(redshifts):
+def get_weights_redshifts(redshifts, z=Z):
     """
     Arguments
     ---------
@@ -293,34 +333,34 @@ def get_weights_redshifts(redshifts):
         List of redshifts, for each measured galaxy. 1D array of shape (ngals,)
     
     """
-    assert LIST_OF_Z is not None
-    idxs_sup = np.digitize(redshifts, LIST_OF_Z) # shape = (ngals,)
+    assert z is not None
+    idxs_sup = np.digitize(redshifts, z) # shape = (ngals,)
     idxs_inf = idxs_sup - 1 # shape = (ngals,)
 
     redshifts_sup = np.array([
-        LIST_OF_Z[idx] if idx < len(LIST_OF_Z) else np.nan for idx in idxs_sup
+        z[idx] if idx < len(z) else np.nan for idx in idxs_sup
     ])
     redshifts_inf = np.array([
-        LIST_OF_Z[idx] if idx >= 0 else np.nan for idx in idxs_inf
+        z[idx] if idx >= 0 else np.nan for idx in idxs_inf
     ])
 
     diff_redshifts = redshifts_sup - redshifts_inf # shape = (ngals,)
     weights_sup = 1 - (redshifts_sup - redshifts) / diff_redshifts # shape = (ngals,)
     weights_inf = 1 - (redshifts - redshifts_inf) / diff_redshifts # shape = (ngals,)
     # Note that `weights_inf + weights_sup` are equal to one everywhere,
-    # except when `redshifts` is below `LIST_OF_Z[0]` or above `LIST_OF_Z[-1]`, in which
+    # except when `redshifts` is below `z[0]` or above `z[-1]`, in which
     # case the value of `weights_inf` and `weights_sup` is nan.
 
     idxs = np.concatenate([idxs_inf, idxs_sup])
     weights_redshifts = np.concatenate([weights_inf, weights_sup])
 
-    # Galaxies with redshift below LIST_OF_Z[0] contribute entirely to the first bin
-    # Galaxies with redshift above LIST_OF_Z[-1] contribute entirely to the last bin
-    weights_redshifts = weights_redshifts[(idxs >= 0) & (idxs < len(LIST_OF_Z))]
-    idxs = idxs[(idxs >= 0) & (idxs < len(LIST_OF_Z))]
+    # Galaxies with redshift below z[0] contribute entirely to the first bin
+    # Galaxies with redshift above z[-1] contribute entirely to the last bin
+    weights_redshifts = weights_redshifts[(idxs >= 0) & (idxs < len(z))]
+    idxs = idxs[(idxs >= 0) & (idxs < len(z))]
     weights_redshifts[np.isnan(weights_redshifts)] = 1.
 
-    out = np.bincount(idxs, weights=weights_redshifts, minlength=len(LIST_OF_Z)) # shape = nz
+    out = np.bincount(idxs, weights=weights_redshifts, minlength=len(z)) # shape = nz
     out /= np.sum(out) # normalize
 
     return out
@@ -376,7 +416,8 @@ def get_data_from_cosmos_ktng(
 
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshifts, imgsize,
-        zbins=None, batch_size=None, verbose=False, **kwargs
+        zbins=None, batch_size=None,
+        update_metadata_only=False, verbose=False, **kwargs
 ):
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
@@ -389,17 +430,15 @@ def create_cropped_dataset(
     nbins = base_dataset.get_nbins(zbins)
 
     # Create HDF5 file structure
-    with h5py.File(hdf5_filepath, 'w') as f:
+    iomode = _get_iomode(update_metadata_only, hdf5_filepath)
+    with h5py.File(hdf5_filepath, iomode) as f:
 
         # Metadata
-        f.attrs["idx_lp"] = idx_lp
-        if ktng.weights_redshifts is not None:
-            f.attrs["weights_redshifts"] = ktng.weights_redshifts
-        if ktng.idx_redshifts is not None:
-            f.attrs["idx_redshifts"] = ktng.idx_redshifts
-            
-        if zbins is not None:
-            f.attrs["zbins"] = zbins
+        _update_metadata(f, ktng, zbins=zbins)
+        if update_metadata_only:
+            if verbose:
+                print("Metadata updated")
+            return
 
         f.create_dataset(
             "kappa", shape=(0, nbins, imgsize, imgsize), maxshape=(None, nbins, imgsize, imgsize),
@@ -440,8 +479,9 @@ def create_cropped_dataset(
 def create_augmented_dataset(
     hdf5_filepath, idx_lp, nimgs, weights_redshifts, imgsize,
     zbins=None, batch_size=50,
-    angle_batch_size=1, angle_step=5, niter_per_angle=1,
-    num_workers=0, resume=False, verbose=False
+    angle_batch_size=ANGLE_BATCH_SIZE, angle_step=5, niter_per_angle=1,
+    num_workers=0, update_metadata_only=False,
+    resume=False, verbose=False
 ):
     """
     Create or resume an augmented dataset from kappaTNG
@@ -457,23 +497,22 @@ def create_augmented_dataset(
     # --------------------------------------------------
     # Create or open HDF5 file
     # --------------------------------------------------
-    if not resume:
-        if os.path.exists(hdf5_filepath):
-            raise FileExistsError
-        with h5py.File(hdf5_filepath, 'w') as f:
+    iomode = _get_iomode(
+        update_metadata_only, hdf5_filepath, resume=resume
+    )
+    with h5py.File(hdf5_filepath, iomode) as f:
 
-            # Metadata
-            f.attrs["idx_lp"] = idx_lp
-            if ktng.weights_redshifts is not None:
-                f.attrs["weights_redshifts"] = ktng.weights_redshifts
-            if ktng.idx_redshifts is not None:
-                f.attrs["idx_redshifts"] = ktng.idx_redshifts
-                
-            if zbins is not None:
-                f.attrs["zbins"] = zbins
-            f.attrs["angle_step"] = angle_step
-            f.attrs["niter_per_angle"] = niter_per_angle
+        # Metadata
+        _update_metadata(
+            f, ktng, zbins=zbins,
+            angle_step=angle_step, niter_per_angle=niter_per_angle
+        )
+        if update_metadata_only:
+            if verbose:
+                print("Metadata updated")
+            return
 
+        if not resume:
             f.create_dataset(
                 "kappa", shape=(0, nbins, imgsize, imgsize),
                 maxshape=(None, nbins, imgsize, imgsize),
@@ -498,10 +537,7 @@ def create_augmented_dataset(
             prog.attrs["last_angle_block"] = 0
             prog.attrs["angle_batch_size"] = angle_batch_size
 
-    # --------------------------------------------------
-    # Read resume state
-    # --------------------------------------------------
-    with h5py.File(hdf5_filepath, 'r') as f:
+        # Read resume state
         last_img_idx = f["progress"].attrs["last_img_idx"]
         last_angle_block = f["progress"].attrs["last_angle_block"]
 
@@ -589,3 +625,42 @@ def create_augmented_dataset(
             with h5py.File(hdf5_filepath, 'r+') as f:
                 f["progress"].attrs["last_img_idx"] = end_idx
                 f["progress"].attrs["last_angle_block"] = 0
+
+
+def _get_iomode(update_metadata_only, hdf5_filepath, resume=False):
+
+    file_exists = os.path.exists(hdf5_filepath)
+    if update_metadata_only or resume:
+        if not file_exists:
+            raise FileNotFoundError(hdf5_filepath)
+        iomode = "r+"
+    else:
+        if file_exists:
+            raise FileExistsError(hdf5_filepath)
+        iomode = "w"
+
+    return iomode
+
+
+def _update_metadata(
+        f: h5py.File, ktng: KappaTNG,
+        zbins=None, angle_step=None, niter_per_angle=None
+):
+    f.attrs["idx_lp"] = ktng.idx_lp
+    if ktng.z is not None:
+        f.attrs["z"] = ktng.z
+    if ktng.cdist is not None:
+        f.attrs["cdist"] = ktng.cdist
+    if ktng.weights_redshifts is not None:
+        f.attrs["weights_redshifts"] = ktng.weights_redshifts
+    if ktng.idx_redshifts is not None:
+        f.attrs["idx_redshifts"] = ktng.idx_redshifts.astype(
+            h5py.string_dtype(encoding="utf-8")
+        )
+
+    if zbins is not None:
+        f.attrs["zbins"] = zbins
+    if angle_step is not None:
+        f.attrs["angle_step"] = angle_step
+    if niter_per_angle is not None:
+        f.attrs["niter_per_angle"] = niter_per_angle

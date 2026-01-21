@@ -116,9 +116,9 @@ class BaseHDF5Dataset:
         self.ds_kappa_pred: h5py.Dataset | None = None
         self.current_idx: int = 0  # To track the batch number
         self.current_real: int = 0 # Useful when self.nreal_per_img > 1
-        self.nx: int | None = None
-        self.ny: int | None = None
-        self.nbins: int | None = None
+        self.nx: int = -1
+        self.ny: int = -1
+        self.nbins: int = -1
 
         if self.list_of_outputs is not None:
             self.noutputs = len(self.list_of_outputs)
@@ -127,6 +127,62 @@ class BaseHDF5Dataset:
 
         self.initialized: bool = False
         self._initialize_dataset()
+
+
+    @property
+    def z(self) -> np.ndarray | None:
+        out = self._get_attr_hdf5("z")
+        if out is not None:
+            assert isinstance(out, np.ndarray)
+        return out
+    
+    @property
+    def cdist(self) -> np.ndarray | None:
+        out = self._get_attr_hdf5("cdist")
+        if out is not None:
+            assert isinstance(out, np.ndarray)
+        return out
+
+    @property
+    def weights_redshifts(self) -> np.ndarray | None:
+        out = self._get_attr_hdf5("weights_redshifts")
+        if out is not None:
+            assert isinstance(out, np.ndarray)
+        return out
+
+    @property
+    def zbins(self) -> list[float] | None:
+        out = self._get_attr_hdf5("zbins")
+        if out is not None:
+            assert isinstance(out, np.ndarray)
+            assert get_nbins(out) == self.nbins
+            out = out.tolist()
+        return out
+
+    def _get_attr_hdf5(self, attrname: str):
+        with self.open():
+            if self.file is not None:
+                try:
+                    out = self.file.attrs[attrname]
+                except KeyError:
+                    out = None
+            else:
+                out = None
+        return out
+    
+    @property
+    def normfact_zbins(self):
+        assert self.weights_redshifts is not None
+        assert self.cdist is not None
+        assert self.z is not None
+        assert self.zbins is not None
+        weighted_cdistsq = self.weights_redshifts * self.cdist**2
+        list_of_weighted_cdistsq = utils.get_list_per_zbin(
+            weighted_cdistsq, self.z, zbins=self.zbins
+        )
+        out = np.array([np.sum(w) for w in list_of_weighted_cdistsq])
+        out /= np.linalg.norm(out)
+        return out
 
 
     @contextmanager
@@ -150,19 +206,6 @@ class BaseHDF5Dataset:
         finally:
             if not self.initialized or self.close_after_batch:
                 self.close()
-
-
-    @property
-    def zbins(self) -> np.ndarray | None:
-        with self.open():
-            assert self.file is not None
-            try:
-                out = self.file.attrs["zbins"]
-                assert isinstance(out, np.ndarray)
-            except KeyError:
-                out = None
-        assert get_nbins(out) == self.nbins
-        return out
 
 
     def _load_batch_dict(self, beg_idx, max_idx, get_all_images):

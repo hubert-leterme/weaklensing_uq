@@ -33,8 +33,8 @@ if __name__ == "__main__":
         "--angle-batch-size", type=int,
         default=argparse.SUPPRESS,
         help=(
-            "Number of angles to compute before pickling, to avoid memory overload. "
-            "Default = 36"
+            "Number of angles to compute before saving to the HDF5 file, "
+            f"to avoid memory overload. Default = {wlktng.ANGLE_BATCH_SIZE}"
         )
     )
     parser.add_argument(

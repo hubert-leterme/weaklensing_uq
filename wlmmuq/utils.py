@@ -20,6 +20,12 @@ from .config import KEY_REPLACEMENT_DICT
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
 
+# Cosmological parameters for computing comoving distances
+C = 0.3e6
+H0 = 70.
+OMEGA_M = 0.3
+OMEGA_LAMBDA = 0.7
+
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
 #vectorized_ks93inv = np.vectorize(ks93inv, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -1081,37 +1087,38 @@ def load_checkpoint_state_dict(
     return state_dict
 
 
-@typing.overload
-def get_list_per_zbin[T](
-        inp: list[T],
-        list_of_z: list[float],
-        zbins: list[float] | None = None
-) -> list[list[T]]: ...
-
-@typing.overload
 def get_list_per_zbin(
-        inp: np.ndarray,
-        list_of_z: list[float],
-        zbins: list[float] | None = None
-) -> list[np.ndarray]: ...
-    
-def get_list_per_zbin(inp, list_of_z, zbins=None):
+        inp: np.ndarray, z: np.ndarray, zbins: list[float] | None = None
+) -> list[np.ndarray]:
+    if zbins is not None:
+        idx_per_bin = np.searchsorted(z, zbins)
+    else:
+        idx_per_bin = np.array([])
+    return np.split(inp, idx_per_bin)
 
-    out = [[]]
-    j = 0
-    for i, z in enumerate(list_of_z):
-        try:
-            assert zbins is not None
-            new_zbin = z >= zbins[j]
-        except (AssertionError, IndexError):
-            new_zbin = False
-        if new_zbin:
-            out.append([])
-            j += 1
-        assert isinstance(out[j], list)
-        out[j].append(inp[i])
 
-    if isinstance(inp, np.ndarray):
-        out = [np.array(l) for l in out]
+def cdist(
+        z: np.ndarray, z_sup: float, c: float = C, h0: float = H0,
+        omega_m: float = OMEGA_M, omega_lambda: float = OMEGA_LAMBDA
+) -> np.ndarray:
+    z_bounds = np.concatenate((
+        [0.0], (z[:-1] + z[1:]) / 2, [z_sup]
+    )) # Shape = (nz + 1,)
+    dz = z_bounds[1:] - z_bounds[:-1] # Shape = (nz,)
+    h = _hubble_param(
+        z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda
+    ) # Shape = (nz,)
+    nz = len(z)
+    triang = np.tril(np.ones((nz, nz))) # Shape = (nz, nz)
+    out = c * np.sum(triang * dz / h, axis=1) # Shape = (nelts,)
 
     return out
+
+
+def _hubble_param(
+        z: np.ndarray, h0: float,
+        omega_m: float, omega_lambda: float
+):
+    return h0 * np.sqrt(
+        omega_m * (1 + z)**3 + omega_lambda
+    )

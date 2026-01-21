@@ -56,6 +56,10 @@ def create_dataset(parser, path_to_output, idx_lp):
             "Default = 50"
         )
     )
+    parser.add_argument(
+        "--update-metadata-only", action='store_true',
+        default=argparse.SUPPRESS,
+    )
 
 
 def _get_model_classes(denoiser=False, deepmass=False):
