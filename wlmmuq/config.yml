@@ -33,6 +33,9 @@ path_to_train_val_dataset: path/to/train/dataset.hdf5 # Augmented dataset from L
 path_to_test_dataset: path/to/test/dataset.hdf5 # Cropped dataset from LP001 (kappaTNG)
 path_to_calib_dataset: path/to/calib/dataset.hdf5 # Augmented dataset from LP001 (kappaTNG)
 
+# Path to Euclid redshift bins (FITS)
+path_to_zbins: path/to/euc-phz-TomographicBins_equipop.fits
+
 # Directory containing pre-trained weights for the Learnlet denoiser
 learnlets_pretrained_weights_dir: path/to/weights
 

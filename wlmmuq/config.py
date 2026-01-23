@@ -66,6 +66,10 @@ PATH_TO_CALIB_DATASET = CONFIG_DATA.get('path_to_calib_dataset', None)
 if PATH_TO_CALIB_DATASET is not None:
     PATH_TO_CALIB_DATASET = os.path.expanduser(PATH_TO_CALIB_DATASET)
 
+PATH_TO_ZBINS = CONFIG_DATA.get('path_to_zbins', None)
+if PATH_TO_ZBINS is not None:
+    PATH_TO_ZBINS = os.path.expanduser(PATH_TO_ZBINS)
+
 LEARNLETS_PRETRAINED_WEIGHTS_DIR = CONFIG_DATA.get('learnlets_pretrained_weights_dir', None)
 if LEARNLETS_PRETRAINED_WEIGHTS_DIR is not None:
     LEARNLETS_PRETRAINED_WEIGHTS_DIR = os.path.expanduser(LEARNLETS_PRETRAINED_WEIGHTS_DIR)

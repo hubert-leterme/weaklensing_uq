@@ -40,12 +40,16 @@ def create_dataset(parser, path_to_output, idx_lp):
         )
     )
     parser.add_argument(
-        "--zbins", type=float, nargs='+',
+        "--zbins", action='store_true',
+        default=argparse.SUPPRESS,
+        help=("Tomographic kappa-maps with redshift bins.")
+    )
+    parser.add_argument(
+        "--path-to-zbins", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Redshift values delimitating the redshift bins (excluding 0 and z_max). "
-            "If none are given, then only one redshift bin will be considered. "
-            "Default = None"
+            "Path to the FITS file containing the values delimitating the redshift bins. "
+            f"Default = {_commons.PATH_TO_ZBINS}"
         )
     )
     parser.add_argument(
