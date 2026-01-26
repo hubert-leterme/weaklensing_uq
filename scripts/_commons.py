@@ -8,6 +8,7 @@ import numpy as np
 from scipy.optimize import minimize
 import torch
 import astropy.table as aptable
+import astropy.io.fits as apfits
 import deepinv as dinv
 
 from wlmmuq import utils as wlutils
@@ -32,6 +33,8 @@ NIMGS_TEST = 512 # Images extracted from the 57 first original files (copped dat
 NIMGS_CALIB = 1024 # Images extracted from the 43 remaining original files (augmented dataset)
 MIN_IDX_FILENAME_ORI_VAL = 98 # To avoid overlaps with the training set
 MIN_IDX_FILENAME_ORI_CALIB = 58 # To avoid overlaps with the test set
+
+IDX_ZBINS = [2, 4, 6, 8, 10]
 
 EPOCH = 100 # Epoch of the trained models to load
 IMGSIZE = 384
@@ -144,7 +147,10 @@ def get_stdnoise_mask(
 
 def create_dataset_from_kappatng(
         func: typing.Callable, path_to_saved_dataset: str, idx_lp: int | str,
-        openingangle: float, ninpimgs: int, verbose: bool = False, **kwargs
+        openingangle: float, ninpimgs: int,
+        use_zbins: bool = False, path_to_zbins: str | None = PATH_TO_ZBINS,
+        idx_zbins: list[int] | None = IDX_ZBINS,
+        verbose: bool = False, **kwargs
 ):
     """
     Create a dataset from the KappaTNG simulation.
@@ -167,6 +173,10 @@ def create_dataset_from_kappatng(
         Opening angle of the input images in degrees.
     ninpimgs : int
         Number of input images before cropping/augmentation.
+    use_zbins: bool, optional
+    path_to_zbins: str, optional
+    idx_zbins: list[int], optional
+        Used to group and merge redshift bins
     verbose : bool, optional
     **kwargs
         Additional arguments to pass to the function `func`.
@@ -176,10 +186,23 @@ def create_dataset_from_kappatng(
         print("Computing redshift weights from COSMOS...")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
     cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
-    weights_redshift = wlktng.get_weights_redshifts(cat_cosmos_bright['zphot'])
+    weights_redshift = wlktng.get_weights_redshifts(
+        cat_cosmos_bright['zphot'], use_bnt_weights=use_zbins
+    )
 
     # Get nb of pixels in output images and adjust opening angle accordingly
     imgsize, openingangle = wlktng.get_npixels_openingangle(openingangle)
+
+    # Get redshift bins
+    if use_zbins:
+        assert path_to_zbins is not None
+        hdul = apfits.open(path_to_zbins)
+        zbins = hdul[1].data["BIN_STOP"]
+        assert isinstance(zbins, np.ndarray)
+        zbins = zbins[:-1] # Exclude the upper limit
+        if idx_zbins is not None:
+            zbins = zbins[idx_zbins]
+        kwargs.update(zbins=zbins)
 
     # Create augmented dataset and store data
     func(

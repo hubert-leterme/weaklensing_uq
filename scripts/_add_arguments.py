@@ -40,9 +40,9 @@ def create_dataset(parser, path_to_output, idx_lp):
         )
     )
     parser.add_argument(
-        "--zbins", action='store_true',
+        "-z", "--use-zbins", action='store_true',
         default=argparse.SUPPRESS,
-        help=("Tomographic kappa-maps with redshift bins.")
+        help=("Create tomographic kappa-maps with redshift bins.")
     )
     parser.add_argument(
         "--path-to-zbins", type=str,
@@ -50,6 +50,13 @@ def create_dataset(parser, path_to_output, idx_lp):
         help=(
             "Path to the FITS file containing the values delimitating the redshift bins. "
             f"Default = {_commons.PATH_TO_ZBINS}"
+        )
+    )
+    parser.add_argument(
+        "--idx-zbins", type=int, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            f"Select redshift bin indices. Used to group and merge redshift bins."
         )
     )
     parser.add_argument(
