@@ -16,10 +16,8 @@ from ..config import KTNG_DIR
 MAX_Z = 2.6
 try:
     Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
-    CDIST = utils.cdist(Z, MAX_Z)
 except (TypeError, FileNotFoundError):
     Z = None
-    CDIST = None
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
 LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 
@@ -30,6 +28,13 @@ RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 OPENINGANGLE = 1.875 # opening angle of the target convergence maps (deg)
 
 ANGLE_BATCH_SIZE = 1
+
+# Cosmological parameters
+C = 2.998e5
+CURVATURE = 0.
+H0 = 67.74
+OMEGA_M = 0.3089
+OMEGA_LAMBDA = 1 - (OMEGA_M + CURVATURE)
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 
@@ -143,7 +148,6 @@ class KappaTNG(BaseKappaTNG):
     def __init__(
             self, *args, idx_lp: int | None = None,
             z: np.ndarray | None = Z,
-            cdist: np.ndarray | None = CDIST,
             weights_redshifts: np.ndarray | None = None,
             zbins: list[float] | None = None,
             zidx: int | None = None, **kwargs
@@ -162,7 +166,7 @@ class KappaTNG(BaseKappaTNG):
                 idx_redshifts = np.array(sorted(file.keys()))[1:]
                 nredshifts = len(idx_redshifts)
                 assert z is not None
-                assert cdist is not None
+                cdist = get_cdist(z=z)
 
                 msg = (
                     "Argument `{}` must have {} elements, "
@@ -325,13 +329,33 @@ def get_npixels_openingangle(openingangle, make_even=True):
     return width, openingangle
 
 
-def get_weights_redshifts(redshifts, z=Z):
+def get_weights_redshifts(
+        redshifts: np.ndarray,
+        z: np.ndarray | None = Z,
+        use_bnt_weights: bool = False,
+        h0: float = H0,
+        omega_m: float = OMEGA_M,
+        omega_lambda: float = OMEGA_LAMBDA
+) -> np.ndarray:
     """
     Arguments
     ---------
-    redshifts (np.array)
-        List of redshifts, for each measured galaxy. 1D array of shape (ngals,)
-    
+    redshifts: np.ndarray, shape = (ngals,)
+        List of redshifts, for each measured galaxy
+    z: np.ndarray, shape = (nplanes,), optional
+        List of redshift planes. Default values are the one provided by
+        Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
+    use_bnt_weights: bool, optional
+        Wether to divide the output n(z) by the Hubble parameter H(z), in order
+        to compute the BNT. Default is False
+    h0, omega_m, omega_lambda: float, optional
+        Cosmological parameters, to compute the Hubble parameter. Default values are
+        the one provided by Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
+
+    Returns
+    -------
+    out: np.ndarray, shape = (nplanes,)
+
     """
     assert z is not None
     idxs_sup = np.digitize(redshifts, z) # shape = (ngals,)
@@ -363,7 +387,43 @@ def get_weights_redshifts(redshifts, z=Z):
     out = np.bincount(idxs, weights=weights_redshifts, minlength=len(z)) # shape = nz
     out /= np.sum(out) # normalize
 
+    if use_bnt_weights:
+        out /= get_hubble_param(z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda)
+
     return out
+
+
+def get_cdist(
+        z: np.ndarray | None = Z,
+        z_sup: float = MAX_Z,
+        c: float = C, h0: float = H0,
+        omega_m: float = OMEGA_M,
+        omega_lambda: float = OMEGA_LAMBDA
+) -> np.ndarray:
+
+    assert z is not None
+    z_bounds = np.concatenate((
+        [0.0], (z[:-1] + z[1:]) / 2, [z_sup]
+    )) # Shape = (nz + 1,)
+    dz = z_bounds[1:] - z_bounds[:-1] # Shape = (nz,)
+    h = get_hubble_param(
+        z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda
+    ) # Shape = (nz,)
+    nz = len(z)
+    triang = np.tril(np.ones((nz, nz))) # Shape = (nz, nz)
+    out = c * np.sum(triang * dz / h, axis=1) # Shape = (nelts,)
+
+    return out
+
+
+def get_hubble_param(
+        z: np.ndarray, h0: float = H0,
+        omega_m: float = OMEGA_M,
+        omega_lambda: float = OMEGA_LAMBDA
+):
+    return h0 * np.sqrt(
+        omega_m * (1 + z)**3 + omega_lambda
+    )
 
 
 def get_data_from_cosmos_ktng(
