@@ -56,7 +56,10 @@ def create_dataset(parser, path_to_output, idx_lp):
         "--idx-zbins", type=int, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            f"Select redshift bin indices. Used to group and merge redshift bins."
+            "Select redshift bin indices. Used to group and merge redshift bins. "
+            "By default, the redshift bins provided by Euclid are grouped two by two "
+            "(except for the three first bins, which are grouped together), which "
+            "yields six bins in total."
         )
     )
     parser.add_argument(
