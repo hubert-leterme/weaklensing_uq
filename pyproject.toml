@@ -32,6 +32,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["wlmmuq", "wlmmuq.*"]
 
 [project.urls]
 Homepage = "https://github.com/hubert-leterme/weaklensing_uq"
