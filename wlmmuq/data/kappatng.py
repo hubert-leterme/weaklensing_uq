@@ -2,6 +2,7 @@ __level__ = 2
 
 import os
 import random
+from dataclasses import dataclass
 import numpy as np
 import h5py
 import tqdm
@@ -10,7 +11,7 @@ import torch
 import astropy.table as aptable
 
 from . import cosmos, dataaugm, base_dataset
-from .. import utils
+from .. import lenspack, utils
 from ..config import KTNG_DIR
 
 MAX_Z = 2.6
@@ -32,7 +33,8 @@ ANGLE_BATCH_SIZE = 1
 # Cosmological parameters
 C = 2.998e5
 CURVATURE = 0.
-H0 = 67.74
+# H0 = 67.74
+H0 = 1. # Normalized Hubble constant (set to 1 at z = 0)
 OMEGA_M = 0.3089
 OMEGA_LAMBDA = 1 - (OMEGA_M + CURVATURE)
 
@@ -332,7 +334,6 @@ def get_npixels_openingangle(openingangle, make_even=True):
 def get_weights_redshifts(
         redshifts: np.ndarray,
         z: np.ndarray | None = Z,
-        use_bnt_weights: bool = False,
         h0: float = H0,
         omega_m: float = OMEGA_M,
         omega_lambda: float = OMEGA_LAMBDA
@@ -345,9 +346,6 @@ def get_weights_redshifts(
     z: np.ndarray, shape = (nplanes,), optional
         List of redshift planes. Default values are the one provided by
         Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
-    use_bnt_weights: bool, optional
-        Wether to divide the output n(z) by the Hubble parameter H(z), in order
-        to compute the BNT. Default is False
     h0, omega_m, omega_lambda: float, optional
         Cosmological parameters, to compute the Hubble parameter. Default values are
         the one provided by Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
@@ -386,9 +384,6 @@ def get_weights_redshifts(
 
     out = np.bincount(idxs, weights=weights_redshifts, minlength=len(z)) # shape = nz
     out /= np.sum(out) # normalize
-
-    if use_bnt_weights:
-        out /= get_hubble_param(z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda)
 
     return out
 
@@ -434,33 +429,31 @@ def get_data_from_cosmos_ktng(
     data_cosmos = cosmos.get_data_from_cosmos(
         cat_cosmos, openingangle
     )
-    ra_cosmos_median = data_cosmos['ra_cosmos_median']
-    dec_cosmos_median = data_cosmos['dec_cosmos_median']
-    extent = data_cosmos['extent']
+    ra_cosmos_median = data_cosmos["ra_cosmos_median"]
+    dec_cosmos_median = data_cosmos["dec_cosmos_median"]
+    extent = data_cosmos["extent"]
     shapedisp = data_cosmos["shapedisp"]
-    if zbins is None:
-        ngal = utils.ngal_per_pixel(
-            cat_cosmos['Ra'], cat_cosmos['Dec'],
-            imgsize, extent
-        ) # Shape = (imgsize, imgsize)
-    else:
-        zbins = sorted(zbins + [0., MAX_Z])
-        ngal_per_zbin = []
-        for z_inf, z_sup in zip(zbins[:-1], zbins[1:]):
-            cat_cosmos_sliced = cat_cosmos[
-                (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
-            ]
-            ngal_per_zbin.append(utils.ngal_per_pixel(
-                cat_cosmos_sliced['Ra'], cat_cosmos_sliced['Dec'],
-                imgsize, extent
-            ))
-        
-        ngal = np.stack(ngal_per_zbin) # Shape = (nbins, imgsize, imgsize)
 
-    mask = ngal > 0
+    boundaries_zbins = [0., MAX_Z]
+    if zbins is not None:
+        boundaries_zbins = sorted(zbins + boundaries_zbins)
 
-    ngal = torch.tensor(ngal, dtype=torch.float32)
-    mask = torch.tensor(mask, dtype=bool)
+    ngal = []
+    for z_inf, z_sup in zip(boundaries_zbins[:-1], boundaries_zbins[1:]):
+        cat_cosmos_sliced = cat_cosmos[
+            (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
+        ]
+        ra_sliced = np.array(cat_cosmos_sliced["Ra"]) # Shape = (ngal_zbin,)
+        dec_sliced = np.array(cat_cosmos_sliced["Dec"]) # Shape = (ngal_zbin,)
+
+        ngal.append(lenspack.bin2d(
+            ra_sliced, dec_sliced, npix=imgsize, extent=extent,
+        ))
+
+    ngal = [
+        torch.tensor(n, dtype=torch.float32) for n in ngal
+    ]
+    ngal = torch.stack(ngal) # Shape = (nbins, nx, ny)
 
     out = {
         'ra_cosmos_median': ra_cosmos_median,
@@ -469,7 +462,6 @@ def get_data_from_cosmos_ktng(
         'openingangle': openingangle,
         'shapedisp': shapedisp,
         'ngal': ngal,
-        'mask': mask
     }
     return out
 

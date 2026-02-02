@@ -8,7 +8,6 @@ import numpy as np
 from scipy.optimize import minimize
 import torch
 import astropy.table as aptable
-import astropy.io.fits as apfits
 import deepinv as dinv
 
 from wlmmuq import utils as wlutils
@@ -130,11 +129,15 @@ def get_stdnoise_mask(
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize, zbins=zbins)
+        data_dict = wlktng.get_data_from_cosmos_ktng(
+            cat_cosmos, imgsize, zbins=zbins
+        )
         shapedisp: float = data_dict["shapedisp"]
-        ngal: torch.Tensor = data_dict["ngal"]
-        mask: torch.Tensor = data_dict["mask"]
-        std_noise: torch.Tensor = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
+        ngal: torch.Tensor = data_dict["ngal"] # Shape = (nbins, nx, ny)
+        std_noise: torch.Tensor = wlutils.get_std_noise(
+            ngal, shapedisp
+        ) # Shape = (nbins, nx, ny)
+        mask = torch.tensor(ngal > 0, dtype=torch.bool) # Shape = (nbins, nx, ny)
 
     if inpainting:
         # Set the noise standard deviation for masked data
@@ -187,7 +190,7 @@ def create_dataset_from_kappatng(
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
     cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
     weights_redshift = wlktng.get_weights_redshifts(
-        cat_cosmos_bright['zphot'], use_bnt_weights=use_zbins
+        cat_cosmos_bright['zphot']
     )
 
     # Get nb of pixels in output images and adjust opening angle accordingly
@@ -196,12 +199,7 @@ def create_dataset_from_kappatng(
     # Get redshift bins
     if use_zbins:
         assert path_to_zbins is not None
-        hdul = apfits.open(path_to_zbins)
-        zbins = hdul[1].data["BIN_STOP"]
-        assert isinstance(zbins, np.ndarray)
-        zbins = zbins[:-1] # Exclude the upper limit
-        if idx_zbins is not None:
-            zbins = zbins[idx_zbins]
+        zbins = wlutils.get_zbins(path_to_zbins, idx_zbins=idx_zbins)
         kwargs.update(zbins=zbins)
 
     # Create augmented dataset and store data

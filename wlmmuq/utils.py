@@ -11,11 +11,12 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 import deepinv as dinv
+import astropy.io.fits as apfits
 
-#from lenspack.image.inversion import ks93, ks93inv
-from lenspack.utils import bin2d
+# from lenspack.image.inversion import ks93, ks93inv
+# from lenspack.utils import bin2d
 
-from . import ks93
+from . import lenspack
 from .config import KEY_REPLACEMENT_DICT
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
@@ -66,19 +67,6 @@ def get_resolution(width, openingangle):
     
     """
     return openingangle / width * 60.
-
-
-def ngal_per_pixel(ra, dec, width, extent):
-    """
-    Parameters
-    ----------
-    ra, dec (numpy.ndarray)
-    width (int)
-        Size of the target convergence maps (nb pixels).
-    extent (4-tuple)
-        Extent of the target convergence maps (deg).
-    """
-    return bin2d(ra, dec, npix=width, extent=extent)
 
 
 def _get_shear_fromto_convergence(
@@ -203,13 +191,38 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
     return arr
 
 
-def get_std_noise(ngal, shapedisp, std_noise_mask):
+def get_std_noise(
+        ngal: torch.Tensor, shapedisp: float, std_noise_mask: float = 0.,
+        weights_squared: torch.Tensor | None = None
+) -> torch.Tensor:
+    """
+    Parameters
+    ----------
+    ngal: torch.Tensor, shape = ([nbins], nx, ny)
+        Number of galaxies per pixel and redshift bin
+    shapedisp: float
+        Standard deviation of intrinsic ellipticities
+    std_noise_mask: float, optional
+        Value to set in the mask. Default = 0.
+    weights_squared: torch.Tensor, shape = ([nbins], nx, ny), optional
+        Weights to apply to the noise variance in each redshift bin.
+        E.g., the BNT weights_squared are defined as the sum over $1 / H(z_i)$
+        in each pixel and each redshift bin, where $H$ denotes the Hubble
+        parameter, and $z_i$ denotes the redshift of the i-th measured
+        galaxy in the given pixel and redshift bin.
+        By default, set to `ngal` (one redshift bin, no BNT).
+    """
+    if weights_squared is None:
+        weights_squared = ngal
+    if len(ngal.shape) == 3:
+        ngal_all_zbins = torch.sum(ngal, dim=0)
+    else:
+        ngal_all_zbins = ngal
+    std_noise = weights_squared**0.5 * torch.nan_to_num(
+        shapedisp / ngal_all_zbins, posinf=std_noise_mask
+    ) # Shape = (nx, ny)
 
-    out = torch.nan_to_num(
-        shapedisp / ngal**0.5, posinf=std_noise_mask
-    ) # standard deviation of the noise
-
-    return out
+    return std_noise
 
 
 def get_masked_and_noisy_shear(
@@ -1089,3 +1102,15 @@ def get_list_per_zbin(
     else:
         idx_per_bin = np.array([])
     return np.split(inp, idx_per_bin)
+
+
+def get_zbins(
+        path_to_zbins: str, idx_zbins: list[int] | None = None
+) -> list[float]:
+    hdul = apfits.open(path_to_zbins)
+    zbins = hdul[1].data["BIN_STOP"]
+    assert isinstance(zbins, np.ndarray)
+    zbins = zbins[:-1] # Exclude the upper limit
+    if idx_zbins is not None:
+        zbins = zbins[idx_zbins]
+    return zbins.tolist()
