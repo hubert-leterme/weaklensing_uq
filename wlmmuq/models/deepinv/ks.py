@@ -40,7 +40,9 @@ class KS(dinv.models.Reconstructor):
     
 
     def get_var(self, physics, kernel_size=32):
-
+        
+        # TODO: Adapt function for 3D std_noise (redshift bins)
+        raise NotImplementedError
         std_noise = (
             physics.noise_model.sigma
         ).unsqueeze(0).unsqueeze(0) # Shape = (1, 1, nx, ny)

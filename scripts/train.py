@@ -73,6 +73,8 @@ def main(
 
     else:
         # Get noise srtandard deviation and mask
+        # TODO: add argument `zbins`
+        raise NotImplementedError
         std_noise, mask = _commons.get_stdnoise_mask(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
