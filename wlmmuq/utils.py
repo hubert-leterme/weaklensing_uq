@@ -129,7 +129,7 @@ def get_shear_from_convergence(
 
     """
     gamma = _get_shear_fromto_convergence(
-        ks93.ks93inv, kappa1, kappa2,
+        lenspack.ks93inv, kappa1, kappa2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     if mask is not None:
@@ -171,7 +171,7 @@ def get_convergence_from_shear(
         if gamma2 is not None:
             gamma2[..., ~mask] = 0
     kappa = _get_shear_fromto_convergence(
-        ks93.ks93, gamma1, gamma2,
+        lenspack.ks93, gamma1, gamma2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     return kappa
@@ -286,7 +286,7 @@ def get_std_ks(
 
     dirac_imag = np.zeros((width1, width2))
 
-    ksmatr_real, ksmatr_imag = ks93.ks93(dirac_real, dirac_imag)
+    ksmatr_real, ksmatr_imag = lenspack.ks93(dirac_real, dirac_imag)
     if std_gaussianfilter is not None:
         ksmatr_real = ndimage.gaussian_filter(
             ksmatr_real, std_gaussianfilter, mode="wrap"
