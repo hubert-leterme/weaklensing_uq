@@ -193,9 +193,13 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
 
 def get_std_noise(
         ngal: torch.Tensor, shapedisp: float, std_noise_mask: float = 0.,
-        weights_squared: torch.Tensor | None = None
+        weights_squared: torch.Tensor | None = None,
+        normalized_zbins: bool = False
 ) -> torch.Tensor:
-    """
+    r"""
+    Compute the noise standard deviation in each pixel, and in each
+    redshift bin if required.
+
     Parameters
     ----------
     ngal: torch.Tensor, shape = ([nbins], nx, ny)
@@ -206,20 +210,43 @@ def get_std_noise(
         Value to set in the mask. Default = 0.
     weights_squared: torch.Tensor, shape = ([nbins], nx, ny), optional
         Weights to apply to the noise variance in each redshift bin.
-        E.g., the BNT weights_squared are defined as the sum over $1 / H(z_i)$
-        in each pixel and each redshift bin, where $H$ denotes the Hubble
-        parameter, and $z_i$ denotes the redshift of the i-th measured
-        galaxy in the given pixel and redshift bin.
-        By default, set to `ngal` (one redshift bin, no BNT).
+        For each pixel $k$ and each redshift bin $j$, it is equal to:
+        $$
+            \sum_{i \in \mathcal{Z}_{jk}} p(z_i)^2,
+        $$
+        where $\mathcal{Z}_{jk}$ denotes the set of indices of the source
+        galaxies in pixel $k$ and redshift bin $j$, $z_i$ denotes
+        the redshift of source galaxy $i$, and $p(z)$ denotes a weight
+        assigned to source redshift $z$.
+        By default, set to `ngal`, which corresponds to $p(z) = 1$
+        for all $z$.
+    normalized_zbins: bool, optional
+        If set to True, then the source redshift distribution is
+        normalized in each redshift bin. Otherwise, it sums to one over
+        all redshift bins. Default is False.
+
+    Returns
+    -------
+    std_noise: torch.Tensor, shape = ([nbins], nx, ny)
+        For each pixel $k$ and each redshift bin $j$, it is equal to:
+        $$
+            \frac1{N_{jk}} \sqrt{
+                \sum_{i \in \mathcal{Z}_{jk}} p(z_i)^2
+            } \times \sigma_0,
+        $$
+        where $\sigma_0$ denotes the standard deviation of intrinsic
+        ellipticities, and $N_{jk}$ denotes:
+        - the total number of source galaxies in pixel $k$ if
+          `normalized_zbins` is False;
+        - the number of source galaxies in pixel $k$ and redshift bin
+          $j$ otherwise.
     """
     if weights_squared is None:
         weights_squared = ngal
-    if len(ngal.shape) == 3:
-        ngal_all_zbins = torch.sum(ngal, dim=0)
-    else:
-        ngal_all_zbins = ngal
+    if len(ngal.shape) == 3 and not normalized_zbins:
+        ngal = torch.sum(ngal, dim=0)
     std_noise = weights_squared**0.5 * torch.nan_to_num(
-        shapedisp / ngal_all_zbins, posinf=std_noise_mask
+        shapedisp / ngal, posinf=std_noise_mask
     ) # Shape = (nx, ny)
 
     return std_noise
