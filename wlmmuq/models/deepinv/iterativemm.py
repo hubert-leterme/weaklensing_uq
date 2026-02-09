@@ -1,6 +1,5 @@
 __level__ = 1
 
-import shutil
 import warnings
 import torch
 from torch import nn
@@ -8,18 +7,6 @@ import deepinv as dinv
 
 from ... import utils
 from . import callbacks
-
-#########################################################################
-# Monkey-patch `shutil` to avoid bugs when rendering LaTeX in matplotlib
-#########################################################################
-
-def fake_which(cmd):
-    if cmd == "latex":
-        return None
-    return shutil.which(cmd)
-
-shutil.which = fake_which
-
 
 #########################################################################
 # Custom classes for PnPMass
