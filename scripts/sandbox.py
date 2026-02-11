@@ -1,7 +1,6 @@
 import torch
 
 import wlmmuq
-import wlmmuq.models.deepinv.iterativemm as wlpnp
 
 import _commons
 
@@ -13,7 +12,7 @@ std_noise, mask = _commons.get_stdnoise_mask(
     imgsize=imgsize, cosmos_include_faint=False,
     inpainting=True, verbose=True
 )
-physics = wlpnp.MassMapping(sigma=std_noise, mask=mask)
+physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask)
 
 kappa = torch.randn(2, 6, imgsize, imgsize)
 gamma = physics(kappa)

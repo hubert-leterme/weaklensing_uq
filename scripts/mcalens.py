@@ -5,12 +5,11 @@ import tqdm
 import torch
 
 import wlmmuq
-import wlmmuq.models.deepinv.iterativemm as wlpnp
-import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
-import wlmmuq.models.deepinv.callbacks as wlcallbacks
+import wlmmuq.optim.mcalens as wlmcalens
+import wlmmuq.callbacks as wlcallbacks
 import wlmmuq.utils as wlutils
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments
@@ -34,10 +33,10 @@ def main(
         min_idx_filename_ori_calib: str | int = _commons.MIN_IDX_FILENAME_ORI_CALIB,
         imgsize: int = _commons.IMGSIZE, batch_size: int = _commons.BATCH_SIZE,
         num_workers: int = NUM_WORKERS,
-        starlet_detection_threshold: float = wlmcalens.STARLET_DETECTION_THRESHOLD,
+        starlet_detection_threshold: float = _commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
-        niter_per_step_g: int = wlmcalens.NITER_PER_STEP_G,
-        niter_per_step_ng: int = wlmcalens.NITER_PER_STEP_NG,
+        niter_per_step_g: int = _commons.NITER_PER_STEP_G,
+        niter_per_step_ng: int = _commons.NITER_PER_STEP_NG,
         mode_cqr: str | list[str] = _commons.MODE_CQR,
         scaling_factor_chisqcqr: float | None = None,
         confidence_uq: int | float = _commons.CONFIDENCE_UQ,
@@ -95,8 +94,8 @@ def main(
     )
 
     # Instantiate physics (forward model) and RMSE metric
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+    physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
 
     hyperparam_precalib = \
         _commons.convert_into_hyperparam_list(
@@ -223,10 +222,10 @@ def main(
 
 
 def run_mcalens_batch(
-        mcalens: wlpnp.BaseOptim,
-        physics: wlpnp.MassMapping,
+        mcalens: wlmmuq.optim.BaseOptim,
+        physics: wlmmuq.physics.MassMapping,
         dataloader, step_size, niter,
-        rmse_fn: wlpnp.RMSE | None = None,
+        rmse_fn: wlmmuq.metric.RMSE | None = None,
         callbacks: wlcallbacks.BaseCallback | None = None,
         get_initial_bounds: bool = False,
         n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,

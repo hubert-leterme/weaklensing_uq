@@ -5,12 +5,10 @@ import tqdm
 import torch
 
 import wlmmuq
-import wlmmuq.models.deepinv.iterativemm as wlpnp
-import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
-import wlmmuq.models.deepinv.callbacks as wlcallbacks
+import wlmmuq.callbacks as wlcallbacks
 import wlmmuq.utils as wlutils
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments
@@ -118,8 +116,8 @@ def main(
     )
 
     # Instantiate physics (forward model) and RMSE metric
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+    physics = wldinv.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wldinv.metric.RMSE(mask=mask).to(device)
 
     hyperparam_precalib = \
         _commons.convert_into_hyperparam_list(
@@ -187,8 +185,8 @@ def main(
             dict_step_size_starlet_debiasing: dict[int, float] | None = {
                 j: tau for j, tau in enumerate(step_size_starlet_debiasing)
             }
-            dict_starlet: dict[int, dict[int, wlmcalens.Starlet2d]] | None = {}
-            dict_starlet_debiaser: dict[int, dict[int, wlpnp.BaseOptim]] | None = {}
+            dict_starlet: dict[int, dict[int, wlmmuq.models.Starlet2d]] | None = {}
+            dict_starlet_debiaser: dict[int, dict[int, wldinv.optim.BaseOptim]] | None = {}
             for i, thresh in enumerate(detection_threshold_starlet_debiasing):
 
                 dict_starlet.update({i: {}})
@@ -212,7 +210,7 @@ def main(
                         multfact_step_size=alph_debiaser,
                         eps_sup_step_size=eps_sup_step_size,
                         niter=niter_starlet_debiasing,
-                        custom_init=wlpnp.ManualInit(),
+                        custom_init=wldinv.optim.ManualInit(),
                         mode="regular",
                         device=device, verbose=verbose
                     )
@@ -391,17 +389,17 @@ def main(
 
 
 def run_pnpmass_batch(
-        pnpmass: wlpnp.BaseOptim, pnpmass_uq: wlpnp.BaseOptim | None,
-        physics: wlpnp.MassMapping,
+        pnpmass: wldinv.optim.BaseOptim, pnpmass_uq: wldinv.optim.BaseOptim | None,
+        physics: wldinv.physics.MassMapping,
         dataloader, step_size, niter,
-        rmse_fn: wlpnp.RMSE | None = None,
-        gaussian_extractor: wlpnp.BaseOptim | None = None,
+        rmse_fn: wldinv.metric.RMSE | None = None,
+        gaussian_extractor: wldinv.optim.BaseOptim | None = None,
         starlet_debiasing: bool = False,
         dict_starlet_debiaser: dict[
-            int, dict[int, wlpnp.BaseOptim]
+            int, dict[int, wldinv.optim.BaseOptim]
         ] | None = None, # {detection_threshold: {step_size: ...}}
         dict_starlet: dict[
-            int, dict[int, wlmcalens.Starlet2d]
+            int, dict[int, wlmmuq.models.Starlet2d]
         ] | None = None, # {detection_threshold: {step_size: ...}}
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False

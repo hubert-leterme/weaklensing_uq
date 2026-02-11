@@ -6,7 +6,7 @@ import _add_arguments
 from _commons import NINPIMGS
 
 import wlmmuq
-import wlmmuq.data.kappatng as wlktng
+import wlmmuq.datasets.kappatng as wlktng
 
 IDX_LP = "001" # Lensing potential used for testing/calibration
 

@@ -2,15 +2,15 @@ __level__ = 1
 
 import warnings
 import torch
-from torch import nn
+import torch.nn as nn
 import deepinv as dinv
 
-from ... import utils
-from . import callbacks
+from .. import callbacks
+from ..loss import metric
 
-#########################################################################
-# Custom classes for PnPMass
-#########################################################################
+#=================================================================================
+# deepinv/optim/distance.py
+#=================================================================================
 
 class MahalanobisDistance(dinv.optim.Distance):
     r"""
@@ -77,7 +77,11 @@ class MahalanobisDistance(dinv.optim.Distance):
         raise NotImplementedError
 
 
-class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
+#=================================================================================
+# deepinv/optim/data_fidelity.py
+#=================================================================================
+
+class Mahalanobis(dinv.optim.DataFidelity):
 
     def __init__(
             self, param_vector: float | torch.Tensor | None = None,
@@ -89,206 +93,14 @@ class Mahalanobis(dinv.optim.data_fidelity.DataFidelity):
         )
 
 
-class ComplexGaussianNoise(dinv.physics.GaussianNoise):
-    """
-    Proper complex Gaussian noise model.
-    """
-    # TODO: check whether __add__ and __mul__ must be redefined
-    def __init__(self, sigma_real: float | torch.Tensor = 0., **kwargs):
-        super().__init__(sigma=sigma_real, **kwargs)
-
-    def forward(self, x, sigma_real=None, seed=None, **kwargs):
-        out_real = super().forward(x.real, sigma=sigma_real, seed=seed, **kwargs)
-        seed = seed + 1 if seed is not None else None
-        out_imag = super().forward(x.imag, sigma=sigma_real, seed=seed, **kwargs)
-        return out_real + 1j * out_imag
-
-
-class MassMapping(dinv.physics.LinearPhysics):
-
-    def __init__(
-            self, sigma: float | torch.Tensor = 0.,
-            mask: torch.Tensor | None = None, **kwargs
-    ):
-        noise_model = ComplexGaussianNoise(sigma_real=sigma)
-        super().__init__(
-            A=self.get_shear_from_convergence,
-            A_adjoint=self.get_convergence_from_shear,
-            noise_model=noise_model, **kwargs
-        )
-        if mask is not None:
-            self.mask = nn.Parameter(mask, requires_grad=False)
-        else:
-            self.mask = None
-
-    def get_shear_from_convergence(self, kappa):
-        return utils.get_shear_from_convergence(
-            kappa, mask=self.mask, return_complex=True
-        )
-
-    def get_convergence_from_shear(self, gamma):
-        return utils.get_convergence_from_shear(
-            gamma, mask=self.mask, return_complex=True
-        ).real # E-mode only
-
-
-#########################################################################
-# Custom classes for Wiener iterative filtering
-#########################################################################
-
-class ProximalWiener(nn.Module):
-
-    def __init__(self, powerspectrum, meancentering=True):
-        super().__init__()
-        self.register_buffer("powerspectrum", powerspectrum)
-        self.meancentering = meancentering
-
-
-    def forward(
-            self, inp: torch.Tensor,
-            g_param: float | torch.Tensor
-    ):
-        # Either one scalar parameter for the whole batch, or one specific
-        # parameter for each image
-        out = torch.fft.fft2(inp)
-        out /= (1 + g_param / self.powerspectrum)
-        out = torch.fft.ifft2(out)
-        if self.meancentering:
-            out = utils.meancenter(out, axis=tuple(range(1, out.ndim)))
-
-        return out.real
-
-
-#########################################################################
-# Metrics
-#########################################################################
-
-class MeancenterMaskMixin:
-
-    def __init__(
-            self, mask: torch.Tensor | None = None,
-            meancentering: bool = True,
-            channelwise_normfact: torch.Tensor | None = None,
-            **kwargs
-    ):
-        super().__init__(**kwargs)
-        if mask is not None:
-            utils.check_mask(mask)
-            self.mask = nn.Parameter(mask, requires_grad=False)
-        else:
-            self.mask = None
-        self.meancentering = meancentering
-        if channelwise_normfact is not None:
-            self.channelwise_normfact = nn.Parameter(
-                channelwise_normfact.view(1, -1, 1, 1), requires_grad=False
-            )
-        else:
-            self.channelwise_normfact = None
-
-
-    def metric(self, x_net, x, *args, **kwargs):
-
-        if self.meancentering:
-            x_net = utils.meancenter(
-                x_net, mask=self.mask,
-                axis=tuple(range(1, x_net.ndim))
-            )
-            try:
-                x = utils.meancenter(
-                    x, mask=self.mask,
-                    axis=tuple(range(1, x.ndim))
-                )
-            except (RuntimeError, AttributeError):
-                x = 0.
-        if self.mask is not None:
-            x_net = x_net[..., self.mask]
-            try:
-                x = x[..., self.mask]
-            except TypeError:
-                pass
-        if self.channelwise_normfact is not None:
-            x_net = x_net / self.channelwise_normfact
-            x = x / self.channelwise_normfact
-
-        return super().metric(x_net, x, *args, **kwargs)
-
-
-class SquareRootMixin:
-    def metric(self, x_net, x, *args, **kwargs):
-        return super().metric(x_net, x, *args, **kwargs) ** 0.5
-
-
-class MSE(MeancenterMaskMixin, dinv.metric.MSE):
-    pass
-
-class MAE(MeancenterMaskMixin, dinv.metric.MAE):
-    pass
-
-class NMSE(MeancenterMaskMixin, dinv.metric.NMSE):
-    pass
-
-class RMSE(SquareRootMixin, MSE):
-    """Root Mean Squared Error metric."""
-
-class NRMSE(SquareRootMixin, NMSE):
-    """Normalized Root Mean Squared Error metric."""
-
-
-class BaseMetricOnLowerUpperBounds(dinv.metric.Metric):
-
-    def metric(self, x_net, x, *args, **kwargs):
-        x_lo = x_net[:, 0]
-        x_hi = x_net[:, 1]
-        out = self._unreduced_metric(x_lo, x_hi, x, *args, **kwargs)
-        return out.mean(dim=tuple(range(1, x.ndim)), keepdim=False)
-
-    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
-        raise NotImplementedError
-
-class MetricOnLowerUpperBounds(MeancenterMaskMixin, BaseMetricOnLowerUpperBounds):
-    pass
-
-class MiscoverageRate(MetricOnLowerUpperBounds):
-    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
-        return ((x < x_lo) | (x > x_hi)).to(torch.float32)
-
-class PredInterv(MetricOnLowerUpperBounds):
-    def _unreduced_metric(self, x_lo, x_hi, x, *args, **kwargs):
-        return x_hi - x_lo
-
-
-#########################################################################
-# Improve the BaseOptim class from deepinv.optim
-#########################################################################
-
-class MetricDict(dict):
-
-    def __init__(
-            self, batch_size, *args,
-            dtype=torch.float32, device="cpu", **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-        self.batch_size = batch_size
-        self.dtype = dtype
-        self.device = device
-
-    def init_metric(self, metric_name: str):
-        self[metric_name] = torch.empty(
-            (self.batch_size, 0),
-            dtype=self.dtype, device=self.device
-        )
-
-    def cat(self, metric_name: str, metric: torch.Tensor):
-        metric = metric.unsqueeze(1) # Shape = (batch_size, 1)
-        self[metric_name] = torch.cat(
-            [self[metric_name], metric], dim=1
-        ) # Shape = (batch_size, niter + 1)
-
+#=================================================================================
+# deepinv/optim/optimizers.py
+#=================================================================================
 
 class BaseOptim(dinv.optim.BaseOptim):
 
     def __init__(
-            self, *args, metric_dict: MetricDict=None, **kwargs
+            self, *args, metric_dict: metric.MetricDict | None = None, **kwargs
     ):
         super().__init__(*args, **kwargs)
 
@@ -320,7 +132,8 @@ class BaseOptim(dinv.optim.BaseOptim):
 
 
     def _update_metrics(
-            self, metrics: MetricDict, x: torch.Tensor, x_gt: torch.Tensor = None
+            self, metrics: metric.MetricDict,
+            x: torch.Tensor, x_gt: torch.Tensor | None = None
     ):
         if self.metric_dict is not None:
             for metric_name, metric_fn in self.metric_dict.items():
@@ -336,7 +149,7 @@ class BaseOptim(dinv.optim.BaseOptim):
 
         x_init = self.get_output(X_init)
         self.batch_size = x_init.shape[0]
-        init = MetricDict(
+        init = metric.MetricDict(
             batch_size=self.batch_size, dtype=x_init.dtype, device=x_init.device
         )
         if self.metric_dict is not None:
@@ -349,7 +162,7 @@ class BaseOptim(dinv.optim.BaseOptim):
         return self._update_metrics(init, x_init, x_gt)
 
 
-    def update_metrics_fn(self, metrics: MetricDict, X_prev, X, x_gt=None):
+    def update_metrics_fn(self, metrics: metric.MetricDict, X_prev, X, x_gt=None):
 
         if metrics is not None:
             x_prev = self.get_output(X_prev)
@@ -397,7 +210,7 @@ class ManualInit:
 
     def __call__(self, _unused_y, _unused_physics):
         return {"est": self.X_init}
-    
+
 
 class CallbackWrapperForFGSteps(nn.Module):
 

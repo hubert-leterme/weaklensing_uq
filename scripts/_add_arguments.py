@@ -1,10 +1,7 @@
 import argparse
+import wlmmuq as wl
 
-import wlmmuq
-import wlmmuq.models as wlnn
-import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
-
-from wlmmuq.data import NUM_WORKERS, OPENINGANGLE
+from wlmmuq.datasets import NUM_WORKERS, OPENINGANGLE
 
 import _commons
 
@@ -79,11 +76,11 @@ def create_dataset(parser, path_to_output, idx_lp):
 def _get_model_classes(denoiser=False, deepmass=False):
     
     if not deepmass:
-        model_classes = wlnn.MODEL_CLASSES_DENOISER
+        model_classes = wl.models.MODEL_CLASSES_DENOISER
     elif not denoiser:
-        model_classes = wlnn.MODEL_CLASSES_DEEPMASS
+        model_classes = wl.models.MODEL_CLASSES_DEEPMASS
     else:
-        model_classes = wlnn.MODEL_CLASSES
+        model_classes = wl.models.MODEL_CLASSES
 
     return model_classes
 
@@ -114,7 +111,7 @@ def model(parser, uq=False, denoiser=False, deepmass=False):
             default=argparse.SUPPRESS,
             help=(
                 "Size of the model (DRUNet only). Possible values are: "
-                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+                f"{' | '.join(wl.models.nn.MODEL_SIZE_DRUNET.keys())}. Default = None"
             )
         )
     parser.add_argument(
@@ -174,7 +171,7 @@ def model_order1(parser, denoiser=False, deepmass=False):
             default=argparse.SUPPRESS,
             help=(
                 "Size of the order-1 model (DRUNet only). Possible values are: "
-                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+                f"{' | '.join(wl.models.nn.MODEL_SIZE_DRUNET.keys())}. Default = None"
             )
         )
     parser.add_argument(
@@ -222,7 +219,7 @@ def model_uq(parser, denoiser=False, deepmass=False):
             default=argparse.SUPPRESS,
             help=(
                 "Size of the order-2 model (DRUNet only). Possible values are: "
-                f"{' | '.join(wlnn.torch.MODEL_SIZE_DRUNET.keys())}. Default = None"
+                f"{' | '.join(wl.models.nn.MODEL_SIZE_DRUNET.keys())}. Default = None"
             )
         )
     parser.add_argument(
@@ -259,7 +256,7 @@ def checkpoint_dir(parser):
         "--checkpoint-dir", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Checkpoint parent directory. Default = {wlmmuq.MODEL_DIR}"
+            f"Checkpoint parent directory. Default = {wl.MODEL_DIR}"
         )
     )
     parser.add_argument(
@@ -358,7 +355,7 @@ def train_val_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the training and validation sets (HDF5 file). "
-            f"Default = {wlmmuq.PATH_TO_TRAIN_VAL_DATASET}"
+            f"Default = {wl.PATH_TO_TRAIN_VAL_DATASET}"
         )
     )
     parser.add_argument(
@@ -387,7 +384,7 @@ def test_calib_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the test set (HDF5 file). "
-            f"Default = {wlmmuq.PATH_TO_TEST_DATASET}"
+            f"Default = {wl.PATH_TO_TEST_DATASET}"
         )
     )
     parser.add_argument(
@@ -395,7 +392,7 @@ def test_calib_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the calibration set (HDF5 file). "
-            f"Default = {wlmmuq.PATH_TO_CALIB_DATASET}"
+            f"Default = {wl.PATH_TO_CALIB_DATASET}"
         )
     )
     parser.add_argument(
@@ -438,7 +435,7 @@ def cqr(parser, prompt_init_bounds=False, montecarlo=False, zero_init_bounds=Fal
         "--mode-cqr", type=str, nargs='+',
         default=argparse.SUPPRESS,
         help=(
-            f"Mode for CQR. Possible values are: {' | '.join(wlnn.CQR_CLASSES.keys())}. "
+            f"Mode for CQR. Possible values are: {' | '.join(wl.models.CQR_CLASSES.keys())}. "
             f"Several values can be provided. Default = '{_commons.MODE_CQR}'"
         )
     )
@@ -528,7 +525,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
         help=(
             "Path to the power spectrum file. "
             f"{additional_msg}"
-            f"Default = '{wlmmuq.PATH_TO_PS}'"
+            f"Default = '{wl.PATH_TO_PS}'"
         )
     )
     if wiener:
@@ -538,7 +535,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
             help=(
                 "Number of iterations for the Wiener filter. "
                 f"{additional_msg}"
-                f"Default = {wlnn.deepinv.preproc_models.NITER_WIENER}"
+                f"Default = {_commons.NITER_WIENER}"
             )
         )
     if mcalens:
@@ -560,7 +557,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
             help=(
                 "Number of iterations for one Gaussian step. "
                 f"{additional_msg}"
-                f"Default = {wlmcalens.NITER_PER_STEP_G}"
+                f"Default = {_commons.NITER_PER_STEP_G}"
             )
         )
         parser.add_argument(
@@ -569,7 +566,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
             help=(
                 "Number of iterations for one non-Gaussian step. "
                 f"{additional_msg}"
-                f"Default = {wlmcalens.NITER_PER_STEP_NG}"
+                f"Default = {_commons.NITER_PER_STEP_NG}"
             )
         )
         additional_msg = (
@@ -582,7 +579,7 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
                 "Detection threshold for computing the support of active "
                 "starlet coefficients. "
                 f"{additional_msg}"
-                f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
+                f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
             )
         )
 
@@ -633,7 +630,7 @@ def starlet_debiasing(parser):
         help=(
             "Detection threshold for computing the support of active "
             "starlet coefficients (starlet debiasing). "
-            f"Default = {int(wlmcalens.STARLET_DETECTION_THRESHOLD)}-sigma"
+            f"Default = {int(_commons.STARLET_DETECTION_THRESHOLD)}-sigma"
         )
     )
 

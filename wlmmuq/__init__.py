@@ -6,3 +6,9 @@ from .config import (
     PATH_TO_ZBINS, LEARNLETS_PRETRAINED_WEIGHTS_DIR,
     KEY_REPLACEMENT_DICT
 )
+
+from .loss import metric
+from . import (
+    datasets, loss, models, optim,
+    physics, training, callbacks, utils
+)

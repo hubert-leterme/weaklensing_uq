@@ -16,6 +16,7 @@ PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing po
 MSG_NOT_INITIALIZED = "The dataset has not been properly initialized."
 
 # TODO: Update docstrings
+# TODO: Inherit from `deepinv.datasets.ImageDataset`
 
 class BaseHDF5Dataset:
 
@@ -527,7 +528,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
 
     def _postprocess(self, out_dict, idx):
-        # TODO: use physics = iterativemm.MassMapping(...) 
+        # TODO: use physics = phys.MassMapping(...) 
         out_dict = super()._postprocess(out_dict, idx)
 
         # Generate noisy shear maps
@@ -652,7 +653,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
             std_noise *= self.std_noise # Shape = ([nimgs], nx, ny)
 
         # Generate noise realizations
-        # TODO: use physics = iterativemm.MassMapping(...)
+        # TODO: use physics = phys.MassMapping(...)
         noise = std_noise * np.random.normal(size=kappa_true.shape)
         noise = self._convert_to_tensor(noise)
         scale = self._convert_to_tensor(scale)

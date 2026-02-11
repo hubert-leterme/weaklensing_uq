@@ -5,11 +5,9 @@ import torch
 
 import wlmmuq
 import wlmmuq.utils as wlutils
-import wlmmuq.models.deepinv.iterativemm as wldinv
-import wlmmuq.models.deepinv.pnpmcalens as wlmcalens
-import wlmmuq.models.deepinv.callbacks as wlcallbacks
+import wlmmuq.callbacks as wlcallbacks
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments
@@ -111,7 +109,7 @@ def main(
     )
 
     # Instantiate RMSE metric
-    rmse_fn = wldinv.RMSE(mask=mask).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
 
     hyperparam_precalib = \
         _commons.convert_into_hyperparam_list(
@@ -127,8 +125,8 @@ def main(
             detection_threshold=starlet_detection_threshold,
             device=device, verbose=verbose
         )
-        physics = wldinv.MassMapping(sigma=std_noise, mask=mask).to(device)
-        init_starlet_debiaser = wldinv.ManualInit()
+        physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
+        init_starlet_debiaser = wlmmuq.optim.ManualInit()
         starlet_debiaser, _, step_size_starlet_debiasing = \
                     _commons.get_pnpmass(
             starlet, denoiser_uq=None,
@@ -245,12 +243,12 @@ def main(
 
 
 def run_deepmass_batch(
-        deepmass: wldinv.BaseOptim, deepmass_uq: wldinv.BaseOptim,
+        deepmass: wlmmuq.optim.BaseOptim, deepmass_uq: wlmmuq.optim.BaseOptim,
         dataloader,
-        rmse_fn: wldinv.RMSE | None = None,
-        starlet_debiaser: wldinv.BaseOptim | None = None,
-        starlet: wlmcalens.Starlet2d | None = None,
-        physics: wldinv.MassMapping | None = None,
+        rmse_fn: wlmmuq.metric.RMSE | None = None,
+        starlet_debiaser: wlmmuq.optim.BaseOptim | None = None,
+        starlet: wlmmuq.models.Starlet2d | None = None,
+        physics: wlmmuq.physics.MassMapping | None = None,
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):

@@ -6,9 +6,9 @@ import _add_arguments
 from _commons import NINPIMGS
 
 import wlmmuq
-import wlmmuq.data.kappatng as wlktng
+import wlmmuq.datasets.kappatng as wlktng
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 IDX_LP = "002" # Lensing potential used for training/validation
 

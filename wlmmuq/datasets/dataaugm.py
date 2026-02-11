@@ -1,5 +1,7 @@
 __level__ = 1
 
+# TODO: data augmentation on-th-fly?
+
 import numpy as np
 from scipy import ndimage
 from skimage.util.shape import view_as_windows

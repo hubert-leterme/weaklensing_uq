@@ -6,10 +6,10 @@ import torch
 
 import wlmmuq
 import wlmmuq.utils as wlutils
-import wlmmuq.data.torch as wlds
-import wlmmuq.models.deepinv as wldinv
+import wlmmuq.datasets.torch as wlds
+import wlmmuq.models as wlmodels
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments
@@ -76,13 +76,13 @@ def main(
         calib_dataset = None
 
     # Instantiate physics (forward model) and RMSE metric
-    physics = wldinv.iterativemm.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wldinv.iterativemm.RMSE(mask=mask).to(device)
+    physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
 
     beg_time = time.time()
 
     # Instantiate the KS model
-    ks = wldinv.ks.KS(std_gaussianfilter=std_gaussianfilter).to(device)
+    ks = wldinv_old.ks.KS(std_gaussianfilter=std_gaussianfilter).to(device)
 
     # Run KS for each batch
     test_dataloader = iter(test_dataset.to_dataloader())
@@ -162,10 +162,10 @@ def main(
 
 
 def run_ks_batch(
-        ks: wldinv.ks.KS,
-        physics: wldinv.iterativemm.MassMapping,
+        ks: wlmodels.KS,
+        physics: wlmmuq.physics.MassMapping,
         dataloader: wlds.HDF5DatasetMassMapping,
-        rmse_fn: wldinv.iterativemm.RMSE | None = None,
+        rmse_fn: wlmmuq.metric.RMSE | None = None,
         get_initial_bounds: bool = False,
         device="cpu", verbose=False
 ):

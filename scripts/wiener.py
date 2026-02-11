@@ -5,10 +5,9 @@ import tqdm
 import torch
 
 import wlmmuq
-import wlmmuq.models.deepinv.iterativemm as wlpnp
 import wlmmuq.utils as wlutils
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments
@@ -78,8 +77,8 @@ def main(
         calib_dataset = None
 
     # Instantiate physics (forward model) and RMSE metric
-    physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wlpnp.RMSE(mask=mask).to(device)
+    physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
 
     beg_time = time.time()
 
@@ -177,9 +176,9 @@ def main(
 
 
 def run_wiener_batch(
-        wiener: wlpnp.BaseOptim, physics: wlpnp.MassMapping,
+        wiener: wlmmuq.optim.BaseOptim, physics: wlmmuq.physics.MassMapping,
         dataloader,
-        rmse_fn: wlpnp.RMSE | None = None,
+        rmse_fn: wlmmuq.metric.RMSE | None = None,
         get_initial_bounds: bool = False,
         n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
         device="cpu", verbose=False

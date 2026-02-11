@@ -4,8 +4,10 @@ import torch
 from torch import nn
 import deepinv as dinv
 
-from ..torch import UNet, SUNet
-from . import iterativemm
+from .. import optim
+from .. import physics as phys
+from . import nn as wlnn
+from . import proxwiener
 
 NITER_WIENER = 12
 
@@ -13,7 +15,20 @@ NITER_WIENER = 12
 # DeepMass with Wiener or KS initialization
 #=================================================================================
 
-class WienerInit(nn.Module):
+class BasePreproc(nn.Module):
+
+    def __init__(
+            self, std_noise: torch.Tensor, mask:torch.Tensor | None = None
+    ):
+        super().__init__()
+        self.physics = phys.MassMapping(sigma=std_noise, mask=mask)
+
+    
+    def forward(self, gamma_noisy):
+        raise NotImplementedError
+
+
+class WienerInit(BasePreproc):
 
     def __init__(
             self, step_size: float,
@@ -21,21 +36,20 @@ class WienerInit(nn.Module):
             mask:torch.Tensor | None = None, niter: int = NITER_WIENER,
             noise_whitening: bool = False
     ):
-        super().__init__()
+        super().__init__(std_noise=std_noise, mask=mask)
         if not noise_whitening:
             param_vector = std_noise**2 # Bayesian data fidelity
         else:
             param_vector = std_noise # Noise whitening data fidelity
-        data_fidelity = iterativemm.Mahalanobis(param_vector=param_vector)
-        prior = dinv.optim.PnP(iterativemm.ProximalWiener(powerspectrum))
+        data_fidelity = optim.Mahalanobis(param_vector=param_vector)
+        prior = dinv.optim.PnP(proxwiener.ProximalWiener(powerspectrum))
 
-        self.optim = iterativemm.optim_builder(
+        self.optim = optim.optim_builder(
             iteration="PGD",
             params_algo={"stepsize": step_size, "g_param": step_size},
             data_fidelity=data_fidelity, prior=prior,
-            early_stop=False, max_iter=niter, custom_init=iterativemm.zero_init,
+            early_stop=False, max_iter=niter, custom_init=optim.zero_init,
         )
-        self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
 
 
     def forward(self, gamma_noisy):
@@ -43,14 +57,6 @@ class WienerInit(nn.Module):
 
 
 class KSInit(nn.Module):
-
-    def __init__(
-            self, std_noise: torch.Tensor, mask:torch.Tensor | None = None
-    ):
-        super().__init__()
-        self.physics = iterativemm.MassMapping(sigma=std_noise, mask=mask)
-
-
     def forward(self, gamma_noisy):
         return self.physics.A_adjoint(gamma_noisy)
 
@@ -59,7 +65,7 @@ class PreprocMixin:
 
     def __init__(
             self, mode_preproc: str,
-            *args, args_preproc: dict=None, **kwargs
+            *args, args_preproc: dict | None = None, **kwargs
     ):
         super().__init__(*args, **kwargs)
         if mode_preproc == "wiener":
@@ -83,8 +89,8 @@ class PreprocMixin:
         return out
 
 
-class UNetPreproc(PreprocMixin, UNet):
+class UNetPreproc(PreprocMixin, wlnn.UNet):
     pass
 
-class SUNetPreproc(PreprocMixin, SUNet):
+class SUNetPreproc(PreprocMixin, wlnn.SUNet):
     pass

@@ -5,17 +5,16 @@ import torch
 import deepinv as dinv
 
 import wlmmuq
-import wlmmuq.data.torch as wlds
-import wlmmuq.models as wlnn
+import wlmmuq.datasets.torch as wlds
 
-from wlmmuq.data import SCALE, NUM_WORKERS
+from wlmmuq.datasets import SCALE, NUM_WORKERS
 
 import _commons
 import _add_arguments
 
 METRIC_DICT = {
-    'mse': wlnn.deepinv.iterativemm.MSE,
-    'mae': wlnn.deepinv.iterativemm.MAE,
+    'mse': wlmmuq.metric.MSE,
+    'mae': wlmmuq.metric.MAE,
 }
 
 NREAL_PER_IMG = 1
@@ -35,7 +34,7 @@ def main(
         nongaussian=False,
         which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
         niter_wiener=_commons.NITER_WIENER,
-        starlet_detection_threshold=wlnn.deepinv.pnpmcalens.STARLET_DETECTION_THRESHOLD,
+        starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
         model_specs: str | None = None,
         order2=False, additional_outlayer=None,
@@ -85,7 +84,7 @@ def main(
         kwargs.update(std_noise=std_noise, mask=mask)
 
         dataset_class = wlds.HDF5DatasetMassMapping
-        physics = wlnn.deepinv.iterativemm.MassMapping(
+        physics = wlmmuq.physics.MassMapping(
             sigma=std_noise, mask=mask
         )
 
@@ -154,7 +153,7 @@ def main(
             nbins=train_dataset.nbins,
             device=device, verbose=verbose, **kwargs_model_order1
         )
-        loss_fun = wlnn.torch.Order2SupLoss(
+        loss_fun = wlmmuq.loss.Order2SupLoss(
             order1_model=order1_model, metric=metric
         )
     else:
@@ -194,7 +193,7 @@ def main(
         if callback_gaussian_extractor is not None:
             callback_list.append(callback_gaussian_extractor)
         callback_list.append(
-            wlnn.deepinv.pnpmcalens.ParamsAlgoUpdater(
+            wlmmuq.training.ParamsAlgoUpdater(
                 optim=gaussian_extractor
             )
         )
@@ -209,7 +208,7 @@ def main(
         if verbose:
             print(f"Resuming training from {path_to_checkpoint_pretrained}")
         kwargs_trainer.update(ckpt_pretrained=path_to_checkpoint_pretrained)
-    trainer = wlnn.deepinv.trainer.Trainer(
+    trainer = wlmmuq.training.Trainer(
         model,
         device=device,
         save_path=save_path,
@@ -230,14 +229,14 @@ def main(
     # Profiling callback
     if cprofiler:
         callback_list.append(
-            wlnn.deepinv.callbacks.CProfilerCallback(
+            wlmmuq.callbacks.CProfilerCallback(
                 trainer, max_nbatches=cprofiler_max_nbatches, wait=cprofiler_wait,
                 cuda_synchronize=cprofiler_cuda_synchronize, verbose=verbose
             )
         )
 
     # Train model
-    callbacks = wlnn.deepinv.callbacks.CallbackList(callback_list)
+    callbacks = wlmmuq.callbacks.CallbackList(callback_list)
     trainer.train(callbacks=callbacks)
 
     train_dataset.close()

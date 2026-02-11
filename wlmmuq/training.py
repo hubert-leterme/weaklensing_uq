@@ -11,11 +11,11 @@ import numpy as np
 import torch
 import deepinv as dinv
 
+from . import utils, optim
 from .callbacks import BaseCallback
-from ... import utils
 
 #=================================================================================
-# Class inheriting from dinv.Trainer, used for training
+# deepinv/training/trainer.py
 #=================================================================================
 
 class Trainer(dinv.Trainer):
@@ -137,6 +137,7 @@ class Trainer(dinv.Trainer):
         if "update_parameters" in inspect.signature(self.model.forward).parameters:
             kwargs["update_parameters"] = True
 
+        # TODO: use `sigma` instead of `physics`, in case of denoiser training
         if self.plot_convergence_metrics and not train:
             x_net, self.conv_metrics = self.model(
                 y, physics, x_gt=x, compute_metrics=True, **kwargs
@@ -158,7 +159,8 @@ class Trainer(dinv.Trainer):
 
         ********** MODIFIED VERSION OF THE DEEPINV METHOD **********
 
-        Option to avoid calling `.item()` and `.cpu()` for each batch.
+        - Callbacks
+        - Option to avoid calling `.item()` and `.cpu()` for each batch.
 
         ************************************************************
 
@@ -505,6 +507,7 @@ class Trainer(dinv.Trainer):
             callbacks.on_get_samples_end(physics_cur)
 
             # If required, compute residuals for both the input and the ground truth
+            # TODO: Include `preproc_for_residual` in `get_samples`
             if self.preproc_for_residual is not None:
                 x_preproc = self.preproc_for_residual(y, self.physics[g])
                 x = x - x_preproc
@@ -553,3 +556,29 @@ class Trainer(dinv.Trainer):
                 x_net,
                 train=train,
             )  # plot images
+
+
+class ParamsAlgoUpdater(BaseCallback):
+
+    def __init__(
+            self,
+            optim: optim.BaseMCALens | optim.BaseOptim
+    ):
+        self.optim = optim
+
+    def on_get_samples_end(self, physics):
+        # Get white noise standard deviation
+        # sigma = physics.noise_model.sigma # Float or tensor, shape = (batch_size,)
+        sigma = physics # TODO: to be updated when `physics` will be fixed (uncomment above line)
+        g_param_g = utils.get_g_param(sigma, noise_whitening=False)
+        if isinstance(self.optim, optim.BaseMCALens):
+            g_param_ng = utils.get_g_param(sigma, noise_whitening=True)
+
+        for i, step_size in enumerate(
+            self.optim.init_params_algo["stepsize"]
+        ): # Possibly, one step size per iteration
+            if isinstance(self.optim, optim.BaseMCALens):
+                self.optim.init_params_algo["g_param"][i].g = step_size.g * g_param_g
+                self.optim.init_params_algo["g_param"][i].ng = step_size.ng * g_param_ng
+            else:
+                self.optim.init_params_algo["g_param"][i] = step_size * g_param_g

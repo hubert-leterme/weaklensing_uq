@@ -3,9 +3,9 @@ import torch
 
 import wlmmuq
 import wlmmuq.utils as wlutils
-import wlmmuq.data.torch as wlbl
+import wlmmuq.datasets.torch as wlbl
 
-from wlmmuq.data import NUM_WORKERS
+from wlmmuq.datasets import NUM_WORKERS
 
 import _commons
 import _add_arguments

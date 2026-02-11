@@ -5,7 +5,6 @@ import torch.nn as nn
 import torchvision.transforms.functional as F
 import deepinv as dinv
 
-
 class KS(dinv.models.Reconstructor):
     """
     Simple Kaiser-Squires inversion.

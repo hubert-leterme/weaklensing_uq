@@ -1,5 +1,7 @@
 __level__ = 1
 
+# TODO: Clean this module; split it into several ones
+
 import os
 from datetime import datetime
 import typing
@@ -9,6 +11,7 @@ import tqdm
 from scipy import ndimage, signal, stats, sparse, linalg
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import deepinv as dinv
 import astropy.io.fits as apfits
@@ -299,7 +302,7 @@ def get_masked_and_noisy_shear(
     check_mask(mask)
     gamma_masked = mask * gamma
 
-    # TODO: use physics = iterativemm.MassMapping(...)
+    # TODO: use physics = phys.MassMapping(...)
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
         noise = randn(*shape) + 1j * randn(*shape)
         if device is not None:
@@ -534,7 +537,7 @@ def check_mask(mask: np.ndarray | torch.Tensor):
 
 def meancenter(
         arr: np.ndarray | torch.Tensor, axis: int | tuple=(-2, -1),
-        mask: np.ndarray | torch.Tensor = None
+        mask: np.ndarray | torch.Tensor | None = None
 ) -> np.ndarray | torch.Tensor:
 
     if torch.is_tensor(arr):
@@ -1141,3 +1144,77 @@ def get_zbins(
     if idx_zbins is not None:
         zbins = zbins[idx_zbins]
     return zbins.tolist()
+
+
+def get_tensor_components(x):
+    # Shape of x: (batch_size, 2, nchannels, nx, ny)
+    return x[:, 0], x[:, 1]
+
+
+def stack_tensor_components(x_g, x_ng):
+    # Shape of x_g and x_ng: (batch_size, nchannels, nx, ny)
+    return torch.stack((x_g, x_ng), dim=1)
+
+
+def add_tensor_components(x):
+    # Shape of x: (batch_size, 2, nchannels, nx, ny)
+    return torch.sum(x, dim=1)
+
+
+class ComponentWrapper:
+    """
+    Wrapper class to hold Gaussian and non-Gaussian components.
+    This is used instead of a tuple to avoid being considered
+    as an iterable by the optimizers.
+    """
+    def __init__(self, val_g, val_ng):
+        self.g = val_g
+        self.ng = val_ng
+
+    def get_components(self):
+        return self.g, self.ng
+
+    def __str__(self):
+        return f"{self.get_components()}"
+
+    def __repr__(self):
+        val_g, val_ng = self.get_components()
+        return f"ComponentWrapper({val_g}, {val_ng})"
+
+
+class ModuleWrapper(nn.Module):
+    """
+    Wrapper class to hold Gaussian and non-Gaussian components of type
+    `optim.BaseOptim` (e.g., data fidelity or prior).
+    This is used instead of `torch.nn.ModuleDict` to avoid being considered
+    as an iterable by the optimizers.
+    """
+    def __init__(
+            self,
+            module_g: nn.Module | None,
+            module_ng: nn.Module | None
+    ):
+        super().__init__()
+        self.g = module_g
+        self.ng = module_ng
+
+    def get_components(self):
+        return self.g, self.ng
+
+
+def merge_dict(d_g, d_ng):
+    d = {}
+    for k in d_g.keys() | d_ng.keys():
+        d[k] = ComponentWrapper(d_g.get(k), d_ng.get(k))
+    return d
+
+
+def unmerge_dict(d):
+    d_g = {}
+    d_ng = {}
+    for k, v in d.items():
+        if isinstance(v, ComponentWrapper):
+            d_g[k], d_ng[k] = v.get_components()
+        else:
+            d_g[k] = d_ng[k] = v
+    return d_g, d_ng

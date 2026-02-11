@@ -225,7 +225,7 @@ class BaseRCPS:
 
         def _diff_alpha(lamb):
             res_rcps_calib = self._calibration_fun(lamb, res_calib)
-            # TODO: update with wlmmuq.models.deepinv.iterativemm.MiscoverageRate
+            # TODO: update with wlmmuq.loss.metric.MiscoverageRate
             losses = utils.miscoverage_rate(
                 pred_calib - res_rcps_calib, pred_calib + res_rcps_calib,
                 kappa_calib, **kwargs
