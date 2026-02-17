@@ -2,6 +2,7 @@ __level__ = 2
 
 import os
 import random
+import warnings
 from dataclasses import dataclass
 import numpy as np
 import h5py
@@ -149,6 +150,8 @@ class KappaTNG(BaseKappaTNG):
     def __init__(
             self, *args, idx_lp: int | None = None,
             z: np.ndarray | None = Z,
+            z_sup: float = MAX_Z, c: float = C, h0: float = H0,
+            omega_m: float = OMEGA_M, omega_lambda: float = OMEGA_LAMBDA, 
             weights_redshifts: np.ndarray | None = None,
             zbins: list[float] | None = None,
             zidx: int | None = None, **kwargs
@@ -163,47 +166,58 @@ class KappaTNG(BaseKappaTNG):
         first_idx_run = "001"
         fname_first_idx_run = self._get_fname(first_idx_run)
         if weights_redshifts is not None:
-            with h5py.File(fname_first_idx_run, 'r', swmr=True) as file:
-                idx_redshifts = np.array(sorted(file.keys()))[1:]
-                nredshifts = len(idx_redshifts)
-                assert z is not None
-                cdist = get_cdist(z=z)
+            assert z is not None
+            cdist = utils.get_cdist(
+                z=z, z_sup=z_sup, c=c, h0=h0,
+                omega_m=omega_m, omega_lambda=omega_lambda
+            )
+            msg = (
+                "Argument `{}` must have {} elements, "
+                "but {} were provided."
+            )
+            self.z = z
+            self.cdist = cdist
+            self.weights_redshifts = weights_redshifts
 
-                msg = (
-                    "Argument `{}` must have {} elements, "
-                    "but {} were provided."
+            self.list_of_z = utils.get_list_per_zbin(
+                z, z, zbins
+            )
+            self.list_of_cdist = utils.get_list_per_zbin(
+                cdist, z, zbins
+            )
+            self.list_of_weights_redshifts = utils.get_list_per_zbin(
+                weights_redshifts, z, zbins
+            )
+            list_of_weights_mseloss = [
+                np.sum(cdist0 * w0) for cdist0, w0 in zip(
+                    self.list_of_cdist, self.list_of_weights_redshifts
                 )
+            ]
+            self.weights_mseloss = np.array(list_of_weights_mseloss)
+
+            try:
+                with h5py.File(fname_first_idx_run, 'r', swmr=True) as file:
+                    idx_redshifts = np.array(sorted(file.keys()))[1:]
+
+            except FileNotFoundError:
+                warnings.warn(f"File '{fname_first_idx_run}' not found")
+                self.idx_redshifts = None
+                self.list_of_idx_redshifts = None
+
+            else:
+                nredshifts = len(idx_redshifts)
+
                 assert len(z) == nredshifts, \
                     msg.format("z", nredshifts, len(z))
                 assert len(cdist) == nredshifts, \
                     msg.format("cdist", nredshifts, len(cdist))
                 assert len(weights_redshifts) == nredshifts, \
                     msg.format("weights_redshifts", nredshifts, len(weights_redshifts))
-
-                self.z = z
-                self.cdist = cdist
-                self.weights_redshifts = weights_redshifts
+                
                 self.idx_redshifts = idx_redshifts
-
-                self.list_of_z = utils.get_list_per_zbin(
-                    z, z, zbins
-                )
-                self.list_of_cdist = utils.get_list_per_zbin(
-                    cdist, z, zbins
-                )
-                self.list_of_weights_redshifts = utils.get_list_per_zbin(
-                    weights_redshifts, z, zbins
-                )
                 self.list_of_idx_redshifts = utils.get_list_per_zbin(
                     idx_redshifts, z, zbins
                 )
-
-                list_of_weights_mseloss = [
-                    np.sum(cdist0 * w0) for cdist0, w0 in zip(
-                        self.list_of_cdist, self.list_of_weights_redshifts
-                    )
-                ]
-                self.weights_mseloss = np.array(list_of_weights_mseloss)
 
         else:
             self.z = None
@@ -332,10 +346,7 @@ def get_npixels_openingangle(openingangle, make_even=True):
 
 def get_weights_redshifts(
         redshifts: np.ndarray,
-        z: np.ndarray | None = Z,
-        h0: float = H0,
-        omega_m: float = OMEGA_M,
-        omega_lambda: float = OMEGA_LAMBDA
+        z: np.ndarray | None = Z
 ) -> np.ndarray:
     """
     Arguments
@@ -345,9 +356,6 @@ def get_weights_redshifts(
     z: np.ndarray, shape = (nplanes,), optional
         List of redshift planes. Default values are the one provided by
         Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
-    h0, omega_m, omega_lambda: float, optional
-        Cosmological parameters, to compute the Hubble parameter. Default values are
-        the one provided by Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
 
     Returns
     -------
@@ -385,39 +393,6 @@ def get_weights_redshifts(
     out /= np.sum(out) # normalize
 
     return out
-
-
-def get_cdist(
-        z: np.ndarray | None = Z,
-        z_sup: float = MAX_Z,
-        c: float = C, h0: float = H0,
-        omega_m: float = OMEGA_M,
-        omega_lambda: float = OMEGA_LAMBDA
-) -> np.ndarray:
-
-    assert z is not None
-    z_bounds = np.concatenate((
-        [0.0], (z[:-1] + z[1:]) / 2, [z_sup]
-    )) # Shape = (nz + 1,)
-    dz = z_bounds[1:] - z_bounds[:-1] # Shape = (nz,)
-    h = get_hubble_param(
-        z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda
-    ) # Shape = (nz,)
-    nz = len(z)
-    triang = np.tril(np.ones((nz, nz))) # Shape = (nz, nz)
-    out = c * np.sum(triang * dz / h, axis=1) # Shape = (nelts,)
-
-    return out
-
-
-def get_hubble_param(
-        z: np.ndarray, h0: float = H0,
-        omega_m: float = OMEGA_M,
-        omega_lambda: float = OMEGA_LAMBDA
-):
-    return h0 * np.sqrt(
-        omega_m * (1 + z)**3 + omega_lambda
-    )
 
 
 def get_data_from_cosmos_ktng(

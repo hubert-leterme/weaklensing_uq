@@ -10,5 +10,6 @@ from .config import (
 from .loss import metric
 from . import (
     datasets, loss, models, optim,
-    physics, training, callbacks, utils
+    physics, transform, training,
+    callbacks, utils
 )

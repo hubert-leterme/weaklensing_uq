@@ -1161,6 +1161,35 @@ def add_tensor_components(x):
     return torch.sum(x, dim=1)
 
 
+def get_cdist(
+        z: np.ndarray, z_sup: float,
+        c: float, h0: float,
+        omega_m: float, omega_lambda: float
+) -> np.ndarray:
+
+    z_bounds = np.concatenate((
+        [0.0], (z[:-1] + z[1:]) / 2, [z_sup]
+    )) # Shape = (nz + 1,)
+    dz = z_bounds[1:] - z_bounds[:-1] # Shape = (nz,)
+    h = get_hubble_param(
+        z, h0=h0, omega_m=omega_m, omega_lambda=omega_lambda
+    ) # Shape = (nz,)
+    nz = len(z)
+    triang = np.tril(np.ones((nz, nz))) # Shape = (nz, nz)
+    out = c * np.sum(triang * dz / h, axis=1) # Shape = (nelts,)
+
+    return out
+
+
+def get_hubble_param(
+        z: np.ndarray, h0: float,
+        omega_m: float, omega_lambda: float
+):
+    return h0 * np.sqrt(
+        omega_m * (1 + z)**3 + omega_lambda
+    )
+
+
 class ComponentWrapper:
     """
     Wrapper class to hold Gaussian and non-Gaussian components.

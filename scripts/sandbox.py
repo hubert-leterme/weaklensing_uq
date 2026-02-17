@@ -1,18 +1,21 @@
 import torch
+import wlmmuq.transform as wltransf
 
-import wlmmuq
+NBINS = 6
+NIMGS = 8
+IMGSIZE = 16
+WHICH_WAY = 1
+TRANSPOSE = True
 
-import _commons
+if __name__ == "__main__":
 
-imgsize = 384
+    dchi = torch.rand(NBINS)
+    chi = torch.cumsum(dchi, dim=0)
+    bnt = wltransf.BNT(chi)
 
-std_noise, mask = _commons.get_stdnoise_mask(
-    path_to_std_noise=wlmmuq.PATH_TO_STD_NOISE,
-    path_to_mask=wlmmuq.PATH_TO_MASK,
-    imgsize=imgsize, cosmos_include_faint=False,
-    inpainting=True, verbose=True
-)
-physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask)
+    x = torch.randn(NIMGS, NBINS, IMGSIZE, IMGSIZE)
+    y = bnt(x, which_way=WHICH_WAY, transpose=TRANSPOSE)
+    x0 = bnt.inverse(y, which_way=WHICH_WAY, transpose=TRANSPOSE)
 
-kappa = torch.randn(2, 6, imgsize, imgsize)
-gamma = physics(kappa)
+    nrmse = torch.linalg.norm(x0 - x) / torch.linalg.norm(x)
+    print(f"NRMSE = {nrmse:.1e}")
