@@ -33,8 +33,7 @@ ANGLE_BATCH_SIZE = 1
 # Cosmological parameters
 C = 2.998e5
 CURVATURE = 0.
-# H0 = 67.74
-H0 = 1. # Normalized Hubble constant (set to 1 at z = 0)
+H0 = 67.74
 OMEGA_M = 0.3089
 OMEGA_LAMBDA = 1 - (OMEGA_M + CURVATURE)
 
