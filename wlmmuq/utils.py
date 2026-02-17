@@ -536,7 +536,7 @@ def check_mask(mask: np.ndarray | torch.Tensor):
 
 
 def meancenter(
-        arr: np.ndarray | torch.Tensor, axis: int | tuple=(-2, -1),
+        arr: np.ndarray | torch.Tensor, axis: int | tuple=(-3, -2, -1),
         mask: np.ndarray | torch.Tensor | None = None
 ) -> np.ndarray | torch.Tensor:
 
