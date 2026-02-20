@@ -14,12 +14,18 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = os.path.join(wlmmuq.MODEL_DIR, "ks")
-OUTPUT_FILENAME = "results_ks"
+METHOD_NAME = "ks"
+OUTPUT_PREFIX = None
 
 def main(
-        path_to_test_dataset: str = wlmmuq.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str = wlmmuq.PATH_TO_CALIB_DATASET,
+        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
+        path_to_test_dataset: str | None = wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
+        test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
+        real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
+        test_on_real_data: bool = False,
+        output_dir: str = wlmmuq.RESULTS_DIR,
+        method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         std_gaussianfilter: float | None = None,
@@ -35,14 +41,17 @@ def main(
         confidence_uq: int | float = _commons.CONFIDENCE_UQ,
         get_initial_bounds: bool = False,
         save_tensors: bool = False, nimgs_save: int = _commons.NIMGS_SAVE,
-        output_dir: str = OUTPUT_DIR, output_filename: str = OUTPUT_FILENAME,
+        output_prefix: str | None = OUTPUT_PREFIX,
         seed: int | None = None, verbose: bool = False, **kwargs
 ):
     _commons.set_seed(seed)
 
-    path_to_output = _commons.get_path_to_output(
-        output_dir, output_filename
-    ) # E.g., "checkpoint/dir/ks/results_ks"
+    output_dir = _commons.get_path_to_results(
+        output_dir, method_name, test_dataset_name=test_dataset_name,
+        real_shearmap_name=real_shearmap_name,
+        test_on_real_data=test_on_real_data
+    )   # E.g., "results/dir/test_kappaTNG/ks/",
+        # or "results/dir/test_cosmos/ks/"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -155,7 +164,8 @@ def main(
         })
 
     _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
+        out_dict, output_dir, now,
+        prefix=output_prefix, verbose=verbose
     )
 
 
@@ -233,7 +243,7 @@ if __name__ == "__main__":
     )
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser, prompt_init_bounds=True, zero_init_bounds=True)
-    _add_arguments.output(parser, OUTPUT_FILENAME)
+    _add_arguments.output(parser, OUTPUT_PREFIX)
     _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()

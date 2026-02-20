@@ -14,14 +14,21 @@ from wlmmuq.data import NUM_WORKERS
 import _commons
 import _add_arguments
 
-OUTPUT_DIR = ""
-OUTPUT_FILENAME = "results_deepmass"
+METHOD_NAME = "deepmass"
+OUTPUT_PREFIX = None
 
 def main(
-        path_to_test_dataset: str = wlmmuq.PATH_TO_TEST_DATASET,
-        path_to_calib_dataset: str = wlmmuq.PATH_TO_CALIB_DATASET,
-        checkpoint_dir: str = wlmmuq.MODEL_DIR,
+        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
+        path_to_test_dataset: str | None = wlmmuq.PATH_TO_TEST_DATASET,
+        path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
+        train_val_dataset_name: str | None = wlmmuq.TRAIN_VAL_DATASET_NAME,
+        test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
+        real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
+        test_on_real_data: bool = False,
+        checkpoint_dir: str | None = wlmmuq.MODEL_DIR,
         checkpoint_subdir: str | None = None, checkpoint_subdir_uq: str | None = None,
+        output_dir: str = wlmmuq.RESULTS_DIR,
+        method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps: str = wlmmuq.PATH_TO_PS,
@@ -50,20 +57,26 @@ def main(
         hyperparam_precalib: list[float] | None = None,
         find_optimal_hyperparam_precalib: bool = False,
         save_tensors: bool = False, nimgs_save: int = _commons.NIMGS_SAVE,
-        output_dir: str = OUTPUT_DIR, output_filename: str = OUTPUT_FILENAME,
+        output_prefix: str | None = OUTPUT_PREFIX,
         seed: int | None = None, verbose: bool = False, **kwargs
 ):
     _commons.set_seed(seed)
 
+    assert checkpoint_subdir is not None    # Model name
     checkpoint_dir, checkpoint_dir_uq = _commons.get_checkpoint_dirs(
         checkpoint_dir,
         checkpoint_subdir=checkpoint_subdir,
         checkpoint_subdir_uq=checkpoint_subdir_uq
     )
 
-    path_to_output = _commons.get_path_to_output(
-        output_dir, output_filename, checkpoint_dir=checkpoint_dir
-    ) # E.g., "checkpoint/dir/results_deepmass"
+    output_dir = _commons.get_path_to_results(
+        output_dir, method_name, test_dataset_name=test_dataset_name,
+        real_shearmap_name=real_shearmap_name,
+        test_on_real_data=test_on_real_data,
+        train_val_dataset_name=train_val_dataset_name,
+        model_name=checkpoint_subdir, 
+    )   # E.g., "results/dir/test_kappaTNG/deepmass/kappaTNG/model_name/",
+        # or "results/dir/test_cosmos/deepmass/kappaTNG/model_name/"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -238,7 +251,8 @@ def main(
         })
 
     _commons.save_results(
-        out_dict, path_to_output, now, verbose=verbose
+        out_dict, output_dir, now,
+        prefix=output_prefix, verbose=verbose
     )
 
 
@@ -333,7 +347,7 @@ if __name__ == "__main__":
     _add_arguments.starlet_debiasing(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
-    _add_arguments.output(parser, OUTPUT_FILENAME)
+    _add_arguments.output(parser, OUTPUT_PREFIX)
     _add_arguments.seed_verbose(parser)
     args = parser.parse_args()
     kwargs = vars(args).copy()

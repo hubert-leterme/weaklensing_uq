@@ -73,10 +73,27 @@ def set_seed(seed):
         torch.manual_seed(seed)
 
 
-def get_path_to_output(output_dir, output_filename, checkpoint_dir=None):
-    if checkpoint_dir is not None:
-        output_dir = os.path.join(checkpoint_dir, output_dir)
-    return os.path.join(output_dir, output_filename)
+def get_path_to_results(
+        output_dir: str, method_name: str,
+        test_dataset_name: str | None = None,
+        real_shearmap_name: str | None = None,
+        test_on_real_data: bool = False,
+        train_val_dataset_name: str | None = None,
+        model_name: str | None = None,
+):
+    dirs = [output_dir, method_name]
+    if not test_on_real_data:
+        assert test_dataset_name is not None
+        dirs.append(test_dataset_name)
+    else:
+        assert real_shearmap_name is not None
+        dirs.append(real_shearmap_name)
+    if train_val_dataset_name is not None:
+        dirs.append(train_val_dataset_name)
+    if model_name is not None:
+        dirs.append(model_name)
+
+    return os.path.join(*dirs)
 
 
 def get_device(verbose=False):
@@ -952,11 +969,11 @@ def get_uq_keys(
 
 
 def save_results(
-        out_dict, path_to_output, now,
+        out_dict, output_dir, now, prefix=None,
         verbose=False, **kwargs
 ):
     path_to_output = _complete_path_to_torch_saved_objects(
-        path_to_output, now, **kwargs
+        output_dir, now, prefix=prefix, **kwargs
     )
     if verbose:
         print(f"Save results to {path_to_output}")
@@ -966,10 +983,12 @@ def save_results(
 
 
 def _complete_path_to_torch_saved_objects(
-        path, timestamp, step_size=None
+        output_dir, timestamp, prefix=None, step_size=None
 ):
+    filename = prefix if prefix is not None else ""
     if step_size is not None:
-        path = f"{path}_step-size_{step_size:.3f}"
-    path = f"{path}_{timestamp}.pt"
+        filename = f"{filename}_step-size_{step_size:.3f}"
+    filename = f"{filename}_{timestamp}.pt"
+    filename = filename.lstrip("_")
 
-    return path
+    return os.path.join(output_dir, filename)

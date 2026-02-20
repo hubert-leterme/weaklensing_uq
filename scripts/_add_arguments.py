@@ -611,14 +611,14 @@ def starlet_debiasing(parser):
     )
 
 
-def output(parser, output_filename):
+def output(parser, prefix=None):
 
     parser.add_argument(
-        "-o", "--output-filename", type=str,
+        "-o", "--output-prefix", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Output filename (without extension). "
-            f"Default = '{output_filename}'"
+            "Prefix for output filename (without extension). "
+            f"Default = '{prefix if prefix is not None else ""}'"
         )
     )
     parser.add_argument(

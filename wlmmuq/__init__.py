@@ -40,6 +40,9 @@ if KTNG_DIR is not None:
 MODEL_DIR = CONFIG_DATA.get('model_dir', None)
 if MODEL_DIR is not None:
     MODEL_DIR = os.path.expanduser(MODEL_DIR)
+RESULTS_DIR = CONFIG_DATA.get('results_dir', None)
+if RESULTS_DIR is not None:
+    RESULTS_DIR = os.path.expanduser(RESULTS_DIR)
 
 PATH_TO_STD_NOISE = CONFIG_DATA.get('path_to_std_noise', None)
 if PATH_TO_STD_NOISE is not None:
@@ -53,6 +56,9 @@ if PATH_TO_EXTENT is not None:
 PATH_TO_PS = CONFIG_DATA.get('path_to_ps', None)
 if PATH_TO_PS is not None:
     PATH_TO_PS = os.path.expanduser(PATH_TO_PS)
+PATH_TO_REAL_SHEARMAP = CONFIG_DATA.get('path_to_real_shearmap', None)
+if PATH_TO_REAL_SHEARMAP is not None:
+    PATH_TO_REAL_SHEARMAP = os.path.expanduser(PATH_TO_REAL_SHEARMAP)
 
 PATH_TO_TRAIN_VAL_DATASET = CONFIG_DATA.get('path_to_train_val_dataset', None)
 if PATH_TO_TRAIN_VAL_DATASET is not None:
@@ -63,6 +69,10 @@ if PATH_TO_TEST_DATASET is not None:
 PATH_TO_CALIB_DATASET = CONFIG_DATA.get('path_to_calib_dataset', None)
 if PATH_TO_CALIB_DATASET is not None:
     PATH_TO_CALIB_DATASET = os.path.expanduser(PATH_TO_CALIB_DATASET)
+
+TRAIN_VAL_DATASET_NAME = CONFIG_DATA.get('train_val_dataset_name', None)
+TEST_DATASET_NAME = CONFIG_DATA.get('test_dataset_name', None)
+REAL_SHEARMAP_NAME = CONFIG_DATA.get('real_shearmap_name', None)
 
 LEARNLETS_PRETRAINED_WEIGHTS_DIR = CONFIG_DATA.get('learnlets_pretrained_weights_dir', None)
 if LEARNLETS_PRETRAINED_WEIGHTS_DIR is not None:
