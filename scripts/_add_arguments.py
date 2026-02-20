@@ -226,27 +226,21 @@ def model_uq(parser, denoiser=False, deepmass=False):
     )
 
 
-def checkpoint_dir(parser):
+def model_name(parser):
 
     parser.add_argument(
-        "--checkpoint-dir", type=str,
+        "-c", "--model-name", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Checkpoint parent directory. Default = {wlmmuq.MODEL_DIR}"
-        )
-    )
-    parser.add_argument(
-        "-c", "--checkpoint-subdir", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Subdirectory containing the save checkpoints. Default is None."
+            "Model name, used for setting the subdirectory containing "
+            "the saved checkpoints. Default is None."
         )
     )
 
 
 def checkpoint(parser):
 
-    checkpoint_dir(parser)
+    model_name(parser)
     parser.add_argument(
         "-t", "--timestamp", type=str,
         default=argparse.SUPPRESS,

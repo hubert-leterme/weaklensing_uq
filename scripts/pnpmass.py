@@ -26,8 +26,8 @@ def main(
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
         real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
         test_on_real_data: bool = False,
-        checkpoint_dir: str | None = wlmmuq.MODEL_DIR,
-        checkpoint_subdir: str | None = None, checkpoint_subdir_uq: str | None = None,
+        model_dir: str | None = wlmmuq.MODEL_DIR,
+        model_name: str | None = None, model_name_uq: str | None = None,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
@@ -72,11 +72,12 @@ def main(
 ):
     _commons.set_seed(seed)
 
-    assert checkpoint_subdir is not None    # Model name
+    assert model_name is not None
     checkpoint_dir, checkpoint_dir_uq = _commons.get_checkpoint_dirs(
-        checkpoint_dir,
-        checkpoint_subdir=checkpoint_subdir,
-        checkpoint_subdir_uq=checkpoint_subdir_uq
+        model_dir,
+        train_val_dataset_name=train_val_dataset_name,
+        model_name=model_name,
+        model_name_uq=model_name_uq
     )
 
     output_dir = _commons.get_path_to_results(
@@ -84,7 +85,7 @@ def main(
         real_shearmap_name=real_shearmap_name,
         test_on_real_data=test_on_real_data,
         train_val_dataset_name=train_val_dataset_name,
-        model_name=checkpoint_subdir
+        model_name=model_name
     )   # E.g., "results/dir/test_kappaTNG/pnpmass/kappaTNG/model_name/",
         # or "results/dir/test_cosmos/pnpmass/kappaTNG/model_name/"
 

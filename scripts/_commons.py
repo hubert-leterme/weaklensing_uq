@@ -188,21 +188,42 @@ def create_dataset_from_kappatng(
 
 
 def get_checkpoint_dirs(
-        checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
+        model_dir,
+        train_val_dataset_name=None, train_val_dataset_name_uq=None,
+        model_name=None, model_name_uq=None
 ):
-    checkpoint_dir0 = checkpoint_dir
-    if checkpoint_subdir is not None:
-        checkpoint_dir = os.path.join(checkpoint_dir0, checkpoint_subdir)
-    else:
-        raise ValueError("Argument `checkpoint_subdir` must be provided.")
-    if checkpoint_subdir_uq is not None:
-        checkpoint_dir_uq = os.path.join(checkpoint_dir0, checkpoint_subdir_uq)
-        warnings.warn(
-            f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
-            f"the one used for the point estimate ({checkpoint_dir})"
-        )
-    else:
-        checkpoint_dir_uq = checkpoint_dir
+    checkpoint_dir = model_dir
+    checkpoint_dir_uq = model_dir
+
+    def _join_subdir(
+            checkpoint_dir, checkpoint_dir_uq,
+            arg, arg_uq, msg_missing_arg, msg_mismatch
+    ):
+        if arg is not None:
+            if arg_uq is not None:
+                warnings.warn(msg_mismatch)
+            else:
+                arg_uq = arg
+            checkpoint_dir = os.path.join(checkpoint_dir, arg)
+            checkpoint_dir_uq = os.path.join(checkpoint_dir_uq, arg_uq)
+
+        else:
+            raise ValueError(msg_missing_arg)
+
+        return checkpoint_dir, checkpoint_dir_uq
+    
+    checkpoint_dir, checkpoint_dir_uq = _join_subdir(
+        checkpoint_dir, checkpoint_dir_uq,
+        train_val_dataset_name, train_val_dataset_name_uq,
+        "Argument `train_val_dataset_name` must be provided.",
+        "Mismatched datasets between order-1 and order-2 training."
+    )
+    checkpoint_dir, checkpoint_dir_uq = _join_subdir(
+        checkpoint_dir, checkpoint_dir_uq,
+        model_name, model_name_uq,
+        "Argument `model_name` must be provided.",
+        "Mismatched models between order-1 and order-2 training."
+    )
 
     return checkpoint_dir, checkpoint_dir_uq
 

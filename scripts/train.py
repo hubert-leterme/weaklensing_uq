@@ -43,7 +43,9 @@ def main(
         nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS,
-        checkpoint_dir: str = wlmmuq.MODEL_DIR, checkpoint_subdir: str | None = None,
+        model_dir: str = wlmmuq.MODEL_DIR,
+        train_val_dataset_name: str | None = wlmmuq.TRAIN_VAL_DATASET_NAME,
+        model_name: str | None = None,
         num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
@@ -55,9 +57,10 @@ def main(
     if verbose:
         print(f"Number of workers: {num_workers}")
 
-    if checkpoint_subdir is not None:
-        checkpoint_dir = os.path.join(checkpoint_dir, checkpoint_subdir)
-
+    checkpoint_dir, _ = _commons.get_checkpoint_dirs(
+        model_dir, train_val_dataset_name=train_val_dataset_name,
+        model_name=model_name
+    )
     callback_list = []
 
     if denoiser:
@@ -360,7 +363,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    _add_arguments.checkpoint_dir(parser)
+    _add_arguments.model_name(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,
