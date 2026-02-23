@@ -233,21 +233,16 @@ def get_masked_and_noisy_shear(
     else:
         randn = np.random.randn
 
-    if mask is None:
-        if torch.is_tensor(std_noise):
-            mask = torch.ones_like(std_noise, dtype=torch.bool)
-        else:
-            mask = np.ones_like(std_noise, dtype=bool)
-
-    if device is not None:
+    if device is not None and torch.is_tensor(mask):
         mask = mask.to(device)
 
     shape = test_array_shape([gamma, std_noise, mask])
     *shape0, nx, ny = shape
 
     # Set masked values to 0
-    check_mask(mask)
-    gamma_masked = mask * gamma
+    if mask is not None:
+        check_mask(mask)
+        gamma_masked = mask * gamma
 
     # TODO: use physics = iterativemm.MassMapping(...)
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
@@ -255,7 +250,7 @@ def get_masked_and_noisy_shear(
         if device is not None:
             noise = noise.to(device)
         noise *= std_noise
-        if not inpainting:
+        if not inpainting and mask is not None:
             noise[..., ~mask] = 0.
         return gamma_masked + noise
 
