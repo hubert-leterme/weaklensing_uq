@@ -128,7 +128,7 @@ def get_stdnoise_mask(
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlktng.get_data_from_cosmos_ktng(cat_cosmos, imgsize)
+        data_dict = wlcosmos.get_data_from_cosmos(cat_cosmos, imgsize, wlktng.RESOLUTION)
         shapedisp = data_dict["shapedisp"]
         ngal = data_dict["ngal"]
         mask = data_dict["mask"]

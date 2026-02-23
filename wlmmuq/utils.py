@@ -578,6 +578,10 @@ def get_1d_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch
     return powerspectrum_1d
 
 
+def get_openingangle(imgsize, resolution):
+    return imgsize * resolution / 60.
+
+
 def check_mask(mask: np.ndarray | torch.Tensor):
     if torch.is_tensor(mask):
         assertion = mask.dtype == torch.bool

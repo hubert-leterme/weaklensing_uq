@@ -3,9 +3,8 @@ import random
 import numpy as np
 import h5py
 import tqdm
-import torch
 
-from . import cosmos, dataaugm
+from . import dataaugm
 from .. import utils
 from .. import KTNG_DIR
 
@@ -199,10 +198,6 @@ class KappaTNGFromSamples(BaseKappaTNG):
         return kappa
 
 
-def get_openingangle(imgsize):
-    return imgsize * RESOLUTION / 60.
-
-
 def get_npixels_openingangle(openingangle, make_even=True):
 
     if not make_even:
@@ -212,7 +207,7 @@ def get_npixels_openingangle(openingangle, make_even=True):
     width = mult * int(openingangle / (mult * RESOLUTION) * 60.)
 
     # Adjust opening angle to match the (integer) number of pixels
-    openingangle = get_openingangle(width)
+    openingangle = utils.get_openingangle(width, RESOLUTION)
 
     return width, openingangle
 
@@ -257,37 +252,6 @@ def get_weights(redshifts):
     return out
 
 
-def get_data_from_cosmos_ktng(cat_cosmos, imgsize):
-
-    openingangle = get_openingangle(imgsize)
-    data_cosmos = cosmos.get_data_from_cosmos(
-        cat_cosmos, openingangle
-    )
-    ra_cosmos_median = data_cosmos['ra_cosmos_median']
-    dec_cosmos_median = data_cosmos['dec_cosmos_median']
-    extent = data_cosmos['extent']
-    shapedisp = data_cosmos["shapedisp"]
-    ngal = utils.ngal_per_pixel(
-        cat_cosmos['Ra'], cat_cosmos['Dec'],
-        imgsize, extent
-    )
-    mask = ngal > 0
-
-    ngal = torch.tensor(ngal, dtype=torch.float32)
-    mask = torch.tensor(mask, dtype=bool)
-
-    out = {
-        'ra_cosmos_median': ra_cosmos_median,
-        'dec_cosmos_median': dec_cosmos_median,
-        'extent': extent,
-        'openingangle': openingangle,
-        'shapedisp': shapedisp,
-        'ngal': ngal,
-        'mask': mask
-    }
-    return out
-
-
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshift, imgsize, batch_size=None,
         verbose=False, **kwargs
@@ -310,7 +274,7 @@ def create_cropped_dataset(
         #     dtype='int'
         # ) # Top-left coordinates
 
-    openingangle = get_openingangle(imgsize)
+    openingangle = utils.get_openingangle(imgsize, RESOLUTION)
     ktng = KappaTNG(
         idx_lp=idx_lp, weights=weights_redshift, openingangle=openingangle, **kwargs
     )

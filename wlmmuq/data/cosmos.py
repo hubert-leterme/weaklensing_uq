@@ -7,6 +7,10 @@ import matplotlib.path as mpath
 
 import astropy.table as aptable
 
+import torch
+from lenspack.utils import bin2d # TODO: use modified `bin2d` function
+
+from .. import utils
 from .. import COSMOS_DIR
 
 COSMOS_VERTICES = [(149.508, 2.880),
@@ -70,29 +74,57 @@ def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
     return extent
 
 
-def get_data_from_cosmos(cat_cosmos, openingangle):
-    """
-    Parameters
-    ----------
-    cat_cosmos (astropy.Table)
-    openingangle (float)
-        Opening angle of the target convergence maps (deg).
-
-    """
-    ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
-    dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
-    extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
-
-    shapedisp1 = np.std(cat_cosmos['e1iso_rot4_gr_snCal'])
-    shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
+def get_data_from_cosmos(
+        cat_cosmos, imgsize, resolution, get_noisy_shear_map=False, east_right=False
+):
+    e1 = cat_cosmos['e1iso_rot4_gr_snCal']
+    e2 = cat_cosmos['e2iso_rot4_gr_snCal']
+    ra = cat_cosmos['ra']
+    dec = cat_cosmos['dec']
+    nhweight_int = cat_cosmos['nhweight_int']
+    
+    shapedisp1 = np.std(e1)
+    shapedisp2 = np.std(e2)
     shapedisp = (shapedisp1 + shapedisp2) / 2
+
+    openingangle = utils.get_openingangle(imgsize, resolution)
+    ra_cosmos_median = np.median(ra) # right ascension (longitude)
+    dec_cosmos_median = np.median(dec) # declination (latitude)
+    extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
+    ngal = bin2d(
+        ra, dec,
+        npix=imgsize, extent=extent
+    )
+    assert isinstance(ngal, np.ndarray)
+    mask = ngal > 0
+
+    ngal = torch.tensor(ngal, dtype=torch.float32)
+    mask = torch.tensor(mask, dtype=torch.bool)
 
     out = {
         'ra_cosmos_median': ra_cosmos_median,
         'dec_cosmos_median': dec_cosmos_median,
         'extent': extent,
-        'shapedisp': shapedisp
+        'openingangle': openingangle,
+        'shapedisp': shapedisp,
+        'ngal': ngal,
+        'mask': mask
     }
+
+    if get_noisy_shear_map:
+        if east_right:
+            e2 = -e2 # Use the complex conjugate of ellipticities (East left in the COSMOS catalog)
+        e1map, e2map = bin2d(
+            ra, dec, 
+            v=(e1, e2), w=nhweight_int,
+            npix=imgsize, extent=extent
+        )
+        gamma = torch.tensor(e1map + 1j * e2map, dtype=torch.complex64)
+
+        out.update({
+            'gamma': gamma
+        })
+    
     return out
 
 
