@@ -212,11 +212,11 @@ def get_std_noise(ngal, shapedisp, std_noise_mask):
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
-        mask: np.ndarray | torch.Tensor = None,
+        mask: np.ndarray | torch.Tensor | None = None,
         inpainting: bool = False,
-        output_shape_wider: tuple[int, int] = None,
-        std_noise_wider: np.ndarray | torch.Tensor = None,
-        mask_wider: np.ndarray | torch.Tensor = None,
+        output_shape_wider: tuple[int, int] | None = None,
+        std_noise_wider: np.ndarray | torch.Tensor | None = None,
+        mask_wider: np.ndarray | torch.Tensor | None = None,
         device=None
 ):
     """
@@ -729,7 +729,7 @@ def skyshow(
             ]
 
     out = plt.imshow(img, origin='lower', extent=extent, **kwargs)
-    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
+    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis (sky observations: east left)
     if printxylabels:
         plt.xlabel("Right ascension")
         plt.ylabel("Declination")
