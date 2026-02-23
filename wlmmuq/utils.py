@@ -65,19 +65,6 @@ def get_resolution(width, openingangle):
     return openingangle / width * 60.
 
 
-def ngal_per_pixel(ra, dec, width, extent):
-    """
-    Parameters
-    ----------
-    ra, dec (numpy.ndarray)
-    width (int)
-        Size of the target convergence maps (nb pixels).
-    extent (4-tuple)
-        Extent of the target convergence maps (deg).
-    """
-    return bin2d(ra, dec, npix=width, extent=extent)
-
-
 def _get_shear_fromto_convergence(
         func: typing.Callable, inp1: np.ndarray | torch.Tensor,
         inp2: np.ndarray | torch.Tensor | None = None,
