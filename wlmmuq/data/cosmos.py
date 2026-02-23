@@ -79,8 +79,8 @@ def get_data_from_cosmos(
 ):
     e1 = cat_cosmos['e1iso_rot4_gr_snCal']
     e2 = cat_cosmos['e2iso_rot4_gr_snCal']
-    ra = cat_cosmos['ra']
-    dec = cat_cosmos['dec']
+    ra = cat_cosmos['Ra']
+    dec = cat_cosmos['Dec']
     nhweight_int = cat_cosmos['nhweight_int']
     
     shapedisp1 = np.std(e1)

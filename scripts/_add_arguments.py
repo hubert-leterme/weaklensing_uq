@@ -290,7 +290,7 @@ def checkpoint(parser):
     )
 
 
-def dataset(parser, batch_size):
+def imgsize(parser):
 
     parser.add_argument(
         "--imgsize", type=int,
@@ -300,6 +300,11 @@ def dataset(parser, batch_size):
             f"Default = {_commons.IMGSIZE}"
         )
     )
+
+
+def dataset(parser, batch_size):
+
+    imgsize(parser)
     parser.add_argument(
         "-b", "--batch-size", type=int,
         default=argparse.SUPPRESS,
