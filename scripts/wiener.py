@@ -69,20 +69,20 @@ def main(
     )
 
     # Load test set
-    test_dataset = _commons.get_dataloader_massmapping(
+    test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
         num_workers, std_noise, mask, shuffle=False
     )
 
     # Load calibration set, if provided
     if cqr:
-        calib_dataset = _commons.get_dataloader_massmapping(
+        calib_dataloader = _commons.get_dataloader_massmapping(
             path_to_calib_dataset, nimgs_calib, imgsize, batch_size,
             num_workers, std_noise, mask,
             shuffle=True, min_idx_filename_ori=min_idx_filename_ori_calib
         )
     else:
-        calib_dataset = None
+        calib_dataloader = None
 
     # Instantiate physics (forward model) and RMSE metric
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
@@ -100,7 +100,6 @@ def main(
     )
 
     # Run iterative Wiener for each batch
-    test_dataloader = iter(test_dataset)
     if verbose:
         print(f"Compute Wiener on the test set ({nimgs_test} images)")
 
@@ -136,10 +135,9 @@ def main(
         })
 
     # Calibrate with CQR, if available
-    if calib_dataset is not None:
+    if calib_dataloader is not None:
         beg_time = time.time()
 
-        calib_dataloader = iter(calib_dataset)
         if verbose:
             print(f"Compute Wiener on the calibration set ({nimgs_calib} images)")
         out_wiener_calib = run_wiener_batch(
