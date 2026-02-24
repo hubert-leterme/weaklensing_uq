@@ -105,7 +105,9 @@ def main(
     # Load test set
     test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False
+        num_workers, std_noise, mask, shuffle=False,
+        test_on_real_data=test_on_real_data,
+        path_to_real_shearmap=path_to_real_shearmap
     )
 
     # Load calibration set, if provided
@@ -245,7 +247,10 @@ def main(
 
         # Run PnPMass for each batch
         if verbose:
-            print(f"Compute PnPMass on the test set ({nimgs_test} images)")
+            if not test_on_real_data:
+                print(f"Compute PnPMass on the test set ({nimgs_test} images)")
+            else:
+                print(f"Compute PnPMass on the COSMOS shear map")
         out_pnpmass = run_pnpmass_batch(
             pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
             rmse_fn=rmse_fn,
@@ -253,19 +258,25 @@ def main(
             starlet_debiasing=starlet_debiasing,
             dict_starlet_debiaser=dict_starlet_debiaser,
             dict_starlet=dict_starlet,
+            test_on_real_data=test_on_real_data,
             callbacks=callbacks,
             device=device, verbose=verbose
         )
         kappa_true = out_pnpmass["kappa_true"]
         kappa_pred = out_pnpmass["kappa_pred"]
         var = out_pnpmass["var"]
+
         rmse = out_pnpmass["rmse"]
+        l2norm = out_pnpmass["l2norm"]
+        try:
+            rmse = rmse.cpu()
+            l2norm = l2norm.cpu()
+        except Exception:
+            pass
 
         dict_kappa_pred_debiased = out_pnpmass["dict_kappa_pred_debiased"]
         dict_var_debiased = out_pnpmass["dict_var_debiased"]
         dict_rmse_debiased = out_pnpmass["dict_rmse_debiased"]
-
-        l2norm = out_pnpmass["l2norm"]
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -274,12 +285,16 @@ def main(
             "step_size": tau,
             "arch": arch,
             "niter": niter,
-            "nimgs_test": nimgs_test,
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
-            "rmse": rmse.cpu(),
-            "l2norm": l2norm.cpu(),
+            "rmse": rmse,
+            "l2norm": l2norm,
+            "test_on_real_data": test_on_real_data,
         }
+        if not test_on_real_data:
+            out_dict.update({
+                "nimgs_test": nimgs_test,
+            })
 
         if starlet_debiasing:
             out_dict.update({
@@ -295,15 +310,19 @@ def main(
             }) # For (key, value) correspondance (threshold or step size)
             out_dict.update({
                 "dict_rmse_debiased": _apply_fn_inside_dict_debiasing(
-                    lambda x: x.cpu(), dict_rmse_debiased
+                    lambda x: x.cpu(), dict_rmse_debiased,
+                    return_none_on_error=True
                 ),
             })
         if save_tensors:
             out_dict.update({
-                "kappa_true": kappa_true[:nimgs_save].cpu(),
                 "kappa_pred": kappa_pred[:nimgs_save].cpu(),
                 "var": var[:nimgs_save].cpu(),
             })
+            if not test_on_real_data:
+                out_dict.update({
+                    "kappa_true": kappa_true[:nimgs_save].cpu(),
+                })
             if starlet_debiasing:
                 select_imgs_cpu = lambda x: x[:nimgs_save].cpu()
                 out_dict.update({
@@ -412,6 +431,7 @@ def run_pnpmass_batch(
         dict_starlet: dict[
             int, dict[int, wlmcalens.Starlet2d]
         ] | None = None, # {detection_threshold: {step_size: ...}}
+        test_on_real_data: bool = False,
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):
@@ -432,7 +452,14 @@ def run_pnpmass_batch(
     pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
     for i, (kappa_true, gamma_noisy) in enumerate(pbar):
         callbacks.on_batch_begin(i)
-        kappa_true = kappa_true.to(device)
+
+        if not test_on_real_data:
+            kappa_true = kappa_true.to(device)
+            compute_metrics = True
+        else: # No groung truth; kappa_true is set to torch.nan or None
+            kappa_true = None
+            compute_metrics = False
+
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             if gaussian_extractor is not None:
@@ -440,12 +467,20 @@ def run_pnpmass_batch(
                     gamma_noisy, physics, x_gt=None, compute_metrics=False
                 )
                 gamma_noisy = gamma_noisy - physics.A(kappa_g)
-                kappa_true = kappa_true - kappa_g
+                if not test_on_real_data:
+                    kappa_true = kappa_true - kappa_g
 
-            kappa_pred, metrics = pnpmass(
-                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+            out_pnpmass = pnpmass(
+                gamma_noisy, physics, x_gt=kappa_true,
+                compute_metrics=compute_metrics
             )
-            rmse = metrics["rmse"]
+            if not test_on_real_data:
+                kappa_pred, metrics = out_pnpmass
+                rmse = metrics["rmse"]
+            else:
+                kappa_pred = out_pnpmass
+                rmse = None
+
             if pnpmass_uq is not None:
                 assert pnpmass_uq.custom_init is not None
                 pnpmass_uq.custom_init.X_init = (kappa_pred,)
@@ -455,13 +490,13 @@ def run_pnpmass_batch(
             else:
                 var = torch.zeros(kappa_pred.shape, device=device)
 
+            dict_kappa_pred_debiased: dict[int, dict[int, torch.Tensor]] = {}
+            dict_var_debiased: dict[int, dict[int, torch.Tensor]] = {}
+            dict_rmse_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
             if starlet_debiasing:
                 assert dict_starlet_debiaser is not None
                 assert dict_starlet is not None
 
-                dict_kappa_pred_debiased: dict[int, dict[int, torch.Tensor]] | None = {}
-                dict_rmse_debiased: dict[int, dict[int, torch.Tensor]] | None = {}
-                dict_var_debiased: dict[int, dict[int, torch.Tensor]] | None = {}
                 for thresh in dict_starlet_debiaser.keys():
 
                     dict_kappa_pred_debiased.update({thresh: {}})
@@ -474,11 +509,16 @@ def run_pnpmass_batch(
                         assert starlet_debiaser.custom_init is not None
                         starlet_debiaser.custom_init.X_init = (kappa_pred,)
                         starlet.x_prev = kappa_pred
-                        kappa_pred_debiased, metrics_starlet_debiaser = \
-                                starlet_debiaser(
-                            gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+                        out_starlet_debiaser = starlet_debiaser(
+                            gamma_noisy, physics, x_gt=kappa_true,
+                            compute_metrics=compute_metrics
                         )
-                        rmse_debiased = metrics_starlet_debiaser["rmse"]
+                        if not test_on_real_data:
+                            kappa_pred_debiased, metrics_starlet_debiaser = out_starlet_debiaser
+                            rmse_debiased = metrics_starlet_debiaser["rmse"]
+                        else:
+                            kappa_pred_debiased = out_starlet_debiaser
+                            rmse_debiased = None
 
                         if pnpmass_uq is not None:
                             assert pnpmass_uq.custom_init is not None
@@ -490,23 +530,19 @@ def run_pnpmass_batch(
                             var_debiased = torch.zeros(kappa_pred_debiased.shape, device=device)
 
                         dict_kappa_pred_debiased[thresh][tau_debiaser] = kappa_pred_debiased
-                        dict_rmse_debiased[thresh][tau_debiaser] = rmse_debiased
                         dict_var_debiased[thresh][tau_debiaser] = var_debiased
-
-            else:
-                dict_kappa_pred_debiased = None
-                dict_rmse_debiased = None
-                dict_var_debiased = None
+                        dict_rmse_debiased[thresh][tau_debiaser] = rmse_debiased
 
             if gaussian_extractor is not None:
                 kappa_pred = kappa_pred + kappa_g
-                if dict_kappa_pred_debiased is not None:
-                    dict_kappa_pred_debiased = _apply_fn_inside_dict_debiasing(
-                        lambda x: x + kappa_g, dict_kappa_pred_debiased
-                    )
-                kappa_true = kappa_true + kappa_g
+                dict_kappa_pred_debiased = _apply_fn_inside_dict_debiasing(
+                    lambda x: x + kappa_g, dict_kappa_pred_debiased
+                )
+                if not test_on_real_data:
+                    assert kappa_true is not None
+                    kappa_true = kappa_true + kappa_g
 
-            if rmse_fn is not None:
+            if rmse_fn is not None and not test_on_real_data:
                 l2norm = rmse_fn(kappa_true, 0)
             else:
                 l2norm = None
@@ -521,14 +557,15 @@ def run_pnpmass_batch(
         listof_dict_var_debiased.append(dict_var_debiased)
         listof_dict_rmse_debiased.append(dict_rmse_debiased)
 
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if not test_on_real_data:
+        kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
 
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs, niter)
-    except TypeError:
+    except Exception:
         rmse = None
         l2norm = None
 
@@ -551,17 +588,10 @@ def run_pnpmass_batch(
         dict_var_debiased = _apply_fn_inside_dict_debiasing(
             cat_along_first_dim, dict_listof_var_debiased
         )
-        try:
-            dict_rmse_debiased = _apply_fn_inside_dict_debiasing(
-                cat_along_first_dim, dict_listof_rmse_debiased
-            )
-        except TypeError:
-            dict_rmse_debiased = None
-
-    else:
-        dict_kappa_pred_debiased = None
-        dict_var_debiased = None
-        dict_rmse_debiased = None
+        dict_rmse_debiased = _apply_fn_inside_dict_debiasing(
+            cat_along_first_dim, dict_listof_rmse_debiased,
+            return_none_on_error=True
+        )
 
     out = {
         "kappa_true": kappa_true,
@@ -599,13 +629,31 @@ def _merge_dicts_debiasing[T](
 
 
 def _apply_fn_inside_dict_debiasing[U, V](
-        fn: typing.Callable[[U], V],
-        dictof_dicts: dict[int, dict[int, U]]
-) -> dict[int, dict[int, V]]:
+    fn: typing.Callable[[U], V],
+    dictof_dicts: dict[int, dict[int, U]],
+    return_none_on_error: bool = False,
+) -> dict[int, dict[int, typing.Optional[V]]]:
+    """Apply `fn` to the inner dict values for debiasing dictionaries.
+
+    If ``return_none_on_error`` is True, exceptions raised by ``fn(v)`` are
+    caught and ``None`` is returned for that entry instead of propagating
+    the error.
+    """
+
+    if return_none_on_error:
+        def _safe_fn(v: U) -> V | None:
+            try:
+                return fn(v)
+            except Exception:
+                return None
+
+        apply_fn = _safe_fn
+    else:
+        apply_fn = fn
 
     return {
         thresh: {
-            tau: fn(v) for tau, v in d.items()
+            tau: apply_fn(v) for tau, v in d.items()
         } for thresh, d in dictof_dicts.items()
     }
 

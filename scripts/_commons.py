@@ -400,13 +400,21 @@ def instantiate_starlet_denoiser(
 
 def get_dataloader_massmapping(
         path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask,
-        **kwargs
+        test_on_real_data=False, path_to_real_shearmap=None, **kwargs
 ):
-    test_dataloader = wlbl.HDF5DatasetMassMapping(
-        hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, output_shape=imgsize,
-        newaxis=True, num_workers=num_workers, **kwargs
-    ).to_dataloader()
+    if not test_on_real_data:
+        test_dataloader = wlbl.HDF5DatasetMassMapping(
+            hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
+            std_noise=std_noise, mask=mask, output_shape=imgsize,
+            newaxis=True, num_workers=num_workers, **kwargs
+        ).to_dataloader()
+    else:
+        if path_to_real_shearmap is None:
+            raise ValueError("Argument `path_to_real_shearmap` must be provided.")
+        test_dataloader = wlbl.RealShearMapDataset(
+            path_to_real_shearmap, newaxis=True,
+            also_get_complex_conjugates=True
+        ).to_dataloader() # TODO: Switch to `newaxis=False` after merge with `tomographic`
 
     return test_dataloader
 
@@ -807,7 +815,7 @@ def convert_into_hyperparam_list(
 def apply_calibration_and_get_metrics(
         kappa_pred: torch.Tensor,
         var: torch.Tensor,
-        kappa_true: torch.Tensor,
+        kappa_true: torch.Tensor | None,
         kappa_pred_calib: torch.Tensor,
         var_calib: torch.Tensor,
         kappa_true_calib: torch.Tensor,
@@ -848,20 +856,28 @@ def apply_calibration_and_get_metrics(
     )
 
     bounds = _get_bounds(kappa_pred, res)
-    err = err_metric(bounds, kappa_true)
-    predinterv = predinterv_metric(bounds, kappa_true)
-
     bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-    err_cqr = err_metric(bounds_cqr, kappa_true)
-    predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
+
+    if kappa_true is not None:
+        err = err_metric(bounds, kappa_true).cpu()
+        err_cqr = err_metric(bounds_cqr, kappa_true).cpu()
+    else:
+        err = None
+        err_cqr = None
+
+    fake_kappa_true = _get_fake_kappa_true(
+        kappa_pred
+    ) # No need to have access to the ground truth to compute the error bar size
+    predinterv = predinterv_metric(bounds, fake_kappa_true).cpu()
+    predinterv_cqr = predinterv_metric(bounds_cqr, fake_kappa_true).cpu()
 
     out_dict = {
         "state_dict_cqr": cqr.state_dict(),
-        "err": err.cpu(),
-        "predinterv": predinterv.cpu(),
-        "err_cqr": err_cqr.cpu(),
-        "predinterv_cqr": predinterv_cqr.cpu(),
-        "hyperparam_precalib": hyperparam_precalib
+        "err": err,
+        "predinterv": predinterv,
+        "err_cqr": err_cqr,
+        "predinterv_cqr": predinterv_cqr,
+        "hyperparam_precalib": hyperparam_precalib,
     }
     if save_tensors:
         out_dict.update({
@@ -917,7 +933,7 @@ def _get_optimal_hyperparam_precalib(
             hyperparam_precalib=params[0]
         )
         bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-        fake_kappa_true = torch.empty_like(
+        fake_kappa_true = _get_fake_kappa_true(
             kappa_pred
         ) # No need to have access to the ground truth to compute the error bar size
         predinterv_cqr = predinterv_metric(
@@ -935,6 +951,12 @@ def _get_optimal_hyperparam_precalib(
         print(results_optim)
 
     return float(results_optim.x[0])
+
+
+def _get_fake_kappa_true(kappa_pred):
+    return torch.empty_like(
+        kappa_pred
+    )
 
 
 def _get_bounds(kappa_pred, res):

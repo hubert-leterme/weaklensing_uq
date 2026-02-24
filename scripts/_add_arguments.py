@@ -355,6 +355,14 @@ def train_val_dataset(parser, batch_size):
 def test_calib_dataset(parser, batch_size):
 
     parser.add_argument(
+        "--path-to-real-shearmap", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the COSMOS shear map (PyTorch saved object). "
+            f"Default = {wlmmuq.PATH_TO_REAL_SHEARMAP}"
+        )
+    )
+    parser.add_argument(
         "--path-to-test-dataset", type=str,
         default=argparse.SUPPRESS,
         help=(
@@ -368,6 +376,14 @@ def test_calib_dataset(parser, batch_size):
         help=(
             "Path to the calibration set (HDF5 file). "
             f"Default = {wlmmuq.PATH_TO_CALIB_DATASET}"
+        )
+    )
+    parser.add_argument(
+        "-cos", "--test-on-real-data", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to test the mass mapping method on the "
+            "COSMOS shear map."
         )
     )
     parser.add_argument(

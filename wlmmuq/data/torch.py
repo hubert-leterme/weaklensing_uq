@@ -50,6 +50,46 @@ class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
         if self.scale_as_input:
             out_dict["kappa_inp"] = TensorList(out_dict["kappa_inp"])
         return out_dict
+    
+
+# TODO: Inerit from DeepInverse's ImageDataset (after upgrading to newer version) 
+class RealShearMapDataset(data.Dataset):
+
+    def __init__(
+            self, path_to_real_shearmap: str, newaxis: bool = False,
+            also_get_complex_conjugates: bool = False
+    ):
+        super().__init__()
+        self.real_gamma = torch.load(path_to_real_shearmap)
+        if newaxis:
+            self.real_gamma = self.real_gamma.unsqueeze(-3)
+        self.also_get_complex_conjugates = also_get_complex_conjugates
+
+    def __len__(self):
+        if not self.also_get_complex_conjugates:
+            out = 1
+        else:
+            out = 4
+        return out
+
+    def __getitem__(self, idx):
+        # No ground truth (see https://deepinv.github.io/deepinv/api/stubs/deepinv.datasets.ImageDataset.html#deepinv.datasets.ImageDataset)
+        if idx == 0:
+            gamma = self.real_gamma
+        elif idx == 1:
+            gamma = torch.conj(self.real_gamma)
+        elif idx == 2:
+            gamma = -self.real_gamma
+        elif idx == 3:
+            gamma = -torch.conj(self.real_gamma)
+        return torch.nan, gamma
+
+    def to_dataloader(self, **kwargs):
+        # Load everything at once
+        out = data.DataLoader(
+            self, batch_size=len(self), shuffle=False, **kwargs
+        )
+        return out
 
 
 class TensorList(list[torch.Tensor]):
