@@ -3,6 +3,7 @@ import argparse
 import time
 import tqdm
 import torch
+import typing
 
 import wlmmuq
 import wlmmuq.models.deepinv.iterativemm as wlpnp
@@ -24,7 +25,7 @@ def main(
         path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
         real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
-        test_on_real_data: bool = False,
+        test_on_real_data: bool = False, run_both: bool = False,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
@@ -77,13 +78,27 @@ def main(
         inpainting=inpainting, verbose=verbose
     )
 
-    # Load test set
-    test_dataloader = _commons.get_dataloader_massmapping(
-        path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False,
-        test_on_real_data=test_on_real_data,
-        path_to_real_shearmap=path_to_real_shearmap
-    )
+    # Load test set(s)
+    if run_both:
+        test_dataloader_sim = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=False,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+        test_dataloader_real = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=True,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+    else:
+        test_dataloader = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=test_on_real_data,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
 
     # Load calibration set, if provided
     if cqr:
@@ -139,97 +154,125 @@ def main(
             callback_list.append(callback_starlet_denoiser)
         callbacks = wlcallbacks.CallbackList(callback_list)
 
-        # Run PnPMass for each batch
-        if verbose:
-            if not test_on_real_data:
-                print(f"Compute MCALens on the test set ({nimgs_test} images)")
-            else:
-                print(f"Compute MCALens on the COSMOS shear map")
-        out_mcalens = run_mcalens_batch(
-            mcalens, physics, test_dataloader, tau, niter,
-            rmse_fn=rmse_fn,
-            callbacks=callbacks,
-            get_initial_bounds=get_initial_bounds,
-            n_noise_reals_per_img=n_noise_reals_per_img,
-            test_on_real_data=test_on_real_data,
-            device=device, verbose=verbose,
-        )
-        kappa_true = out_mcalens["kappa_true"]
-        kappa_pred = out_mcalens["kappa_pred"]
-        var = out_mcalens["var"]
+        # Prepare runs: either single or both (simulated and real)
+        runs = []
+        if run_both:
+            runs.append(("sim", test_dataloader_sim, False, _commons.get_path_to_results(
+                output_dir, method_name, test_dataset_name=test_dataset_name,
+                real_shearmap_name=real_shearmap_name, test_on_real_data=False,
+                train_val_dataset_name=None, model_name=None)))
+            runs.append(("real", test_dataloader_real, True, _commons.get_path_to_results(
+                output_dir, method_name, test_dataset_name=test_dataset_name,
+                real_shearmap_name=real_shearmap_name, test_on_real_data=True,
+                train_val_dataset_name=None, model_name=None)))
+        else:
+            runs.append(("single", test_dataloader, test_on_real_data, output_dir))
 
-        rmse = out_mcalens["rmse"]
-        l2norm = out_mcalens["l2norm"]
-        try:
-            rmse = rmse.cpu()
-            l2norm = l2norm.cpu()
-        except Exception:
-            pass
-
-        inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
-
-        out_dict = {
-            "inference_time": inference_time,
-            "step_size": tau,
-            "niter": niter,
-            "imgsize": imgsize,
-            "confidence_uq": confidence_uq,
-            "rmse": rmse,
-            "l2norm": l2norm,
-            "test_on_real_data": test_on_real_data,
-        }
-        if not test_on_real_data:
-            out_dict.update({
-                "nimgs_test": nimgs_test,
-            })
-        if save_tensors:
-            out_dict.update({
-                "kappa_pred": kappa_pred[:nimgs_save].cpu(),
-                "var": var[:nimgs_save].cpu(),
-            })
-            if not test_on_real_data:
-                out_dict.update({
-                    "kappa_true": kappa_true[:nimgs_save].cpu(),
-                })
-
-        # Calibrate with CQR, if available
-        if calib_dataloader is not None:
-            beg_time = time.time()
-
+        # Run inference per run and collect outputs
+        run_outputs: list[tuple[str, dict, str]] = []
+        for run_name, tdataloader, td_real_flag, out_dir_run in runs:
             if verbose:
-                print(f"Compute PnPMass on the calibration set ({nimgs_calib} images)")
+                if td_real_flag:
+                    print(f"Compute MCALens on the COSMOS shear map ({nimgs_test} images)")
+                else:
+                    print(f"Compute MCALens on the test set ({nimgs_test} images)")
+
+            out_run = run_mcalens_batch(
+                mcalens, physics, tdataloader, tau, niter,
+                rmse_fn=rmse_fn,
+                callbacks=callbacks,
+                get_initial_bounds=get_initial_bounds,
+                n_noise_reals_per_img=n_noise_reals_per_img,
+                starlet=starlet,
+                test_on_real_data=td_real_flag,
+                device=device, verbose=verbose,
+            )
+            run_outputs.append((run_name, out_run, out_dir_run))
+
+        # Run calibration once (if requested)
+        if (calib_dataloader is not None) and cqr:
+            if verbose:
+                print(f"Compute MCALens on the calibration set ({nimgs_calib} images)")
             out_pnpmass_calib = run_mcalens_batch(
                 mcalens, physics, calib_dataloader, tau, niter,
                 rmse_fn=rmse_fn,
                 callbacks=callbacks,
                 get_initial_bounds=get_initial_bounds,
+                n_noise_reals_per_img=n_noise_reals_per_img,
+                starlet=starlet,
                 device=device, verbose=verbose,
             )
             kappa_true_calib = out_pnpmass_calib["kappa_true"]
             kappa_pred_calib = out_pnpmass_calib["kappa_pred"]
             var_calib = out_pnpmass_calib["var"]
+        else:
+            kappa_true_calib = None
+            kappa_pred_calib = None
+            var_calib = None
 
-            mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
-                mode_cqr, scaling_factor_chisqcqr
-            )
-            for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
-                for rho in hyperparam_precalib:
-                    uq_dict = _commons.apply_calibration_and_get_metrics(
-                        kappa_pred, var, kappa_true,
-                        kappa_pred_calib, var_calib, kappa_true_calib,
-                        confidence_uq=confidence_uq,
-                        imgsize=imgsize, mode=mcqr, a=a,
-                        hyperparam_precalib=rho,
-                        find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                        mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                        device=device, verbose=verbose
-                    )
-                    uq_key = _commons.get_uq_keys(
-                        mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
-                    )
+        # Apply calibration and save per-run results
+        for run_name, out_run, out_dir_run in run_outputs:
+            kappa_true = out_run["kappa_true"]
+            kappa_pred = out_run["kappa_pred"]
+            var = out_run["var"]
+
+            rmse = out_run["rmse"]
+            l2norm = out_run["l2norm"]
+            try:
+                rmse = rmse.cpu()
+                l2norm = l2norm.cpu()
+            except Exception:
+                pass
+
+            inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
+
+            trd = (run_name == "real") if run_both else test_on_real_data
+            out_dict = {
+                "inference_time": inference_time,
+                "step_size": tau,
+                "niter": niter,
+                "imgsize": imgsize,
+                "confidence_uq": confidence_uq,
+                "rmse": rmse,
+                "l2norm": l2norm,
+                "test_on_real_data": trd,
+            }
+            if not trd:
+                out_dict.update({
+                    "nimgs_test": nimgs_test,
+                })
+            if save_tensors:
+                out_dict.update({
+                    "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+                    "var": var[:nimgs_save].cpu(),
+                })
+                if not trd:
                     out_dict.update({
-                        uq_key: uq_dict
+                        "kappa_true": kappa_true[:nimgs_save].cpu(),
                     })
+
+            if (kappa_pred_calib is not None) and (var_calib is not None) and (kappa_true_calib is not None):
+                mode_cqr_list, scaling_factor_list = _commons.convert_into_list_cqr_mode(
+                    mode_cqr, typing.cast(typing.Any, scaling_factor_chisqcqr)
+                )
+                for mcqr, a in zip(mode_cqr_list, scaling_factor_list):
+                    for rho in hyperparam_precalib:
+                        uq_dict = _commons.apply_calibration_and_get_metrics(
+                            kappa_pred, var, kappa_true,
+                            kappa_pred_calib, var_calib, kappa_true_calib,
+                            confidence_uq=confidence_uq,
+                            imgsize=imgsize, mode=mcqr, a=a,
+                            hyperparam_precalib=rho,
+                            find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
+                            mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                            device=device, verbose=verbose
+                        )
+                        uq_key = _commons.get_uq_keys(
+                            mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
+                        )
+                        out_dict.update({
+                            uq_key: uq_dict
+                        })
 
             calibration_time = _commons.get_inference_time(
                 beg_time, which="calibration", verbose=verbose
@@ -239,10 +282,10 @@ def main(
                 "nimgs_calib": nimgs_calib,
             })
 
-        _commons.save_results(
-            out_dict, output_dir, now, step_size=tau,
-            prefix=output_prefix, verbose=verbose
-        )
+            _commons.save_results(
+                out_dict, out_dir_run, now, step_size=tau,
+                prefix=output_prefix, verbose=verbose
+            )
 
 
 def run_mcalens_batch(
@@ -253,6 +296,7 @@ def run_mcalens_batch(
         callbacks: wlcallbacks.BaseCallback | None = None,
         get_initial_bounds: bool = False,
         n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
+        starlet: wlmcalens.Starlet2d | None = None,
         test_on_real_data: bool = False,
         device="cpu", verbose=False
 ):
@@ -294,6 +338,7 @@ def run_mcalens_batch(
                     mcalens, physics,
                     output_shape=kappa_pred.shape,
                     n_noise_reals=n_noise_reals_per_img,
+                    starlet=starlet,
                     device=device, verbose=verbose
                 )
             else:

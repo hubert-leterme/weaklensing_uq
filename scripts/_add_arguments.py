@@ -387,6 +387,14 @@ def test_calib_dataset(parser, batch_size):
         )
     )
     parser.add_argument(
+        "--run-both", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Run inference on both the simulated test set and the real COSMOS shear map. "
+            "Calibration (if requested) is still performed only once."
+        )
+    )
+    parser.add_argument(
         "--nimgs-test", type=int,
         default=argparse.SUPPRESS,
         help=(

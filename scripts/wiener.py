@@ -1,4 +1,5 @@
 import os
+import typing
 import argparse
 import time
 import tqdm
@@ -22,7 +23,7 @@ def main(
         path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
         real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
-        test_on_real_data: bool = False,
+        test_on_real_data: bool = False, run_both: bool = False,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
@@ -48,12 +49,25 @@ def main(
 ):
     _commons.set_seed(seed)
 
-    output_dir = _commons.get_path_to_results(
-        output_dir, method_name, test_dataset_name=test_dataset_name,
-        real_shearmap_name=real_shearmap_name,
-        test_on_real_data=test_on_real_data
-    )   # E.g., "results/dir/test_kappaTNG/wiener/",
-        # or "results/dir/test_cosmos/wiener/"
+    # When run_both is True we create two output dirs (simulated and real)
+    if run_both:
+        output_dir_sim = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=False
+        )
+        output_dir_real = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=True
+        )
+    else:
+        output_dir = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=test_on_real_data
+        )   # E.g., "results/dir/test_kappaTNG/wiener/",
+            # or "results/dir/test_cosmos/wiener/"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -68,13 +82,27 @@ def main(
         inpainting=inpainting, verbose=verbose
     )
 
-    # Load test set
-    test_dataloader = _commons.get_dataloader_massmapping(
-        path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False,
-        test_on_real_data=test_on_real_data,
-        path_to_real_shearmap=path_to_real_shearmap
-    )
+    # Load test set(s)
+    if run_both:
+        test_dataloader_sim = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=False,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+        test_dataloader_real = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=True,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+    else:
+        test_dataloader = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=test_on_real_data,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
 
     # Load calibration set, if provided
     if cqr:
@@ -90,8 +118,6 @@ def main(
     physics = wlpnp.MassMapping(sigma=std_noise, mask=mask).to(device)
     rmse_fn = wlpnp.RMSE(mask=mask).to(device)
 
-    beg_time = time.time()
-
     # Instantiate the Wiener model
     wiener = _commons.get_wiener(
         path_to_ps=path_to_ps,
@@ -101,62 +127,37 @@ def main(
         device=device, verbose=verbose
     )
 
-    # Run iterative Wiener for each batch
-    if verbose:
-        if not test_on_real_data:
-            print(f"Compute Wiener on the test set ({nimgs_test} images)")
-        else:
-            print(f"Compute Wiener on the COSMOS shear map")
+    beg_time = time.time()
 
-    out_wiener = run_wiener_batch(
-        wiener, physics, test_dataloader,
-        rmse_fn=rmse_fn,
-        get_initial_bounds=get_initial_bounds,
-        n_noise_reals_per_img=n_noise_reals_per_img,
-        test_on_real_data=test_on_real_data,
-        device=device, verbose=verbose,
-    )
-    kappa_true = out_wiener["kappa_true"]
-    kappa_pred = out_wiener["kappa_pred"]
-    var = out_wiener["var"]
+    # Prepare runs: either single or both (simulated and real)
+    runs = []
+    if run_both:
+        runs.append(("sim", test_dataloader_sim, False, output_dir_sim))
+        runs.append(("real", test_dataloader_real, True, output_dir_real))
+    else:
+        runs.append(("single", test_dataloader, test_on_real_data, output_dir))
 
-    rmse = out_wiener["rmse"]
-    l2norm = out_wiener["l2norm"]
-    try:
-        rmse = rmse.cpu()
-        l2norm = l2norm.cpu()
-    except Exception:
-        pass
+    # Run inference for each requested dataset and collect results
+    run_outputs: list[tuple[str, dict, str]] = []  # (name, out_wiener, out_dir)
+    for run_name, tdataloader, td_real_flag, out_dir_run in runs:
+        if verbose:
+            if td_real_flag:
+                print(f"Compute Wiener on the COSMOS shear map ({nimgs_test} images)")
+            else:
+                print(f"Compute Wiener on the test set ({nimgs_test} images)")
 
-    inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
+        out_run = run_wiener_batch(
+            wiener, physics, tdataloader,
+            rmse_fn=rmse_fn,
+            get_initial_bounds=get_initial_bounds,
+            n_noise_reals_per_img=n_noise_reals_per_img,
+            test_on_real_data=td_real_flag,
+            device=device, verbose=verbose,
+        )
+        run_outputs.append((run_name, out_run, out_dir_run))
 
-    out_dict = {
-        "inference_time": inference_time,
-        "niter": niter_wiener,
-        "imgsize": imgsize,
-        "confidence_uq": confidence_uq,
-        "rmse": rmse,
-        "l2norm": l2norm,
-        "test_on_real_data": test_on_real_data,
-    }
-    if not test_on_real_data:
-        out_dict.update({
-            "nimgs_test": nimgs_test,
-        })
-    if save_tensors:
-        out_dict.update({
-            "kappa_pred": kappa_pred[:nimgs_save].cpu(),
-            "var": var[:nimgs_save].cpu(),
-        })
-        if not test_on_real_data:
-            out_dict.update({
-                "kappa_true": kappa_true[:nimgs_save].cpu(),
-            })
-
-    # Calibrate with CQR, if available
-    if calib_dataloader is not None:
-        beg_time = time.time()
-
+    # Run calibration once (if requested) and apply to each run's outputs
+    if (calib_dataloader is not None) and cqr:
         if verbose:
             print(f"Compute Wiener on the calibration set ({nimgs_calib} images)")
         out_wiener_calib = run_wiener_batch(
@@ -169,23 +170,69 @@ def main(
         kappa_true_calib = out_wiener_calib["kappa_true"]
         kappa_pred_calib = out_wiener_calib["kappa_pred"]
         var_calib = out_wiener_calib["var"]
+    else:
+        kappa_true_calib = None
+        kappa_pred_calib = None
+        var_calib = None
 
-        mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
-            mode_cqr, scaling_factor_chisqcqr
-        )
-        for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
-            uq_dict = _commons.apply_calibration_and_get_metrics(
-                kappa_pred, var, kappa_true,
-                kappa_pred_calib, var_calib, kappa_true_calib,
-                confidence_uq=confidence_uq,
-                imgsize=imgsize, mode=mcqr, a=a,
-                mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                device=device, verbose=verbose
-            )
-            uq_key = _commons.get_uq_keys(mode_cqr=mcqr, scaling_factor_chisqcqr=a)
+    # For each run, compose out_dict, apply calibration if present, and save
+    for run_name, out_wiener_run, out_dir_run in run_outputs:
+        kappa_true = out_wiener_run["kappa_true"]
+        kappa_pred = out_wiener_run["kappa_pred"]
+        var = out_wiener_run["var"]
+
+        rmse = out_wiener_run["rmse"]
+        l2norm = out_wiener_run["l2norm"]
+        try:
+            rmse = rmse.cpu()
+            l2norm = l2norm.cpu()
+        except Exception:
+            pass
+
+        inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
+
+        trd = (run_name == "real") if run_both else test_on_real_data
+        out_dict = {
+            "inference_time": inference_time,
+            "niter": niter_wiener,
+            "imgsize": imgsize,
+            "confidence_uq": confidence_uq,
+            "rmse": rmse,
+            "l2norm": l2norm,
+            "test_on_real_data": trd,
+        }
+        if not trd:
             out_dict.update({
-                uq_key: uq_dict
+                "nimgs_test": nimgs_test,
             })
+        if save_tensors:
+            out_dict.update({
+                "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+                "var": var[:nimgs_save].cpu(),
+            })
+            if not trd:
+                out_dict.update({
+                    "kappa_true": kappa_true[:nimgs_save].cpu(),
+                })
+
+        # Apply calibration UQ metrics only if we have calibration outputs
+        if (kappa_pred_calib is not None) and (var_calib is not None) and (kappa_true_calib is not None):
+            mode_cqr_list, scaling_factor_chisqcqr_list = _commons.convert_into_list_cqr_mode(
+                mode_cqr, typing.cast(typing.Any, scaling_factor_chisqcqr)
+            )
+            for mcqr, a in zip(mode_cqr_list, scaling_factor_chisqcqr_list):
+                uq_dict = _commons.apply_calibration_and_get_metrics(
+                    kappa_pred, var, kappa_true,
+                    kappa_pred_calib, var_calib, kappa_true_calib,
+                    confidence_uq=confidence_uq,
+                    imgsize=imgsize, mode=mcqr, a=a,
+                    mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                    device=device, verbose=verbose
+                )
+                uq_key = _commons.get_uq_keys(mode_cqr=mcqr, scaling_factor_chisqcqr=a)
+                out_dict.update({
+                    uq_key: uq_dict
+                })
 
         calibration_time = _commons.get_inference_time(
             beg_time, which="calibration", verbose=verbose
@@ -195,10 +242,10 @@ def main(
             "nimgs_calib": nimgs_calib,
         })
 
-    _commons.save_results(
-        out_dict, output_dir, now,
-        prefix=output_prefix, verbose=verbose
-    )
+        _commons.save_results(
+            out_dict, out_dir_run, now,
+            prefix=output_prefix, verbose=verbose
+        )
 
 
 def run_wiener_batch(

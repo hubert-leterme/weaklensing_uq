@@ -726,6 +726,7 @@ def variance_estimation_through_noise_propagation(
         physics: wlpnp.MassMapping,
         output_shape: tuple | torch.Size,
         n_noise_reals: int = N_NOISE_REALS_UQ,
+        starlet: wlpnpmcalens.Starlet2d | None = None,
         device="cpu", verbose=False, **kwargs
 ):
     noise_outputs = torch.zeros(
@@ -741,6 +742,8 @@ def variance_estimation_through_noise_propagation(
         noise = physics.noise_model(zeros) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
         # Propagate noise realisations through the pipeline
         # For MCALens, the support of active wavelet coefficients is assumed to be already initialized.
+        if starlet is not None:
+            starlet.x_prev = None # Reset `x_prev`, not `active_coefs`
         noise_outputs[i] = method(noise, physics, **kwargs)
 
     return torch.std(noise_outputs, dim=0)**2 # Shape = (batch_size, 1, imgsize, imgsize)

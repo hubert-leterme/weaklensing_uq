@@ -25,7 +25,7 @@ def main(
         train_val_dataset_name: str | None = wlmmuq.TRAIN_VAL_DATASET_NAME,
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
         real_shearmap_name: str | None = wlmmuq.REAL_SHEARMAP_NAME,
-        test_on_real_data: bool = False,
+        test_on_real_data: bool = False, run_both: bool = False,
         model_dir: str | None = wlmmuq.MODEL_DIR,
         model_name: str | None = None, model_name_uq: str | None = None,
         output_dir: str = wlmmuq.RESULTS_DIR,
@@ -79,14 +79,31 @@ def main(
         model_name_uq=model_name_uq
     )
 
-    output_dir = _commons.get_path_to_results(
-        output_dir, method_name, test_dataset_name=test_dataset_name,
-        real_shearmap_name=real_shearmap_name,
-        test_on_real_data=test_on_real_data,
-        train_val_dataset_name=train_val_dataset_name,
-        model_name=model_name
-    )   # E.g., "results/dir/test_kappaTNG/pnpmass/kappaTNG/model_name/",
-        # or "results/dir/test_cosmos/pnpmass/kappaTNG/model_name/"
+    # When run_both is True we create two output dirs (simulated and real)
+    if run_both:
+        output_dir_sim = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=False,
+            train_val_dataset_name=train_val_dataset_name,
+            model_name=model_name
+        )
+        output_dir_real = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=True,
+            train_val_dataset_name=train_val_dataset_name,
+            model_name=model_name
+        )
+    else:
+        output_dir = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name,
+            test_on_real_data=test_on_real_data,
+            train_val_dataset_name=train_val_dataset_name,
+            model_name=model_name
+        )   # E.g., "results/dir/test_kappaTNG/pnpmass/kappaTNG/model_name/",
+            # or "results/dir/test_cosmos/pnpmass/kappaTNG/model_name/"
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -101,13 +118,27 @@ def main(
         inpainting=inpainting, verbose=verbose
     )
 
-    # Load test set
-    test_dataloader = _commons.get_dataloader_massmapping(
-        path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False,
-        test_on_real_data=test_on_real_data,
-        path_to_real_shearmap=path_to_real_shearmap
-    )
+    # Load test set(s)
+    if run_both:
+        test_dataloader_sim = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=False,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+        test_dataloader_real = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=True,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
+    else:
+        test_dataloader = _commons.get_dataloader_massmapping(
+            path_to_test_dataset, nimgs_test, imgsize, batch_size,
+            num_workers, std_noise, mask, shuffle=False,
+            test_on_real_data=test_on_real_data,
+            path_to_real_shearmap=path_to_real_shearmap
+        )
 
     # Load calibration set, if provided
     if cqr:
@@ -242,100 +273,38 @@ def main(
             callback_list.append(callback_starlet_denoiser)
         callbacks = wlcallbacks.CallbackList(callback_list)
 
-        # Run PnPMass for each batch
-        if verbose:
-            if not test_on_real_data:
-                print(f"Compute PnPMass on the test set ({nimgs_test} images)")
-            else:
-                print(f"Compute PnPMass on the COSMOS shear map")
-        out_pnpmass = run_pnpmass_batch(
-            pnpmass, pnpmass_uq, physics, test_dataloader, tau, niter,
-            rmse_fn=rmse_fn,
-            gaussian_extractor=gaussian_extractor,
-            starlet_debiasing=starlet_debiasing,
-            dict_starlet_debiaser=dict_starlet_debiaser,
-            dict_starlet=dict_starlet,
-            test_on_real_data=test_on_real_data,
-            callbacks=callbacks,
-            device=device, verbose=verbose
-        )
-        kappa_true = out_pnpmass["kappa_true"]
-        kappa_pred = out_pnpmass["kappa_pred"]
-        var = out_pnpmass["var"]
+        # Prepare runs: either single or both (simulated and real)
+        runs = []
+        if run_both:
+            runs.append(("sim", test_dataloader_sim, False, output_dir_sim))
+            runs.append(("real", test_dataloader_real, True, output_dir_real))
+        else:
+            runs.append(("single", test_dataloader, test_on_real_data, output_dir))
 
-        rmse = out_pnpmass["rmse"]
-        l2norm = out_pnpmass["l2norm"]
-        try:
-            rmse = rmse.cpu()
-            l2norm = l2norm.cpu()
-        except Exception:
-            pass
+        # Run inference for each requested dataset and collect results
+        run_outputs: list[tuple[str, dict, str]] = []  # (name, out_pnpmass, out_dir)
+        for run_name, tdataloader, td_real_flag, out_dir_run in runs:
+            if verbose:
+                if td_real_flag:
+                    print(f"Compute PnPMass on the COSMOS shear map ({nimgs_test} images)")
+                else:
+                    print(f"Compute PnPMass on the test set ({nimgs_test} images)")
 
-        dict_kappa_pred_debiased = out_pnpmass["dict_kappa_pred_debiased"]
-        dict_var_debiased = out_pnpmass["dict_var_debiased"]
-        dict_rmse_debiased = out_pnpmass["dict_rmse_debiased"]
+            out_pnpmass_run = run_pnpmass_batch(
+                pnpmass, pnpmass_uq, physics, tdataloader, tau, niter,
+                rmse_fn=rmse_fn,
+                gaussian_extractor=gaussian_extractor,
+                starlet_debiasing=starlet_debiasing,
+                dict_starlet_debiaser=dict_starlet_debiaser,
+                dict_starlet=dict_starlet,
+                test_on_real_data=td_real_flag,
+                callbacks=callbacks,
+                device=device, verbose=verbose
+            )
+            run_outputs.append((run_name, out_pnpmass_run, out_dir_run))
 
-        inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
-
-        out_dict = {
-            "inference_time": inference_time,
-            "step_size": tau,
-            "arch": arch,
-            "niter": niter,
-            "imgsize": imgsize,
-            "confidence_uq": confidence_uq,
-            "rmse": rmse,
-            "l2norm": l2norm,
-            "test_on_real_data": test_on_real_data,
-        }
-        if not test_on_real_data:
-            out_dict.update({
-                "nimgs_test": nimgs_test,
-            })
-
-        if starlet_debiasing:
-            out_dict.update({
-                "niter_starlet_debiasing": niter_starlet_debiasing
-            })
-            out_dict.update({
-                "dict_detection_threshold_starlet_debiasing": \
-                    dict_detection_threshold_starlet_debiasing,
-                "dict_multfact_step_size_starlet_debiasing": \
-                    dict_multfact_step_size_starlet_debiasing,
-                "dict_step_size_starlet_debiasing": \
-                    dict_step_size_starlet_debiasing,
-            }) # For (key, value) correspondance (threshold or step size)
-            out_dict.update({
-                "dict_rmse_debiased": _apply_fn_inside_dict_debiasing(
-                    lambda x: x.cpu(), dict_rmse_debiased,
-                    return_none_on_error=True
-                ),
-            })
-        if save_tensors:
-            out_dict.update({
-                "kappa_pred": kappa_pred[:nimgs_save].cpu(),
-                "var": var[:nimgs_save].cpu(),
-            })
-            if not test_on_real_data:
-                out_dict.update({
-                    "kappa_true": kappa_true[:nimgs_save].cpu(),
-                })
-            if starlet_debiasing:
-                select_imgs_cpu = lambda x: x[:nimgs_save].cpu()
-                out_dict.update({
-                    "dict_kappa_pred_debiased": _apply_fn_inside_dict_debiasing(
-                        select_imgs_cpu, dict_kappa_pred_debiased
-                    ),
-                    "dict_var_debiased": _apply_fn_inside_dict_debiasing(
-                        select_imgs_cpu, dict_var_debiased
-                    ),
-                })
-
-        # Calibrate with CQR, if available
-        if calib_dataloader is not None:
-            # TODO: starlet debiasing
-            beg_time = time.time()
-
+        # Run calibration once (if requested) and then apply to each inference result
+        if (calib_dataloader is not None) and cqr:
             if verbose:
                 print(f"Compute PnPMass on the calibration set ({nimgs_calib} images)")
             out_pnpmass_calib = run_pnpmass_batch(
@@ -345,61 +314,154 @@ def main(
                 starlet_debiasing=starlet_debiasing,
                 dict_starlet_debiaser=dict_starlet_debiaser,
                 dict_starlet=dict_starlet,
+                test_on_real_data=False,
                 callbacks=callbacks,
                 device=device, verbose=verbose,
             )
             kappa_true_calib = out_pnpmass_calib["kappa_true"]
             kappa_pred_calib = out_pnpmass_calib["kappa_pred"]
             var_calib = out_pnpmass_calib["var"]
-
             dict_kappa_pred_debiased_calib = out_pnpmass_calib["dict_kappa_pred_debiased"]
             dict_var_debiased_calib = out_pnpmass_calib["dict_var_debiased"]
+        else:
+            kappa_true_calib = None
+            kappa_pred_calib = None
+            var_calib = None
+            dict_kappa_pred_debiased_calib = None
+            dict_var_debiased_calib = None
 
-            mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
-                mode_cqr, scaling_factor_chisqcqr
-            )
-            for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
-                for rho in hyperparam_precalib:
-                    uq_results = _commons.apply_calibration_and_get_metrics(
-                        kappa_pred, var, kappa_true,
-                        kappa_pred_calib, var_calib, kappa_true_calib,
-                        confidence_uq=confidence_uq,
-                        imgsize=imgsize, mode=mcqr, a=a,
-                        hyperparam_precalib=rho,
-                        find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                        mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                        device=device, verbose=verbose
-                    )
-                    uq_key = _commons.get_uq_keys(
-                        mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
-                    )
+        # For each run, prepare out_dict and apply calibration if available, then save
+        for run_name, out_pnpmass_run, out_dir_run in run_outputs:
+            kappa_true = out_pnpmass_run["kappa_true"]
+            kappa_pred = out_pnpmass_run["kappa_pred"]
+            var = out_pnpmass_run["var"]
+            rmse = out_pnpmass_run["rmse"]
+            l2norm = out_pnpmass_run["l2norm"]
+            dict_kappa_pred_debiased = out_pnpmass_run["dict_kappa_pred_debiased"]
+            dict_var_debiased = out_pnpmass_run["dict_var_debiased"]
+            dict_rmse_debiased = out_pnpmass_run["dict_rmse_debiased"]
+
+            try:
+                rmse = rmse.cpu()
+                l2norm = l2norm.cpu()
+            except Exception:
+                pass
+
+            inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
+
+            trd = (run_name == "real") if run_both else test_on_real_data
+            out_dict = {
+                "inference_time": inference_time,
+                "step_size": tau,
+                "arch": arch,
+                "niter": niter,
+                "imgsize": imgsize,
+                "confidence_uq": confidence_uq,
+                "rmse": rmse,
+                "l2norm": l2norm,
+                "test_on_real_data": trd,
+            }
+            if not trd:
+                out_dict.update({
+                    "nimgs_test": nimgs_test,
+                })
+
+            if starlet_debiasing:
+                out_dict.update({
+                    "niter_starlet_debiasing": niter_starlet_debiasing
+                })
+                out_dict.update({
+                    "dict_detection_threshold_starlet_debiasing": \
+                        dict_detection_threshold_starlet_debiasing,
+                    "dict_multfact_step_size_starlet_debiasing": \
+                        dict_multfact_step_size_starlet_debiasing,
+                    "dict_step_size_starlet_debiasing": \
+                        dict_step_size_starlet_debiasing,
+                })
+                out_dict.update({
+                    "dict_rmse_debiased": _apply_fn_inside_dict_debiasing(
+                        lambda x: x.cpu(), dict_rmse_debiased,
+                        return_none_on_error=True
+                    ),
+                })
+
+            if save_tensors:
+                out_dict.update({
+                    "kappa_pred": kappa_pred[:nimgs_save].cpu(),
+                    "var": var[:nimgs_save].cpu(),
+                })
+                if not trd:
                     out_dict.update({
-                        uq_key: uq_results
+                        "kappa_true": kappa_true[:nimgs_save].cpu(),
                     })
-                    if starlet_debiasing:
-                        merged_dict_debiased: dict[int, dict[int, list[torch.Tensor]]] = \
-                                _merge_dicts_debiasing([
-                            dict_kappa_pred_debiased, dict_var_debiased,
-                            dict_kappa_pred_debiased_calib, dict_var_debiased_calib
-                        ])
-                        def _fn(inplist: list[torch.Tensor]) -> dict:
-                            kappa_pred_0, var_0, kappa_pred_calib_0, var_calib_0 = inplist
-                            return _commons.apply_calibration_and_get_metrics(
-                                kappa_pred_0, var_0, kappa_true,
-                                kappa_pred_calib_0, var_calib_0, kappa_true_calib,
-                                confidence_uq=confidence_uq,
-                                imgsize=imgsize, mode=mcqr, a=a,
-                                hyperparam_precalib=rho,
-                                find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                                mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
-                                device=device, verbose=verbose
-                            )
-                        dict_uq_results_debiased = _apply_fn_inside_dict_debiasing(
-                            _fn, merged_dict_debiased
+                if starlet_debiasing:
+                    select_imgs_cpu = lambda x: x[:nimgs_save].cpu()
+                    out_dict.update({
+                        "dict_kappa_pred_debiased": _apply_fn_inside_dict_debiasing(
+                            select_imgs_cpu, dict_kappa_pred_debiased
+                        ),
+                        "dict_var_debiased": _apply_fn_inside_dict_debiasing(
+                            select_imgs_cpu, dict_var_debiased
+                        ),
+                    })
+
+            # Apply calibration if available
+            if (kappa_pred_calib is not None) and (var_calib is not None):
+                # mypy/static check help: these must be set when calib outputs exist
+                assert kappa_true_calib is not None
+                if starlet_debiasing:
+                    assert dict_kappa_pred_debiased_calib is not None
+                    assert dict_var_debiased_calib is not None
+                mode_cqr, scaling_factor_chisqcqr = _commons.convert_into_list_cqr_mode(
+                    mode_cqr, scaling_factor_chisqcqr
+                )
+                for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
+                    for rho in hyperparam_precalib:
+                        uq_results = _commons.apply_calibration_and_get_metrics(
+                            kappa_pred, var, kappa_true,
+                            kappa_pred_calib, var_calib, kappa_true_calib,
+                            confidence_uq=confidence_uq,
+                            imgsize=imgsize, mode=mcqr, a=a,
+                            hyperparam_precalib=rho,
+                            find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
+                            mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                            device=device, verbose=verbose
+                        )
+                        uq_key = _commons.get_uq_keys(
+                            mode_cqr=mcqr, scaling_factor_chisqcqr=a, rho=rho
                         )
                         out_dict.update({
-                            f"{uq_key}_debiased": dict_uq_results_debiased
+                            uq_key: uq_results
                         })
+                        if starlet_debiasing:
+                            merged_dict_debiased: dict[int, dict[int, list[torch.Tensor]]] = \
+                                _merge_dicts_debiasing([
+                                    dict_kappa_pred_debiased,
+                                    dict_var_debiased,
+                                    dict_kappa_pred_debiased_calib,
+                                    dict_var_debiased_calib
+                                ])
+                            def _fn(inplist: list[torch.Tensor]) -> dict:
+                                # inplist: kappa_pred_run, var_run, kappa_pred_calib, var_calib
+                                kappa_pred_0, var_0, kappa_pred_calib_0, var_calib_0 = inplist
+                                # safety: ensure calibration ground truth is present
+                                assert kappa_true_calib is not None
+                                return _commons.apply_calibration_and_get_metrics(
+                                    kappa_pred_0, var_0, kappa_true,
+                                    kappa_pred_calib_0, var_calib_0, kappa_true_calib,
+                                    confidence_uq=confidence_uq,
+                                    imgsize=imgsize, mode=mcqr, a=a,
+                                    hyperparam_precalib=rho,
+                                    find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
+                                    mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                                    device=device, verbose=verbose
+                                )
+                            dict_uq_results_debiased = _apply_fn_inside_dict_debiasing(
+                                _fn, merged_dict_debiased
+                            )
+                            out_dict.update({
+                                f"{uq_key}_debiased": dict_uq_results_debiased
+                            })
 
             calibration_time = _commons.get_inference_time(
                 beg_time, which="calibration", verbose=verbose
@@ -409,10 +471,10 @@ def main(
                 "nimgs_calib": nimgs_calib,
             })
 
-        _commons.save_results(
-            out_dict, output_dir, now, step_size=tau,
-            prefix=output_prefix, verbose=verbose
-        )
+            _commons.save_results(
+                out_dict, out_dir_run, now, step_size=tau,
+                prefix=output_prefix, verbose=verbose
+            )
 
 
 def run_pnpmass_batch(
@@ -487,8 +549,8 @@ def run_pnpmass_batch(
             else:
                 var = torch.zeros(kappa_pred.shape, device=device)
 
-            dict_kappa_pred_debiased: dict[int, dict[int, torch.Tensor]] = {}
-            dict_var_debiased: dict[int, dict[int, torch.Tensor]] = {}
+            dict_kappa_pred_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
+            dict_var_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
             dict_rmse_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
             if starlet_debiasing:
                 assert dict_starlet_debiaser is not None
