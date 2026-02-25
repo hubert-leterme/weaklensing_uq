@@ -50,7 +50,6 @@ def main(
         num_workers: int = NUM_WORKERS,
         mode: str = _commons.MODE_PNPMASS,
         which_gaussian_extractor: str = _commons.WHICH_GAUSSIAN_EXTRACTOR,
-        update_ng_first: bool = False,
         niter_wiener: int = _commons.NITER_WIENER,
         starlet_detection_threshold: float = _commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
@@ -156,7 +155,6 @@ def main(
             step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode=mode,
-            update_ng_first=update_ng_first,
             path_to_ps=path_to_ps,
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose
@@ -175,7 +173,6 @@ def main(
                 eps_sup_step_size=eps_sup_step_size,
                 niter=niter_wiener,
                 starlet_detection_threshold=starlet_detection_threshold,
-                mcalens_update_ng_first=update_ng_first,
                 device=device, verbose=False
             )
         else:

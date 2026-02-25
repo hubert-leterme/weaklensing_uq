@@ -535,14 +535,6 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
             "or `--mode pnpmcalens`. "
         ) if verbose else ""
         parser.add_argument(
-            "--update-ng-first", action='store_true',
-            default=argparse.SUPPRESS,
-            help=(
-                "Update the non-Gaussian component before the Gaussian component. "
-                f"{additional_msg}"
-            )
-        )
-        parser.add_argument(
             "-ig", "--niter-per-step-g", type=int,
             default=argparse.SUPPRESS,
             help=(

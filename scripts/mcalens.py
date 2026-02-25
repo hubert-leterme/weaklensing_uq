@@ -128,7 +128,6 @@ def main(
             step_size=tau, multfact_step_size=alph,
             eps_sup_step_size=eps_sup_step_size,
             niter=niter, mode="pnpmcalens",
-            update_ng_first=True,
             path_to_ps=path_to_ps,
             niter_per_step_g=niter_per_step_g, niter_per_step_ng=niter_per_step_ng,
             device=device, verbose=verbose

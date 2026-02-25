@@ -181,7 +181,6 @@ def main(
             imgsize=imgsize, physics=physics,
             niter=1, # Convergence in one iteration (white noise)
             starlet_detection_threshold=starlet_detection_threshold,
-            mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
             device=device, verbose=verbose
         ) # Not all arguments are needed here (`white_noise=True`)
         kwargs_trainer.update(preproc_for_residual=gaussian_extractor)

@@ -585,7 +585,6 @@ def get_gaussian_extractor(
         eps_sup_step_size=EPS_SUP_STEP_SIZE,
         niter=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
-        mcalens_update_ng_first=False,
         device="cpu", verbose=False
 ):
     data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
@@ -629,7 +628,7 @@ def get_gaussian_extractor(
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
             prior_g=prior_g, prior_ng=prior_ng,
             early_stop=False, max_iter=niter, custom_init=wlpnp.zero_init,
-            update_ng_first=mcalens_update_ng_first,
+            update_ng_first=True,
             output_mode="discard_ng", verbose=verbose
         ).to(device)
 
@@ -650,7 +649,6 @@ def get_pnpmass(
         niter=NITER_PNPMASS,
         custom_init=wlpnp.zero_init,
         mode=MODE_PNPMASS,
-        update_ng_first=False,
         path_to_ps=PATH_TO_PS,
         niter_per_step_g=NITER_PER_STEP_G,
         niter_per_step_ng=NITER_PER_STEP_NG,
@@ -700,7 +698,7 @@ def get_pnpmass(
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
             early_stop=False, max_iter=niter, custom_init=custom_init,
-            update_ng_first=update_ng_first,
+            update_ng_first=True,
             output_mode="add_components", verbose=True, **kwargs
         ).to(device)
 
