@@ -79,6 +79,12 @@ python scripts/create_cropped_dataset.py -o path/to/test/dataset.hdf5 --idx-lp 1
 
 Both datasets are generated from the full set of 100 independent realizations corresponding to the specified lensing potential. To prevent any overlap between the calibration and test samples, the data should be filtered by realization index when loading the datasets (see the table above for the specific realization ranges used for each set).
 
+#### COSMOS shear map
+
+```bash
+python scripts/create_gamma_cosmos.py -o path/to/cosmos/shearmap.pt
+```
+
 ### Training denoisers for PnPMass
 
 #### Point estimate (order-1 networks)
@@ -127,20 +133,30 @@ The following scripts run PnPMass with a step size set to 50%, 75% and 100% of i
 
 ```bash
 # Standard version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 
 # Residual version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 ```
 
 #### Run PnPMass with uncertainty quantification and conformal prediction
 
 ```bash
 # Standard version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o results_pnpmass_niter_8_cqr --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o niter_8_cqr --seed 42 -v
 
 # Residual version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o results_pnpmass_mode_residual_niter_8_cqr --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o mode_residual_niter_8_cqr --seed 42 -v
+```
+
+#### Run PnPMass on the COSMOS shear map
+
+```bash
+# Standard version
+python scripts/pnpmass.py -cos -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o cosmos_niter_8_cqr --seed 42 -v
+
+# Residual version
+python scripts/pnpmass.py -cos -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o cosmos_mode_residual_niter_8_cqr --seed 42 -v
 ```
 
 ## Jupyter notebooks
