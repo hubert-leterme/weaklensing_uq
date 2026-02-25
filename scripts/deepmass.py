@@ -95,7 +95,9 @@ def main(
     # Load test set
     test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False
+        num_workers, std_noise, mask, shuffle=False,
+        test_on_real_data=test_on_real_data,
+        path_to_real_shearmap=path_to_real_shearmap
     )
 
     # Load calibration set, if provided
@@ -168,38 +170,55 @@ def main(
 
     # Run DeepMass for each batch
     if verbose:
-        print(f"Compute DeepMass on the test set ({nimgs_test} images)")
+        if not test_on_real_data:
+            print(f"Compute DeepMass on the test set ({nimgs_test} images)")
+        else:
+            print(f"Compute DeepMass on the COSMOS shear map")
     out_deepmass = run_deepmass_batch(
         deepmass, deepmass_uq, test_dataloader,
         rmse_fn=rmse_fn,
         starlet_debiaser=starlet_debiaser,
         starlet=starlet,
+        test_on_real_data=test_on_real_data,
         callbacks=callbacks,
         device=device, verbose=verbose,
     )
     kappa_true = out_deepmass["kappa_true"]
     kappa_pred = out_deepmass["kappa_pred"]
     var = out_deepmass["var"]
+
     rmse = out_deepmass["rmse"]
     l2norm = out_deepmass["l2norm"]
+    try:
+        rmse = rmse.cpu()
+        l2norm = l2norm.cpu()
+    except Exception:
+        pass
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     out_dict = {
         "inference_time": inference_time,
         "arch": arch,
-        "nimgs_test": nimgs_test,
         "imgsize": imgsize,
         "confidence_uq": confidence_uq,
-        "rmse": rmse.cpu(),
-        "l2norm": l2norm.cpu(),
+        "rmse": rmse,
+        "l2norm": l2norm,
+        "test_on_real_data": test_on_real_data,
     }
+    if not test_on_real_data:
+        out_dict.update({
+            "nimgs_test": nimgs_test,
+        })
     if save_tensors:
         out_dict.update({
-            "kappa_true": kappa_true[:nimgs_save].cpu(),
             "kappa_pred": kappa_pred[:nimgs_save].cpu(),
             "var": var[:nimgs_save].cpu(),
         })
+        if not test_on_real_data:
+            out_dict.update({
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+            })
 
     # Calibrate with CQR, if available
     if calib_dataloader is not None:
@@ -262,6 +281,7 @@ def run_deepmass_batch(
         starlet_debiaser: wldinv.BaseOptim | None = None,
         starlet: wlmcalens.Starlet2d | None = None,
         physics: wldinv.MassMapping | None = None,
+        test_on_real_data: bool = False,
         callbacks: wlcallbacks.BaseCallback | None = None,
         device="cpu", verbose=False
 ):
@@ -278,22 +298,36 @@ def run_deepmass_batch(
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     for i, (kappa_true, gamma_noisy) in enumerate(pbar):
         callbacks.on_batch_begin(i)
-        kappa_true = kappa_true.to(device)
+
+        if not test_on_real_data:
+            kappa_true = kappa_true.to(device)
+            compute_metrics = True
+        else: # No groung truth; kappa_true is set to torch.nan or None
+            kappa_true = None
+            compute_metrics = False
+
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             kappa_pred = deepmass(gamma_noisy)
             if starlet_debiaser is not None:
                 starlet_debiaser.custom_init.X_init = (kappa_pred,)
                 starlet.x_prev = kappa_pred
-                kappa_pred, metrics_starlet_debiaser = starlet_debiaser(
-                    gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+                out_starlet_debiaser = starlet_debiaser(
+                    gamma_noisy, physics, x_gt=kappa_true,
+                    compute_metrics=compute_metrics
                 )
+                if not test_on_real_data:
+                    kappa_pred, metrics_starlet_debiaser = out_starlet_debiaser
+                    rmse_debiased = metrics_starlet_debiaser["rmse"]
+                else:
+                    kappa_pred = out_starlet_debiaser
+                    rmse_debiased = None
 
             if deepmass_uq is not None:
                 var = deepmass_uq(gamma_noisy)
             else:
                 var = torch.zeros(kappa_true.shape, device=device)
-            if rmse_fn is not None:
+            if rmse_fn is not None and not test_on_real_data:
                 rmse = rmse_fn(kappa_pred, kappa_true)
                 l2norm = rmse_fn(kappa_true, 0)
             else:
@@ -306,11 +340,12 @@ def run_deepmass_batch(
         listof_rmse.append(rmse) # Shape = (batch_size,)
         if starlet_debiaser is not None:
             listof_rmse_starlet_debiaser.append(
-                metrics_starlet_debiaser["rmse"]
+                rmse_debiased
             ) # Shape = (batch_size, niter_debiaser)
         listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if not test_on_real_data:
+        kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
@@ -320,7 +355,7 @@ def run_deepmass_batch(
         else:
             rmse_starlet_debiaser = None
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
-    except TypeError:
+    except Exception:
         rmse = None
         rmse_starlet_debiaser = None
         l2norm = None

@@ -71,7 +71,9 @@ def main(
     # Load test set
     test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False
+        num_workers, std_noise, mask, shuffle=False,
+        test_on_real_data=test_on_real_data,
+        path_to_real_shearmap=path_to_real_shearmap
     )
 
     # Load calibration set, if provided
@@ -101,38 +103,55 @@ def main(
 
     # Run iterative Wiener for each batch
     if verbose:
-        print(f"Compute Wiener on the test set ({nimgs_test} images)")
+        if not test_on_real_data:
+            print(f"Compute Wiener on the test set ({nimgs_test} images)")
+        else:
+            print(f"Compute Wiener on the COSMOS shear map")
 
     out_wiener = run_wiener_batch(
         wiener, physics, test_dataloader,
         rmse_fn=rmse_fn,
         get_initial_bounds=get_initial_bounds,
         n_noise_reals_per_img=n_noise_reals_per_img,
+        test_on_real_data=test_on_real_data,
         device=device, verbose=verbose,
     )
     kappa_true = out_wiener["kappa_true"]
     kappa_pred = out_wiener["kappa_pred"]
     var = out_wiener["var"]
+
     rmse = out_wiener["rmse"]
     l2norm = out_wiener["l2norm"]
+    try:
+        rmse = rmse.cpu()
+        l2norm = l2norm.cpu()
+    except Exception:
+        pass
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     out_dict = {
         "inference_time": inference_time,
         "niter": niter_wiener,
-        "nimgs_test": nimgs_test,
         "imgsize": imgsize,
         "confidence_uq": confidence_uq,
-        "rmse": rmse.cpu(),
-        "l2norm": l2norm.cpu(),
+        "rmse": rmse,
+        "l2norm": l2norm,
+        "test_on_real_data": test_on_real_data,
     }
+    if not test_on_real_data:
+        out_dict.update({
+            "nimgs_test": nimgs_test,
+        })
     if save_tensors:
         out_dict.update({
-            "kappa_true": kappa_true[:nimgs_save].cpu(),
             "kappa_pred": kappa_pred[:nimgs_save].cpu(),
             "var": var[:nimgs_save].cpu(),
         })
+        if not test_on_real_data:
+            out_dict.update({
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+            })
 
     # Calibrate with CQR, if available
     if calib_dataloader is not None:
@@ -188,6 +207,7 @@ def run_wiener_batch(
         rmse_fn: wlpnp.RMSE | None = None,
         get_initial_bounds: bool = False,
         n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
+        test_on_real_data: bool = False,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -197,11 +217,16 @@ def run_wiener_batch(
 
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
+
+        if not test_on_real_data:
+            kappa_true = kappa_true.to(device)
+        else: # No groung truth; kappa_true is set to torch.nan or None
+            kappa_true = None
+
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             kappa_pred = wiener(gamma_noisy, physics)
-            if rmse_fn is not None:
+            if rmse_fn is not None and not test_on_real_data:
                 rmse = rmse_fn(kappa_pred, kappa_true)
                 l2norm = rmse_fn(kappa_true, 0)
             else:
@@ -213,11 +238,12 @@ def run_wiener_batch(
         listof_rmse.append(rmse) # Shape = (batch_size,)
         listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if not test_on_real_data:
+        kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     
     if get_initial_bounds:
-        nimgs, nchannels, nx, ny = kappa_true.shape
+        nimgs, nchannels, nx, ny = kappa_pred.shape
         with torch.no_grad():
             var = _commons.variance_estimation_through_noise_propagation(
                 wiener, physics,
@@ -229,12 +255,12 @@ def run_wiener_batch(
             nimgs, 1, 1, 1
         ) # Shape = (nimgs, 1, imgsize, imgsize)
     else:
-        var = torch.zeros(kappa_true.shape, device=device) # Shape = (nimgs, 1, imgsize, imgsize)
+        var = torch.zeros(kappa_pred.shape, device=device) # Shape = (nimgs, 1, imgsize, imgsize)
 
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
-    except TypeError:
+    except Exception:
         rmse = None
         l2norm = None
 

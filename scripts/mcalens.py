@@ -80,7 +80,9 @@ def main(
     # Load test set
     test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False
+        num_workers, std_noise, mask, shuffle=False,
+        test_on_real_data=test_on_real_data,
+        path_to_real_shearmap=path_to_real_shearmap
     )
 
     # Load calibration set, if provided
@@ -140,20 +142,30 @@ def main(
 
         # Run PnPMass for each batch
         if verbose:
-            print(f"Compute PnPMass on the test set ({nimgs_test} images)")
+            if not test_on_real_data:
+                print(f"Compute MCALens on the test set ({nimgs_test} images)")
+            else:
+                print(f"Compute MCALens on the COSMOS shear map")
         out_mcalens = run_mcalens_batch(
             mcalens, physics, test_dataloader, tau, niter,
             rmse_fn=rmse_fn,
             callbacks=callbacks,
             get_initial_bounds=get_initial_bounds,
             n_noise_reals_per_img=n_noise_reals_per_img,
+            test_on_real_data=test_on_real_data,
             device=device, verbose=verbose,
         )
         kappa_true = out_mcalens["kappa_true"]
         kappa_pred = out_mcalens["kappa_pred"]
         var = out_mcalens["var"]
+
         rmse = out_mcalens["rmse"]
         l2norm = out_mcalens["l2norm"]
+        try:
+            rmse = rmse.cpu()
+            l2norm = l2norm.cpu()
+        except Exception:
+            pass
 
         inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
@@ -161,18 +173,25 @@ def main(
             "inference_time": inference_time,
             "step_size": tau,
             "niter": niter,
-            "nimgs_test": nimgs_test,
             "imgsize": imgsize,
             "confidence_uq": confidence_uq,
-            "rmse": rmse.cpu(),
-            "l2norm": l2norm.cpu(),
+            "rmse": rmse,
+            "l2norm": l2norm,
+            "test_on_real_data": test_on_real_data,
         }
+        if not test_on_real_data:
+            out_dict.update({
+                "nimgs_test": nimgs_test,
+            })
         if save_tensors:
             out_dict.update({
-                "kappa_true": kappa_true[:nimgs_save].cpu(),
                 "kappa_pred": kappa_pred[:nimgs_save].cpu(),
                 "var": var[:nimgs_save].cpu(),
             })
+            if not test_on_real_data:
+                out_dict.update({
+                    "kappa_true": kappa_true[:nimgs_save].cpu(),
+                })
 
         # Calibrate with CQR, if available
         if calib_dataloader is not None:
@@ -235,6 +254,7 @@ def run_mcalens_batch(
         callbacks: wlcallbacks.BaseCallback | None = None,
         get_initial_bounds: bool = False,
         n_noise_reals_per_img: int = _commons.N_NOISE_REALS_UQ,
+        test_on_real_data: bool = False,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -250,12 +270,26 @@ def run_mcalens_batch(
     pbar.set_description(f"Step size = {step_size:.2e}, Nb iterations = {niter}")
     for i, (kappa_true, gamma_noisy) in enumerate(pbar):
         callbacks.on_batch_begin(i)
-        kappa_true = kappa_true.to(device)
+
+        if not test_on_real_data:
+            kappa_true = kappa_true.to(device)
+            compute_metrics = True
+        else: # No groung truth; kappa_true is set to torch.nan or None
+            kappa_true = None
+            compute_metrics = False
+
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
-            kappa_pred, metrics = mcalens(
-                gamma_noisy, physics, x_gt=kappa_true, compute_metrics=True
+            out_mcalens = mcalens(
+                gamma_noisy, physics, x_gt=kappa_true,
+                compute_metrics=compute_metrics
             )
+            if not test_on_real_data:
+                kappa_pred, metrics = out_mcalens
+                rmse = metrics["rmse"]
+            else:
+                kappa_pred = out_mcalens
+                rmse = None
             if get_initial_bounds:
                 var = _commons.variance_estimation_through_noise_propagation(
                     mcalens, physics,
@@ -266,7 +300,7 @@ def run_mcalens_batch(
             else:
                 var = torch.zeros(kappa_pred.shape, device=device)
 
-            if rmse_fn is not None:
+            if rmse_fn is not None and not test_on_real_data:
                 l2norm = rmse_fn(kappa_true, 0)
             else:
                 l2norm = None
@@ -274,16 +308,17 @@ def run_mcalens_batch(
         listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
-        listof_rmse.append(metrics["rmse"]) # Shape = (batch_size, niter)
+        listof_rmse.append(rmse) # Shape = (batch_size, niter)
         listof_l2norm.append(l2norm) # Shape = (batch_size, niter)
 
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if not test_on_real_data:
+        kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     var = torch.cat(listof_var, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs, niter)
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs, niter)
-    except TypeError:
+    except Exception:
         rmse = None
         l2norm = None
 

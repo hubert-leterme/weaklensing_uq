@@ -69,7 +69,9 @@ def main(
     # Load test set
     test_dataloader = _commons.get_dataloader_massmapping(
         path_to_test_dataset, nimgs_test, imgsize, batch_size,
-        num_workers, std_noise, mask, shuffle=False
+        num_workers, std_noise, mask, shuffle=False,
+        test_on_real_data=test_on_real_data,
+        path_to_real_shearmap=path_to_real_shearmap
     )
 
     # Load calibration set, if provided
@@ -93,34 +95,51 @@ def main(
 
     # Run KS for each batch
     if verbose:
-        print(f"Compute Kaiser-Squires on the test set ({nimgs_test} images)")
+        if not test_on_real_data:
+            print(f"Compute Kaiser-Squires on the test set ({nimgs_test} images)")
+        else:
+            print(f"Compute Kaiser-Squires on the COSMOS shear map")
     out_ks = run_ks_batch(
         ks, physics, test_dataloader,
         rmse_fn=rmse_fn, get_initial_bounds=get_initial_bounds,
+        test_on_real_data=test_on_real_data,
         device=device, verbose=verbose,
     )
     kappa_true = out_ks["kappa_true"]
     kappa_pred = out_ks["kappa_pred"]
     var = out_ks["var"]
+
     rmse = out_ks["rmse"]
     l2norm = out_ks["l2norm"]
+    try:
+        rmse = rmse.cpu()
+        l2norm = l2norm.cpu()
+    except Exception:
+        pass
 
     inference_time = _commons.get_inference_time(beg_time, verbose=verbose)
 
     out_dict = {
         "inference_time": inference_time,
-        "nimgs_test": nimgs_test,
         "imgsize": imgsize,
         "confidence_uq": confidence_uq,
-        "rmse": rmse.cpu(),
-        "l2norm": l2norm.cpu(),
+        "rmse": rmse,
+        "l2norm": l2norm,
+        "test_on_real_data": test_on_real_data,
     }
+    if not test_on_real_data:
+        out_dict.update({
+            "nimgs_test": nimgs_test,
+        })
     if save_tensors:
         out_dict.update({
-            "kappa_true": kappa_true[:nimgs_save].cpu(),
             "kappa_pred": kappa_pred[:nimgs_save].cpu(),
             "var": var[:nimgs_save].cpu(),
         })
+        if not test_on_real_data:
+            out_dict.update({
+                "kappa_true": kappa_true[:nimgs_save].cpu(),
+            })
 
     # Calibrate with CQR, if available
     if calib_dataloader is not None:
@@ -173,6 +192,7 @@ def run_ks_batch(
         dataloader: wlds.HDF5DatasetMassMapping,
         rmse_fn: wldinv.iterativemm.RMSE | None = None,
         get_initial_bounds: bool = False,
+        test_on_real_data: bool = False,
         device="cpu", verbose=False
 ):
     listof_kappa_true = []
@@ -182,38 +202,45 @@ def run_ks_batch(
 
     pbar = tqdm.tqdm(dataloader, disable=not verbose)
     for kappa_true, gamma_noisy in pbar:
-        kappa_true = kappa_true.to(device)
+
+        if not test_on_real_data:
+            kappa_true = kappa_true.to(device)
+        else: # No groung truth; kappa_true is set to torch.nan or None
+            kappa_true = None
+
         gamma_noisy = gamma_noisy.to(device)
         with torch.no_grad():
             kappa_pred = ks(gamma_noisy, physics)
-            if rmse_fn is not None:
+            if rmse_fn is not None and not test_on_real_data:
                 rmse = rmse_fn(kappa_pred, kappa_true)
                 l2norm = rmse_fn(kappa_true, 0)
             else:
                 rmse = None
                 l2norm = None
 
-        listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
+        if not test_on_real_data:
+            listof_kappa_true.append(kappa_true) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_kappa_pred.append(kappa_pred) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_rmse.append(rmse) # Shape = (batch_size,)
         listof_l2norm.append(l2norm) # Shape = (batch_size,)
 
-    kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
+    if not test_on_real_data:
+        kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
     kappa_pred = torch.cat(listof_kappa_pred, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
 
     if get_initial_bounds:
         with torch.no_grad():
             var = ks.get_var(physics) # Shape = (imgsize, imgsize)
         var = var.unsqueeze(0).unsqueeze(0).repeat(
-            kappa_true.shape[0], 1, 1, 1
+            kappa_pred.shape[0], 1, 1, 1
         ) # Shape = (nimgs, 1, imgsize, imgsize)
     else:
-        var = torch.zeros(kappa_true.shape, device=device) # Shape = (nimgs, 1, imgsize, imgsize)
+        var = torch.zeros(kappa_pred.shape, device=device) # Shape = (nimgs, 1, imgsize, imgsize)
 
     try:
         rmse = torch.cat(listof_rmse, dim=0) # Shape = (nimgs,)
         l2norm = torch.cat(listof_l2norm, dim=0) # Shape = (nimgs,)
-    except TypeError:
+    except Exception:
         rmse = None
         l2norm = None
 
