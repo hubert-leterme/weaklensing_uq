@@ -456,6 +456,14 @@ def cqr(parser, prompt_init_bounds=False, montecarlo=False, zero_init_bounds=Fal
                 f"Get pre-calibration bounds {uq_method}."
             )
         )
+        parser.add_argument(
+            "--n-noise-reals-per-img", type=int,
+            default=argparse.SUPPRESS,
+            help=(
+                "Number of noise realizations per image. "
+                f"Default = {_commons.N_NOISE_REALS_UQ}"
+            )
+        )
     if not zero_init_bounds:
         parser.add_argument(
             "-rho", "--hyperparam-precalib", type=float, nargs='+',
