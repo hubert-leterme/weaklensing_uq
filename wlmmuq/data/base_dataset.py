@@ -15,6 +15,7 @@ PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing po
 
 class BaseHDF5Dataset:
 
+    # TODO: Inherit from `deepinv.datasets.HDF5Dataset`
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
