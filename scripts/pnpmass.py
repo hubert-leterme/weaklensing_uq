@@ -52,7 +52,7 @@ def main(
         imgsize: int = _commons.IMGSIZE, batch_size: int = _commons.BATCH_SIZE,
         num_workers: int = NUM_WORKERS,
         mode: str = _commons.MODE_PNPMASS,
-        which_gaussian_extractor: str = _commons.WHICH_GAUSSIAN_EXTRACTOR,
+        which_gaussian_extractor: str = _commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS,
         niter_wiener: int = _commons.NITER_WIENER,
         starlet_detection_threshold: float = _commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size: float = _commons.EPS_SUP_STEP_SIZE,
@@ -744,7 +744,7 @@ if __name__ == "__main__":
         help=(
             "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
             "Only used if `--mode` is set to 'residual'. "
-            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
+            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS}'"
         )
     )
     _add_arguments.gaussian_extractor(parser, wiener=True, mcalens=True, verbose=True)

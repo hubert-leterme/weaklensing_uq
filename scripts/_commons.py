@@ -44,7 +44,7 @@ KEYS_MODEL = [
 ] # Arguments passed to the model's constructor
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
-WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
+WHICH_GAUSSIAN_EXTRACTOR_PNPMASS = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 NITER_MCALENS = 32
@@ -583,7 +583,7 @@ def get_wiener(
 
 
 def get_gaussian_extractor(
-        which=WHICH_GAUSSIAN_EXTRACTOR,
+        which=WHICH_GAUSSIAN_EXTRACTOR_PNPMASS,
         path_to_ps=PATH_TO_PS,
         white_noise=False,
         imgsize=IMGSIZE, std_noise=None, physics=None,

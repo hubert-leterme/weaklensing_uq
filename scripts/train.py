@@ -30,7 +30,7 @@ def main(
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
-        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
+        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS,
         niter_wiener=_commons.NITER_WIENER,
         starlet_detection_threshold=wlnn.deepinv.pnpmcalens.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
@@ -267,7 +267,7 @@ if __name__ == "__main__":
         help=(
             "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
             "Only used if `--nongaussian` is activated. "
-            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
+            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS}'"
         )
     )
     parser.add_argument(
