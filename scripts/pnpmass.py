@@ -422,6 +422,7 @@ def main(
                 )
                 for mcqr, a in zip(mode_cqr, scaling_factor_chisqcqr):
                     for rho in hyperparam_precalib:
+                        # TODO: calibrate only once, instead of doing it for each run
                         uq_results = _commons.apply_calibration_and_get_metrics(
                             kappa_pred, var, kappa_true,
                             kappa_pred_calib, var_calib, kappa_true_calib,
