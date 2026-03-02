@@ -1158,3 +1158,16 @@ def load_checkpoint_state_dict(
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
     return state_dict
+
+
+def get_std_gaussian(fwhm, resolution):
+    """
+    Compute standard deviation of a Gaussian distribution in pixel unit,
+    from the full width at half maximum (FWHM).
+    
+    :param fwhm: FWHM (arcmin)
+    :param resolution: Resolution (arcmin per pixel)
+    """
+    std_gaussian_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
+    std_gaussian = std_gaussian_arcmin / resolution
+    return std_gaussian

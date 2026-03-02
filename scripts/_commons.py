@@ -48,6 +48,10 @@ WHICH_GAUSSIAN_EXTRACTOR_PNPMASS = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 NITER_MCALENS = 32
+FWHM_KS = 2.4   # As in J.-L. Starck, K. E. Themelis, N. Jeffrey, A. Peel,
+                # and F. Lanusse, “Weak-lensing mass reconstruction using sparsity
+                # and a Gaussian random field,” A&A, vol. 649, p. A99, May 2021.
+
 NITER_STARLET_DEBIASING = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 

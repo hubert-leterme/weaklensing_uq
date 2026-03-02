@@ -27,6 +27,7 @@ def main(
         test_on_real_data: bool = False, run_both: bool = False,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
+        fwhm: float | None = _commons.FWHM_KS,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         compute_mask_from_cosmos: bool = False,
@@ -118,6 +119,7 @@ def main(
     rmse_fn = wldinv.iterativemm.RMSE(mask=mask).to(device)
 
     # Instantiate the KS model
+    std_gaussianfilter = wlutils.get_std_gaussian(fwhm, resolution)
     ks = wldinv.ks.KS(std_gaussianfilter=std_gaussianfilter).to(device)
 
     # Prepare runs: either single or both (simulated and real)
@@ -290,6 +292,14 @@ def run_ks_batch(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--fwhm", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Full width at half maximum (FWHM) for Gaussian smoothing. "
+            f"Default = {_commons.FWHM_KS:.1f}"
+        )
+    )
     _add_arguments.std_noise_mask(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
