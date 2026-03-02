@@ -290,6 +290,42 @@ def checkpoint(parser):
     )
 
 
+def std_noise_mask(parser):
+
+    parser.add_argument(
+        "--compute-mask-from-cosmos", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to compute the noise standard deviation "
+            "and mask from the COSMOS catalog."
+        )
+    )
+    parser.add_argument(
+        "--cosmos-include-faint", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to include the 'faint' COSMOS catalog in "
+            "addition to the 'bright' one."
+        )
+    )
+    parser.add_argument(
+        "--max-z", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Maximum redshift value, above which the COSOMS catalog will be "
+            f"filtered out. Default = {_commons.MAX_Z:.1f}"
+        )
+    )
+    parser.add_argument(
+        "--resolution", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Resolution (in arcmin per pixel) at which the COSMOS catalog will "
+            f"be binned. Default = {_commons.RESOLUTION:.2f}"
+        )
+    )
+
+
 def imgsize(parser):
 
     parser.add_argument(

@@ -24,7 +24,9 @@ def main(
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps=wlmmuq.PATH_TO_PS,
+        compute_mask_from_cosmos=False,
         cosmos_include_faint=False,
+        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
@@ -74,7 +76,9 @@ def main(
         std_noise, mask = _commons.get_stdnoise_mask(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
+            compute_mask_from_cosmos=compute_mask_from_cosmos,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+            max_z=max_z, resolution=resolution,
             inpainting=inpainting_deepmass, verbose=verbose
         )
         # Update arguments for data loading
@@ -239,6 +243,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    _add_arguments.std_noise_mask(parser)
     _add_arguments.model(parser, uq=True, denoiser=True, deepmass=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',

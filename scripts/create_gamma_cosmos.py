@@ -25,12 +25,14 @@ import _add_arguments
 def main(
         path_to_output=wlmmuq.PATH_TO_REAL_SHEARMAP,
         imgsize: int = _commons.IMGSIZE,
+        max_z: float = wlktng.MAX_Z,
+        resolution: float = wlktng.RESOLUTION,
         verbose: bool = False
 ):
     cat_cosmos, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, wlktng.MAX_Z)
+    cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
     data_dict = wlcosmos.get_data_from_cosmos(
-        cat_cosmos, imgsize, wlktng.RESOLUTION,
+        cat_cosmos, imgsize, resolution,
         get_noisy_shear_map=True, east_right=True
     )
     gamma = data_dict["gamma"]

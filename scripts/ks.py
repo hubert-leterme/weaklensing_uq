@@ -29,8 +29,10 @@ def main(
         method_name: str = METHOD_NAME,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
-        std_gaussianfilter: float | None = None,
-        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_DEEPMASS,
+        compute_mask_from_cosmos: bool = False,
+        cosmos_include_faint: bool = False,
+        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        inpainting: bool = _commons.INPAINTING_KS,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,
         nimgs_calib: int = _commons.NIMGS_CALIB,
@@ -73,7 +75,9 @@ def main(
     std_noise, mask = _commons.get_stdnoise_mask(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
+        compute_mask_from_cosmos=compute_mask_from_cosmos,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+        max_z=max_z, resolution=resolution,
         inpainting=inpainting, verbose=verbose
     )
 
@@ -286,6 +290,7 @@ def run_ks_batch(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    _add_arguments.std_noise_mask(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_PREFIX)

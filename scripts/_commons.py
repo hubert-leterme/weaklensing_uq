@@ -23,6 +23,7 @@ from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
 from wlmmuq.models.deepinv.preproc_models import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
+from wlmmuq.data.kappatng import MAX_Z, RESOLUTION
 
 # The following global variables are valid for the kappaTNG dataset
 NINPIMGS = 100 # Number of input images before cropping
@@ -50,8 +51,10 @@ NITER_MCALENS = 32
 NITER_STARLET_DEBIASING = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
-INPAINTING_WIENER = False
-INPAINTING_PNPMASS = False
+INPAINTING_KS = True
+INPAINTING_WIENER = False # TODO: set to True?
+INPAINTING_MCALENS = False # TODO: set to True?
+INPAINTING_PNPMASS = False # TODO: set to True?
 INPAINTING_DEEPMASS = True
 
 N_NOISE_REALS_UQ = 32
@@ -105,14 +108,18 @@ def get_device(verbose=False):
 
 def get_stdnoise_mask(
         path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
+        compute_mask_from_cosmos=False,
         imgsize=IMGSIZE,
         cosmos_include_faint=False,
+        max_z=MAX_Z,
+        resolution=RESOLUTION,
         inpainting=False, verbose=False
 ):
-    if path_to_std_noise is not None:
-        assert path_to_mask is not None, (
-            "If `path_to_std_noise` is provided, `path_to_mask` must also be provided."
-        )
+    if not compute_mask_from_cosmos:
+        if path_to_std_noise is None or path_to_mask is None:
+            raise ValueError(
+                "Both `path_to_std_noise` and `path_to_mask` must be provided."
+            )
         if verbose:
             print("Load noise standard deviation and mask from files")
         std_noise = torch.load(path_to_std_noise)
@@ -121,14 +128,14 @@ def get_stdnoise_mask(
         if verbose:
             print("Load COSMOS galaxy shape catalog")
         cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
         if cosmos_include_faint:
             cat_cosmos = aptable.vstack(
                 [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlcosmos.get_data_from_cosmos(cat_cosmos, imgsize, wlktng.RESOLUTION)
+        data_dict = wlcosmos.get_data_from_cosmos(cat_cosmos, imgsize, resolution)
         shapedisp = data_dict["shapedisp"]
         ngal = data_dict["ngal"]
         mask = data_dict["mask"]
@@ -174,7 +181,7 @@ def create_dataset_from_kappatng(
     if verbose:
         print("Computing redshift weights from COSMOS...")
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, MAX_Z)
     weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
 
     # Get nb of pixels in output images and adjust opening angle accordingly

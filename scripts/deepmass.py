@@ -37,7 +37,10 @@ def main(
         load_model_uq: bool = False,
         arch_uq: str | None = None, timestamp_uq: str | None = None, epoch_uq: int | None = None,
         model_specs_uq: str | None = None,
-        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_DEEPMASS,
+        compute_mask_from_cosmos: bool = False,
+        cosmos_include_faint: bool = False,
+        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        inpainting: bool = _commons.INPAINTING_DEEPMASS,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,
         nimgs_calib: int = _commons.NIMGS_CALIB,
@@ -105,7 +108,9 @@ def main(
     std_noise, mask = _commons.get_stdnoise_mask(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
+        compute_mask_from_cosmos=compute_mask_from_cosmos,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+        max_z=max_z, resolution=resolution,
         inpainting=inpainting, verbose=verbose
     )
 
@@ -433,6 +438,7 @@ if __name__ == "__main__":
     _add_arguments.checkpoint(parser)
     _add_arguments.gaussian_extractor(parser, wiener=True)
     _add_arguments.starlet_debiasing(parser)
+    _add_arguments.std_noise_mask(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_PREFIX)

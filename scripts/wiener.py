@@ -30,7 +30,10 @@ def main(
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps: str = wlmmuq.PATH_TO_PS,
         niter_wiener: int = _commons.NITER_WIENER,
-        cosmos_include_faint: bool = False, inpainting: bool = _commons.INPAINTING_WIENER,
+        compute_mask_from_cosmos: bool = False,
+        cosmos_include_faint: bool = False,
+        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        inpainting: bool = _commons.INPAINTING_WIENER,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,
         nimgs_calib: int = _commons.NIMGS_CALIB,
@@ -78,7 +81,9 @@ def main(
     std_noise, mask = _commons.get_stdnoise_mask(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
+        compute_mask_from_cosmos=compute_mask_from_cosmos,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+        max_z=max_z, resolution=resolution,
         inpainting=inpainting, verbose=verbose
     )
 
@@ -325,6 +330,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     _add_arguments.gaussian_extractor(parser, wiener=True)
+    _add_arguments.std_noise_mask(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser, prompt_init_bounds=True, montecarlo=True, zero_init_bounds=True)
     _add_arguments.output(parser, OUTPUT_PREFIX)
