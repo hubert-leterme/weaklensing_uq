@@ -3,6 +3,7 @@ import warnings
 import time
 import random
 import typing
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import minimize
@@ -851,21 +852,27 @@ def apply_calibration_and_get_metrics(
     )
     if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
         hyperparam_precalib = _get_optimal_hyperparam_precalib(
-            cqr,
-            kappa_pred, var,
-            kappa_pred_calib, var_calib, kappa_true_calib,
-            predinterv_metric, confidence_uq=confidence_uq,
+            cqr=cqr,
+            kappa_pred_calib=kappa_pred_calib,
+            var_calib=var_calib,
+            kappa_true_calib=kappa_true_calib,
+            predinterv_metric=predinterv_metric,
+            confidence_uq=confidence_uq,
             verbose=verbose
         )
 
     # Compute pre- and post-calibration residuals
     if verbose:
         print("Calibrate residuals with CQR")
-    res, res_cqr = _get_residuals_cqr(
-        cqr, var, kappa_pred_calib, var_calib,
-        kappa_true_calib, confidence_uq=confidence_uq,
+    cqr_dataobj = _get_residuals_cqr(
+        cqr=cqr, kappa_pred_calib=kappa_pred_calib,
+        var_calib=var_calib, kappa_true_calib=kappa_true_calib,
+        var=var,
+        confidence_uq=confidence_uq,
         hyperparam_precalib=hyperparam_precalib
     )
+    res = cqr_dataobj.res
+    res_cqr = cqr_dataobj.res_cqr
 
     bounds = _get_bounds(kappa_pred, res)
     bounds_cqr = _get_bounds(kappa_pred, res_cqr)
@@ -919,8 +926,6 @@ def _instantiate_cqr(
 
 def _get_optimal_hyperparam_precalib(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
-        kappa_pred: torch.Tensor,
-        var: torch.Tensor,
         kappa_pred_calib: torch.Tensor,
         var_calib: torch.Tensor,
         kappa_true_calib: torch.Tensor,
@@ -939,20 +944,23 @@ def _get_optimal_hyperparam_precalib(
 
     def mean_predinterv(params: np.ndarray):
 
-        _, res_cqr = _get_residuals_cqr(
-            cqr, var, kappa_pred_calib, var_calib,
-            kappa_true_calib, confidence_uq=confidence_uq,
+        cqr_dataobj = _get_residuals_cqr(
+            cqr=cqr, kappa_pred_calib=kappa_pred_calib,
+            var_calib=var_calib, kappa_true_calib=kappa_true_calib,
+            confidence_uq=confidence_uq,
             hyperparam_precalib=params[0]
         )
-        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-        fake_kappa_true = _get_fake_kappa_true(
-            kappa_pred
+        bounds_calib_cqr = _get_bounds(
+            kappa_pred_calib, cqr_dataobj.res_calib_cqr
+        )
+        fake_kappa_true_calib = _get_fake_kappa_true(
+            kappa_pred_calib
         ) # No need to have access to the ground truth to compute the error bar size
-        predinterv_cqr = predinterv_metric(
-            bounds_cqr, fake_kappa_true
+        predinterv_calib_cqr = predinterv_metric(
+            bounds_calib_cqr, fake_kappa_true_calib
         ) # Shape = (nimgs,)
 
-        return predinterv_cqr.mean().item()
+        return predinterv_calib_cqr.mean().item()
 
     results_optim = minimize(
         mean_predinterv, x0=init_hyperparam,
@@ -978,12 +986,20 @@ def _get_bounds(kappa_pred, res):
     return out
 
 
+@dataclass
+class _ResidualCQR:
+    res: torch.Tensor | None
+    res_cqr: torch.Tensor | None
+    res_calib: torch.Tensor
+    res_calib_cqr: torch.Tensor
+
+
 def _get_residuals_cqr(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
-        var: torch.Tensor,
         kappa_pred_calib: torch.Tensor,
         var_calib:torch.Tensor,
         kappa_true_calib: torch.Tensor,
+        var: torch.Tensor | None = None,
         confidence_uq: int | float = CONFIDENCE_UQ,
         hyperparam_precalib: float | None = None
 ):
@@ -996,15 +1012,41 @@ def _get_residuals_cqr(
         var_calib, confidence_uq=confidence_uq
     )
     cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
-    res_cqr = cqr(res)
+    if res is not None:
+        res_cqr = cqr(res)
+    else:
+        res_cqr = None
+    res_calib_cqr = cqr(res_calib)
 
-    return res, res_cqr
+    return _ResidualCQR(
+        res=res, res_cqr=res_cqr,
+        res_calib=res_calib, res_calib_cqr=res_calib_cqr
+    )
+
+
+@typing.overload
+def _get_error_bars(
+        var: torch.Tensor,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> torch.Tensor: ...
+
+
+@typing.overload
+def _get_error_bars(
+        var: None,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> None: ...
 
 
 def _get_error_bars(
-        var, confidence_uq=CONFIDENCE_UQ
-):  
-    return confidence_uq * var**0.5
+        var: torch.Tensor | None,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> torch.Tensor | None:
+    if var is not None:
+        out = confidence_uq * var**0.5
+    else:
+        out = None
+    return out
 
 
 def get_uq_keys(
