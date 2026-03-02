@@ -379,7 +379,7 @@ def test_calib_dataset(parser, batch_size):
         )
     )
     parser.add_argument(
-        "-cos", "--test-on-real-data", action='store_true',
+        "--test-on-real-data", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Whether to test the mass mapping method on the "
