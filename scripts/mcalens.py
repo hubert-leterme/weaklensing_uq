@@ -61,12 +61,24 @@ def main(
 ):
     _commons.set_seed(seed)
 
-    output_dir = _commons.get_path_to_results(
-        output_dir, method_name, test_dataset_name=test_dataset_name,
-        real_shearmap_name=real_shearmap_name,
-        test_on_real_data=test_on_real_data
-    )   # E.g., "results/dir/test_kappaTNG/mcalens/",
-        # or "results/dir/test_cosmos/mcalens/"
+    # Prepare per-run output directories once (do not recompute per `tau`)
+    if run_both:
+        output_dir_sim = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name, test_on_real_data=False,
+            train_val_dataset_name=None, model_name=None
+        )
+        output_dir_real = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name, test_on_real_data=True,
+            train_val_dataset_name=None, model_name=None
+        )
+    else:
+        output_dir = _commons.get_path_to_results(
+            output_dir, method_name, test_dataset_name=test_dataset_name,
+            real_shearmap_name=real_shearmap_name, test_on_real_data=test_on_real_data,
+            train_val_dataset_name=None, model_name=None
+        )
 
     now = wlutils.get_timestamp()
     device = _commons.get_device(verbose=verbose)
@@ -162,14 +174,8 @@ def main(
         # Prepare runs: either single or both (simulated and real)
         runs = []
         if run_both:
-            runs.append(("sim", test_dataloader_sim, False, _commons.get_path_to_results(
-                output_dir, method_name, test_dataset_name=test_dataset_name,
-                real_shearmap_name=real_shearmap_name, test_on_real_data=False,
-                train_val_dataset_name=None, model_name=None)))
-            runs.append(("real", test_dataloader_real, True, _commons.get_path_to_results(
-                output_dir, method_name, test_dataset_name=test_dataset_name,
-                real_shearmap_name=real_shearmap_name, test_on_real_data=True,
-                train_val_dataset_name=None, model_name=None)))
+            runs.append(("sim", test_dataloader_sim, False, output_dir_sim))
+            runs.append(("real", test_dataloader_real, True, output_dir_real))
         else:
             runs.append(("single", test_dataloader, test_on_real_data, output_dir))
 
