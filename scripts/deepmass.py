@@ -217,7 +217,7 @@ def main(
     for run_name, tdataloader, td_real_flag, out_dir_run in runs:
         if verbose:
             if td_real_flag:
-                print(f"Compute DeepMass on the COSMOS shear map ({nimgs_test} images)")
+                print(f"Compute DeepMass on the COSMOS shear map")
             else:
                 print(f"Compute DeepMass on the test set ({nimgs_test} images)")
 
