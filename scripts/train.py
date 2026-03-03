@@ -243,7 +243,6 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    _add_arguments.std_noise_mask(parser)
     _add_arguments.model(parser, uq=True, denoiser=True, deepmass=True)
     parser.add_argument(
         "-d", "--denoiser", action='store_true',
@@ -299,6 +298,7 @@ if __name__ == "__main__":
             "uniformly between `scale_min` and `scale` for each input image."
         )
     )
+    _add_arguments.std_noise_mask(parser)
     parser.add_argument(
         "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,
