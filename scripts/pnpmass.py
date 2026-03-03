@@ -43,7 +43,7 @@ def main(
         niter: int = _commons.NITER_PNPMASS,
         bin_data_from_cosmos: bool = False,
         cosmos_include_faint: bool = False,
-        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting: bool = _commons.INPAINTING_PNPMASS,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,

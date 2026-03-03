@@ -313,7 +313,7 @@ def std_noise_mask(parser):
         default=argparse.SUPPRESS,
         help=(
             "Maximum redshift value, above which the COSOMS catalog will be "
-            f"filtered out. Default = {_commons.MAX_Z:.1f}"
+            f"filtered out. Default is None"
         )
     )
     parser.add_argument(

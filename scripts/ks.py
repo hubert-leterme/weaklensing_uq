@@ -32,7 +32,7 @@ def main(
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         bin_data_from_cosmos: bool = False,
         cosmos_include_faint: bool = False,
-        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting: bool = _commons.INPAINTING_KS,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,

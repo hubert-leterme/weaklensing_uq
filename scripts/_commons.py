@@ -145,7 +145,8 @@ def get_stdnoise_mask_shearmap(
         if verbose:
             print("Load COSMOS galaxy shape catalog")
         cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
+        if max_z is not None:
+            cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
         if cosmos_include_faint:
             cat_cosmos = aptable.vstack(
                 [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
@@ -211,8 +212,10 @@ def create_dataset_from_kappatng(
     # Get redshift weights from the COSMOS catalog
     if verbose:
         print("Computing redshift weights from COSMOS...")
+    # TODO: Do not filter out high redshifts?
+    # TODO: Also take `cat_cosmos_faint` for the redshift distribution? No 'zphot' field
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, MAX_Z)
+    # cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, MAX_Z)
     weights_redshift = wlktng.get_weights(cat_cosmos_bright['zphot'])
 
     # Get nb of pixels in output images and adjust opening angle accordingly
@@ -458,11 +461,14 @@ def get_dataloader_massmapping(
 
 def get_gamma_from_cosmos(
         imgsize: int = IMGSIZE,
-        max_z: float = wlktng.MAX_Z,
+        max_z: float | None = wlktng.MAX_Z,
         resolution: float = wlktng.RESOLUTION,
+        verbose: bool = False
 ) -> torch.Tensor:
+    # TODO: remove
     cat_cosmos, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
+    if max_z is not None:
+        cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
     data_dict = wlcosmos.get_data_from_cosmos(
         cat_cosmos, imgsize, resolution,
         get_noisy_shear_map=True, east_right=True

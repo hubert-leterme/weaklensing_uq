@@ -60,7 +60,9 @@ def cosmos_catalog():
     cat_bright = aptable.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
     cat_faint = aptable.Table.read(f'{COSMOS_DIR}/cosmos_faint_cat.asc', format='ascii')
 
-    # Discard galaxies with redshift measurement problem
+    # Discard galaxies with redshift measurement problem (zphot < 0.6 and i+ > 24)
+    # For more details, see B. Remy et al., “Probabilistic mass-mapping with neural score 
+    # estimation,” A&A, vol. 672, p. A51, Apr. 2023.
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
 
     return cat_bright, cat_faint

@@ -12,7 +12,7 @@ try:
     LIST_OF_Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
 except (TypeError, FileNotFoundError):
     LIST_OF_Z = None
-MAX_Z = 2.6
+MAX_Z = None # Do not filter out high redshifts
 FILENAMES_OLD = ['kappa13', 'kappa23', 'kappa30'] # when using the old sample dataset
 LIST_OF_Z_OLD = [0.506, 1.034, 1.532] # corresponding redshifts
 

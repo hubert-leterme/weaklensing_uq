@@ -25,10 +25,11 @@ import _add_arguments
 def main(
         path_to_output=wlmmuq.PATH_TO_REAL_SHEARMAP,
         imgsize: int = _commons.IMGSIZE,
-        max_z: float = wlktng.MAX_Z,
+        max_z: float | None = wlktng.MAX_Z,
         resolution: float = wlktng.RESOLUTION,
         verbose: bool = False
 ):
+    # TODO: Use get_stdnoise_mask_shearmap
     gamma = _commons.get_gamma_from_cosmos(
         imgsize=imgsize, max_z=max_z, resolution=resolution
     )

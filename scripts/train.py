@@ -26,7 +26,7 @@ def main(
         path_to_ps=wlmmuq.PATH_TO_PS,
         bin_data_from_cosmos=False,
         cosmos_include_faint=False,
-        max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
