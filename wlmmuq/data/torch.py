@@ -23,7 +23,7 @@ class TorchMixin:
         return torch.tensor(arr, dtype=torch.float32)
 
     def _add_newaxis_arr(self, arr: torch.Tensor) -> torch.Tensor:
-        return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nx, ny)
+        return _unsqueeze_channeldim(arr) # Shape = ([nimgs,] 1, nx, ny)
 
     def to_dataloader(self, **kwargs):
         out = data.DataLoader(
@@ -53,16 +53,17 @@ class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
     
 
 # TODO: Inerit from DeepInverse's ImageDataset (after upgrading to newer version) 
-class RealShearMapDataset(data.Dataset):
+class SingleShearMapDataset(data.Dataset):
 
     def __init__(
-            self, path_to_real_shearmap: str, newaxis: bool = False,
+            self, gamma: torch.Tensor,
+            newaxis: bool = base_dataset.NEWAXIS,
             also_get_complex_conjugates: bool = False
     ):
         super().__init__()
-        self.real_gamma = torch.load(path_to_real_shearmap)
         if newaxis:
-            self.real_gamma = self.real_gamma.unsqueeze(-3)
+            gamma = _unsqueeze_channeldim(gamma)
+        self.gamma = gamma
         self.also_get_complex_conjugates = also_get_complex_conjugates
 
     def __len__(self):
@@ -75,13 +76,13 @@ class RealShearMapDataset(data.Dataset):
     def __getitem__(self, idx):
         # No ground truth (see https://deepinv.github.io/deepinv/api/stubs/deepinv.datasets.ImageDataset.html#deepinv.datasets.ImageDataset)
         if idx == 0:
-            gamma = self.real_gamma
+            gamma = self.gamma
         elif idx == 1:
-            gamma = torch.conj(self.real_gamma)
+            gamma = torch.conj(self.gamma)
         elif idx == 2:
-            gamma = -self.real_gamma
+            gamma = -self.gamma
         elif idx == 3:
-            gamma = -torch.conj(self.real_gamma)
+            gamma = -torch.conj(self.gamma)
         return torch.nan, gamma
 
     def to_dataloader(self, **kwargs):
@@ -95,3 +96,7 @@ class RealShearMapDataset(data.Dataset):
 class TensorList(list[torch.Tensor]):
     def to(self, device, **kwargs):
         return TensorList(t.to(device, **kwargs) for t in self)
+    
+
+def _unsqueeze_channeldim(arr):
+    return arr.unsqueeze(-3)

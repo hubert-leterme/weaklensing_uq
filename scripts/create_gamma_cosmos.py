@@ -29,13 +29,9 @@ def main(
         resolution: float = wlktng.RESOLUTION,
         verbose: bool = False
 ):
-    cat_cosmos, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
-    data_dict = wlcosmos.get_data_from_cosmos(
-        cat_cosmos, imgsize, resolution,
-        get_noisy_shear_map=True, east_right=True
+    gamma = _commons.get_gamma_from_cosmos(
+        imgsize=imgsize, max_z=max_z, resolution=resolution
     )
-    gamma = data_dict["gamma"]
     torch.save(gamma, path_to_output)
 
 

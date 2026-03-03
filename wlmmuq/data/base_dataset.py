@@ -10,6 +10,7 @@ from .. import utils
 
 SCALE = 1.
 PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing potential 001
+NEWAXIS = True # TODO: Switch to False after merge with `tomographic`
 
 # TODO: Update docstrings
 
@@ -21,7 +22,7 @@ class BaseHDF5Dataset:
             std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
             meancentering=False, sort_by_filename_ori=True,
             pattern_filename_ori=PATTERN_FILENAME_ORI, min_idx_filename_ori=None,
-            newaxis=False, list_of_outputs=None, close_after_batch=False,
+            newaxis=NEWAXIS, list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
     ):
         """
@@ -419,7 +420,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             Default is True.
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
-            for training purpose. Default is False.
+            for training purpose. Default is True.
         complexconjugate (bool, default=True)   
             Whether to use convention from jax_lensing (due to the inversion of the x-axis?).
         return_complex (bool, default=False)
@@ -564,7 +565,7 @@ class BaseHDF5DatasetDenoiser(BaseHDF5Dataset):
             Default is True.
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
-            for training purpose. Default is False.
+            for training purpose. Default is True.
         list_of_outputs: list of str, optional
             List of outputs to returns. Can be one of 'kappa_true', 'gamma1', 'gamma2',
             'gamma1_noisy', 'gamma2_noisy', 'kappa_inp'.
@@ -684,7 +685,7 @@ class InputTargetMixin:
             Default is True.
         newaxis: bool, optional
             If True, the returned arrays will be of shape (nimgs, 1, nx, ny),
-            for training purpose. Default is False.
+            for training purpose. Default is True.
         close_after_batch: bool, optional
             Default is False.
         verbose : bool, optional

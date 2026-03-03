@@ -184,15 +184,6 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
     return arr
 
 
-def get_std_noise(ngal, shapedisp, std_noise_mask):
-
-    out = torch.nan_to_num(
-        shapedisp / ngal**0.5, posinf=std_noise_mask
-    ) # standard deviation of the noise
-
-    return out
-
-
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,

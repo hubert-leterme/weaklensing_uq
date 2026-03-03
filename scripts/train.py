@@ -24,7 +24,7 @@ def main(
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps=wlmmuq.PATH_TO_PS,
-        compute_mask_from_cosmos=False,
+        bin_data_from_cosmos=False,
         cosmos_include_faint=False,
         max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
@@ -73,10 +73,10 @@ def main(
 
     else:
         # Get noise srtandard deviation and mask
-        std_noise, mask = _commons.get_stdnoise_mask(
+        std_noise, mask, _ = _commons.get_stdnoise_mask_shearmap(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
-            compute_mask_from_cosmos=compute_mask_from_cosmos,
+            bin_data_from_cosmos=bin_data_from_cosmos,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
             max_z=max_z, resolution=resolution,
             inpainting=inpainting_deepmass, verbose=verbose
@@ -145,7 +145,7 @@ def main(
         hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_train, batch_size=batch_size,
         output_shape=imgsize,
-        newaxis=True, nreal_per_img=nreal_per_img,
+        nreal_per_img=nreal_per_img,
         num_workers=num_workers, **kwargs
     )
     train_dataloader = train_dataset.to_dataloader()
@@ -153,7 +153,7 @@ def main(
         hdf5_filepath=path_to_train_val_dataset,
         nimgs=nimgs_val, batch_size=batch_size,
         beg_idx=nimgs_train, shuffle=False,
-        output_shape=imgsize, newaxis=True,
+        output_shape=imgsize,
         num_workers=num_workers, **kwargs
     )
     val_dataloader = val_dataset.to_dataloader()

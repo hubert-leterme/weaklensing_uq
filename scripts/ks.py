@@ -30,7 +30,7 @@ def main(
         fwhm: float | None = _commons.FWHM_KS,
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
-        compute_mask_from_cosmos: bool = False,
+        bin_data_from_cosmos: bool = False,
         cosmos_include_faint: bool = False,
         max_z: float = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting: bool = _commons.INPAINTING_KS,
@@ -73,10 +73,12 @@ def main(
     device = _commons.get_device(verbose=verbose)
 
     # Load noise standard deviation and mask
-    std_noise, mask = _commons.get_stdnoise_mask(
+    std_noise, mask, gamma_real = _commons.get_stdnoise_mask_shearmap(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
-        compute_mask_from_cosmos=compute_mask_from_cosmos,
+        path_to_real_shearmap=path_to_real_shearmap,
+        bin_data_from_cosmos=bin_data_from_cosmos,
+        get_noisy_shear_map=test_on_real_data or run_both,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
         max_z=max_z, resolution=resolution,
         inpainting=inpainting, verbose=verbose
@@ -87,21 +89,18 @@ def main(
         test_dataloader_sim = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
-            test_on_real_data=False,
-            path_to_real_shearmap=path_to_real_shearmap
+            test_on_real_data=False
         )
         test_dataloader_real = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
-            test_on_real_data=True,
-            path_to_real_shearmap=path_to_real_shearmap
+            test_on_real_data=True, gamma_real=gamma_real
         )
     else:
         test_dataloader = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
-            test_on_real_data=test_on_real_data,
-            path_to_real_shearmap=path_to_real_shearmap
+            test_on_real_data=test_on_real_data, gamma_real=gamma_real
         )
 
     # Load calibration set, if provided
