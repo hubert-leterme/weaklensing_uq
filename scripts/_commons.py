@@ -20,7 +20,8 @@ from wlmmuq.models.deepinv import iterativemm as wlpnp
 from wlmmuq.models.deepinv import pnpmcalens as wlpnpmcalens
 from wlmmuq.models import cqr as wlcqr
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_REAL_SHEARMAP
+from wlmmuq import PATH_TO_PS
 from wlmmuq.models.deepinv.preproc_models import NITER_WIENER
 from wlmmuq.models.deepinv.pnpmcalens import \
     NITER_PER_STEP_G, NITER_PER_STEP_NG, STARLET_DETECTION_THRESHOLD
@@ -111,24 +112,35 @@ def get_device(verbose=False):
     return device
 
 
-def get_stdnoise_mask(
+def get_stdnoise_mask_shearmap(
         path_to_std_noise=PATH_TO_STD_NOISE, path_to_mask=PATH_TO_MASK,
-        compute_mask_from_cosmos=False,
+        path_to_real_shearmap=PATH_TO_REAL_SHEARMAP,
+        bin_data_from_cosmos=False,
+        get_noisy_shear_map=False,
         imgsize=IMGSIZE,
         cosmos_include_faint=False,
         max_z=MAX_Z,
         resolution=RESOLUTION,
         inpainting=False, verbose=False
 ):
-    if not compute_mask_from_cosmos:
+    if not bin_data_from_cosmos:
         if path_to_std_noise is None or path_to_mask is None:
             raise ValueError(
                 "Both `path_to_std_noise` and `path_to_mask` must be provided."
             )
         if verbose:
-            print("Load noise standard deviation and mask from files")
+            print("Load noise standard deviation, mask, and shear map from files")
         std_noise = torch.load(path_to_std_noise)
         mask = torch.load(path_to_mask)
+        if get_noisy_shear_map:
+            if path_to_real_shearmap is None:
+                raise ValueError(
+                    "Argument `path_to_real_shearmap` must be provided."
+                )
+            gamma_real = torch.load(path_to_real_shearmap)
+        else:
+            gamma_real = None
+
     else:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
@@ -140,21 +152,35 @@ def get_stdnoise_mask(
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlcosmos.get_data_from_cosmos(cat_cosmos, imgsize, resolution)
-        shapedisp = data_dict["shapedisp"]
-        ngal = data_dict["ngal"]
+        data_dict = wlcosmos.get_data_from_cosmos(
+            cat_cosmos, imgsize, resolution,
+            get_noisy_shear_map=get_noisy_shear_map
+        )
+        std_noise = data_dict["std_noise"]
         mask = data_dict["mask"]
-        std_noise = wlutils.get_std_noise(ngal, shapedisp, std_noise_mask=0)
+        if get_noisy_shear_map:
+            gamma_real = data_dict["gamma"]
+        else:
+            gamma_real = None
 
     if inpainting:
         # Set the noise standard deviation for masked data
-        std_noise[~mask] = std_noise.max()
+        max_std_noise = std_noise.max()
+        std_noise[~mask] = max_std_noise
+        if get_noisy_shear_map:
+            assert gamma_real is not None
+            def _get_white_noise():
+                return torch.normal(mean=0., std=torch.ones_like(std_noise))
+            white_noise_real = _get_white_noise()
+            white_noise_imag = _get_white_noise()
+            gamma_real[~mask] = max_std_noise * \
+                (white_noise_real + 1j * white_noise_imag)[~mask]
 
-    return std_noise, mask
+    return std_noise, mask, gamma_real
 
 
 def create_dataset_from_kappatng(
-        func: typing.Callable, path_to_saved_dataset:str, idx_lp: int | str,
+        func: typing.Callable, path_to_saved_dataset: str, idx_lp: int | str,
         openingangle: float, ninpimgs: int, verbose: bool = False, **kwargs
 ):
     """
@@ -412,23 +438,37 @@ def instantiate_starlet_denoiser(
 
 def get_dataloader_massmapping(
         path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask,
-        test_on_real_data=False, path_to_real_shearmap=None, **kwargs
+        test_on_real_data=False, gamma_real=None, **kwargs
 ):
     if not test_on_real_data:
         test_dataloader = wlbl.HDF5DatasetMassMapping(
             hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
             std_noise=std_noise, mask=mask, output_shape=imgsize,
-            newaxis=True, num_workers=num_workers, **kwargs
+            num_workers=num_workers, **kwargs
         ).to_dataloader()
     else:
-        if path_to_real_shearmap is None:
-            raise ValueError("Argument `path_to_real_shearmap` must be provided.")
-        test_dataloader = wlbl.RealShearMapDataset(
-            path_to_real_shearmap, newaxis=True,
-            also_get_complex_conjugates=True
-        ).to_dataloader() # TODO: Switch to `newaxis=False` after merge with `tomographic`
+        if gamma_real is None:
+            raise ValueError("Argument `gamma_real` must be provided.")
+        test_dataloader = wlbl.SingleShearMapDataset(
+            gamma_real, also_get_complex_conjugates=True
+        ).to_dataloader()
 
     return test_dataloader
+
+
+def get_gamma_from_cosmos(
+        imgsize: int = IMGSIZE,
+        max_z: float = wlktng.MAX_Z,
+        resolution: float = wlktng.RESOLUTION,
+) -> torch.Tensor:
+    cat_cosmos, _ = wlcosmos.cosmos_catalog()
+    cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
+    data_dict = wlcosmos.get_data_from_cosmos(
+        cat_cosmos, imgsize, resolution,
+        get_noisy_shear_map=True, east_right=True
+    )
+    gamma = data_dict["gamma"]
+    return gamma
 
 
 def _get_args_wienerinit(

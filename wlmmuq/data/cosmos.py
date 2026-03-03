@@ -8,7 +8,7 @@ import matplotlib.path as mpath
 import astropy.table as aptable
 
 import torch
-from lenspack.utils import bin2d # TODO: use modified `bin2d` function
+from ..lenspack import bin2d
 
 from .. import utils
 from .. import COSMOS_DIR
@@ -77,11 +77,11 @@ def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
 def get_data_from_cosmos(
         cat_cosmos, imgsize, resolution, get_noisy_shear_map=False, east_right=False
 ):
-    e1 = cat_cosmos['e1iso_rot4_gr_snCal']
-    e2 = cat_cosmos['e2iso_rot4_gr_snCal']
-    ra = cat_cosmos['Ra']
-    dec = cat_cosmos['Dec']
-    nhweight_int = cat_cosmos['nhweight_int']
+    e1: np.ndarray = cat_cosmos['e1iso_rot4_gr_snCal']
+    e2: np.ndarray = cat_cosmos['e2iso_rot4_gr_snCal']
+    ra: np.ndarray = cat_cosmos['Ra']
+    dec: np.ndarray = cat_cosmos['Dec']
+    nhweight_int: np.ndarray = cat_cosmos['nhweight_int']
     
     shapedisp1 = np.std(e1)
     shapedisp2 = np.std(e2)
@@ -91,14 +91,25 @@ def get_data_from_cosmos(
     ra_cosmos_median = np.median(ra) # right ascension (longitude)
     dec_cosmos_median = np.median(dec) # declination (latitude)
     extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
-    ngal = bin2d(
+    l2norm_nhweight_int = bin2d(
         ra, dec,
-        npix=imgsize, extent=extent
+        v=nhweight_int**2,
+        npix=imgsize, extent=extent,
+        sum_instead_of_average=True
+    )**0.5
+    sum_nhweight_int = bin2d(
+        ra, dec,
+        v=nhweight_int,
+        npix=imgsize, extent=extent,
+        sum_instead_of_average=True
     )
-    assert isinstance(ngal, np.ndarray)
-    mask = ngal > 0
+    std_noise = np.nan_to_num(
+        shapedisp * l2norm_nhweight_int / sum_nhweight_int,
+        posinf=0.
+    )
+    mask = sum_nhweight_int > 0
 
-    ngal = torch.tensor(ngal, dtype=torch.float32)
+    std_noise = torch.tensor(std_noise, dtype=torch.float32)
     mask = torch.tensor(mask, dtype=torch.bool)
 
     out = {
@@ -107,7 +118,7 @@ def get_data_from_cosmos(
         'extent': extent,
         'openingangle': openingangle,
         'shapedisp': shapedisp,
-        'ngal': ngal,
+        'std_noise': std_noise,
         'mask': mask
     }
 

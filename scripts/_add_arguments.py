@@ -293,7 +293,7 @@ def checkpoint(parser):
 def std_noise_mask(parser):
 
     parser.add_argument(
-        "--compute-mask-from-cosmos", action='store_true',
+        "--bin-data-from-cosmos", action='store_true',
         default=argparse.SUPPRESS,
         help=(
             "Whether to compute the noise standard deviation "
