@@ -114,7 +114,11 @@ The optional argument `-t1 YYYYMMDD_hhmmss` must be replaced by the timestamp of
 #### Point estimate (order-1 networks)
 
 ```bash
+# COSMOS "bright" catalog only 
 python scripts/train.py -a UNetPreproc -m wiener -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_nepochs_20 -w 8 --seed 42 -v
+
+# COSMOS "bright" + "faint" catalogs
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
 ```
 
 #### Variance estimate (order-2 networks)
