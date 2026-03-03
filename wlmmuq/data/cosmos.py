@@ -8,7 +8,7 @@ import matplotlib.path as mpath
 import astropy.table as aptable
 
 import torch
-from lenspack.utils import bin2d # TODO: use modified `bin2d` function
+from ..lenspack import bin2d
 
 from .. import utils
 from .. import COSMOS_DIR
