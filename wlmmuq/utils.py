@@ -9,13 +9,17 @@ import torch
 import torch.nn.functional as F
 import deepinv as dinv
 
-#from lenspack.image.inversion import ks93, ks93inv
-from lenspack.utils import bin2d
-
-from . import ks93
-from . import KEY_REPLACEMENT_DICT
+from . import lenspack
+from . import KEY_REPLACEMENT_DICT, PATH_TO_XCLUS
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
+
+# Global variables for plotting X-ray clusters
+XCLUS_ZMIN = 0.3
+XCLUS_ZMAX = 0.99
+XCLUS_M500MIN = 3
+XCLUS_MTEXT = False # overplot x-clusters M500
+XCLUS_ZTEXT = True  # overplot x-clusters redshift
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -63,19 +67,6 @@ def get_resolution(width, openingangle):
     
     """
     return openingangle / width * 60.
-
-
-def ngal_per_pixel(ra, dec, width, extent):
-    """
-    Parameters
-    ----------
-    ra, dec (numpy.ndarray)
-    width (int)
-        Size of the target convergence maps (nb pixels).
-    extent (4-tuple)
-        Extent of the target convergence maps (deg).
-    """
-    return bin2d(ra, dec, npix=width, extent=extent)
 
 
 def _get_shear_fromto_convergence(
@@ -126,7 +117,7 @@ def get_shear_from_convergence(
 
     """
     gamma = _get_shear_fromto_convergence(
-        ks93.ks93inv, kappa1, kappa2,
+        lenspack.ks93inv, kappa1, kappa2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     if mask is not None:
@@ -168,7 +159,7 @@ def get_convergence_from_shear(
         if gamma2 is not None:
             gamma2[..., ~mask] = 0
     kappa = _get_shear_fromto_convergence(
-        ks93.ks93, gamma1, gamma2,
+        lenspack.ks93, gamma1, gamma2,
         complexconjugate=complexconjugate, return_complex=return_complex
     )
     return kappa
@@ -200,23 +191,14 @@ def convert_to_complex(arr: np.ndarray | torch.Tensor):
     return arr
 
 
-def get_std_noise(ngal, shapedisp, std_noise_mask):
-
-    out = torch.nan_to_num(
-        shapedisp / ngal**0.5, posinf=std_noise_mask
-    ) # standard deviation of the noise
-
-    return out
-
-
 def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
-        mask: np.ndarray | torch.Tensor = None,
+        mask: np.ndarray | torch.Tensor | None = None,
         inpainting: bool = False,
-        output_shape_wider: tuple[int, int] = None,
-        std_noise_wider: np.ndarray | torch.Tensor = None,
-        mask_wider: np.ndarray | torch.Tensor = None,
+        output_shape_wider: tuple[int, int] | None = None,
+        std_noise_wider: np.ndarray | torch.Tensor | None = None,
+        mask_wider: np.ndarray | torch.Tensor | None = None,
         device=None
 ):
     """
@@ -246,21 +228,16 @@ def get_masked_and_noisy_shear(
     else:
         randn = np.random.randn
 
-    if mask is None:
-        if torch.is_tensor(std_noise):
-            mask = torch.ones_like(std_noise, dtype=torch.bool)
-        else:
-            mask = np.ones_like(std_noise, dtype=bool)
-
-    if device is not None:
+    if device is not None and torch.is_tensor(mask):
         mask = mask.to(device)
 
     shape = test_array_shape([gamma, std_noise, mask])
     *shape0, nx, ny = shape
 
     # Set masked values to 0
-    check_mask(mask)
-    gamma_masked = mask * gamma
+    if mask is not None:
+        check_mask(mask)
+        gamma_masked = mask * gamma
 
     # TODO: use physics = iterativemm.MassMapping(...)
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
@@ -268,7 +245,7 @@ def get_masked_and_noisy_shear(
         if device is not None:
             noise = noise.to(device)
         noise *= std_noise
-        if not inpainting:
+        if not inpainting and mask is not None:
             noise[..., ~mask] = 0.
         return gamma_masked + noise
 
@@ -304,7 +281,7 @@ def get_std_ks(
 
     dirac_imag = np.zeros((width1, width2))
 
-    ksmatr_real, ksmatr_imag = ks93.ks93(dirac_real, dirac_imag)
+    ksmatr_real, ksmatr_imag = lenspack.ks93(dirac_real, dirac_imag)
     if std_gaussianfilter is not None:
         ksmatr_real = ndimage.gaussian_filter(
             ksmatr_real, std_gaussianfilter, mode="wrap"
@@ -578,6 +555,10 @@ def get_1d_powerspectrum(kappa: np.ndarray | torch.Tensor) -> np.ndarray | torch
     return powerspectrum_1d
 
 
+def get_openingangle(imgsize, resolution):
+    return imgsize * resolution / 60.
+
+
 def check_mask(mask: np.ndarray | torch.Tensor):
     if torch.is_tensor(mask):
         assertion = mask.dtype == torch.bool
@@ -701,8 +682,15 @@ def plot_means_errs(
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, imgsize: int | tuple[int] = None,
-        extent: list[float] = None, **kwargs
+        printxticks=True, printyticks=True,
+        imgsize: int | tuple[int] | None = None,
+        extent: list[float] | None = None,
+        extent_after_crop: list[float] | None = None,
+        xclus: bool = False, path_to_xclus: str = PATH_TO_XCLUS,
+        zmin: float = XCLUS_ZMIN, zmax: float = XCLUS_ZMAX,
+        m500min: float = XCLUS_M500MIN,
+        ztext: bool = XCLUS_ZTEXT, mtext: bool = XCLUS_MTEXT,
+        **kwargs
 ):
     if imgsize is not None:
         if isinstance(imgsize, int):
@@ -713,7 +701,9 @@ def skyshow(
         end_i = beg_i + imgsize[0]
         end_j = beg_j + imgsize[1]
         img = crop_arr(img, beg_i, end_i, beg_j, end_j)
-        if extent is not None:
+        if extent_after_crop is not None:
+            extent = extent_after_crop
+        elif extent is not None:
             x_min, x_max, y_min, y_max = extent
             dx = (x_max - x_min) / imgsize_ori[1]
             dy = (y_max - y_min) / imgsize_ori[0]
@@ -725,7 +715,8 @@ def skyshow(
             ]
 
     out = plt.imshow(img, origin='lower', extent=extent, **kwargs)
-    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis
+
+    plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis (sky observations: east left)
     if printxylabels:
         plt.xlabel("Right ascension")
         plt.ylabel("Declination")
@@ -742,6 +733,34 @@ def skyshow(
         plt.plot(*boundaries, c=c, lw=1)
     if title is not None:
         plt.title(title)
+
+    # Xray clusters
+    # This section is a copy-paste from the `cosmostat` repository
+    # https://github.com/CosmoStat/cosmostat.git
+    if xclus:
+        xclusters = np.loadtxt(path_to_xclus)
+        highz = (xclusters[:, 6] >= zmin) & (xclusters[:, 6] <= zmax)
+        for cluster in xclusters[highz]:
+            ra_cl, dec_cl, z_cl = cluster[1], cluster[2], cluster[6]
+            m500 = cluster[7]
+            if m500 > m500min:
+                plt.scatter(ra_cl, dec_cl, c="w", s=6)
+                if ztext:
+                    plt.text(
+                        ra_cl + 0.03,
+                        dec_cl + 0.02,
+                        "{:.2f}".format(z_cl),
+                        fontsize=8,
+                        c="w",
+                    )
+                if mtext:
+                    plt.text(
+                        ra_cl + 0.03,
+                        dec_cl - 0.02,
+                        "{:.2f}".format(m500),
+                        fontsize=8,
+                        c="w",
+                    )
 
     return out
 
@@ -1172,3 +1191,16 @@ def load_checkpoint_state_dict(
                     print(f"Replacing key '{old_key}' with '{new_key}'")
                 state_dict[new_key] = state_dict.pop(old_key)
     return state_dict
+
+
+def get_std_gaussian(fwhm, resolution):
+    """
+    Compute standard deviation of a Gaussian distribution in pixel unit,
+    from the full width at half maximum (FWHM).
+    
+    :param fwhm: FWHM (arcmin)
+    :param resolution: Resolution (arcmin per pixel)
+    """
+    std_gaussian_arcmin = fwhm / (2 * np.sqrt(2 * np.log(2)))
+    std_gaussian = std_gaussian_arcmin / resolution
+    return std_gaussian

@@ -7,6 +7,10 @@ import matplotlib.path as mpath
 
 import astropy.table as aptable
 
+import torch
+from ..lenspack import bin2d
+
+from .. import utils
 from .. import COSMOS_DIR
 
 COSMOS_VERTICES = [(149.508, 2.880),
@@ -56,7 +60,9 @@ def cosmos_catalog():
     cat_bright = aptable.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
     cat_faint = aptable.Table.read(f'{COSMOS_DIR}/cosmos_faint_cat.asc', format='ascii')
 
-    # Discard galaxies with redshift measurement problem
+    # Discard galaxies with redshift measurement problem (zphot < 0.6 and i+ > 24)
+    # For more details, see B. Remy et al., “Probabilistic mass-mapping with neural score 
+    # estimation,” A&A, vol. 672, p. A51, Apr. 2023.
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
 
     return cat_bright, cat_faint
@@ -70,29 +76,68 @@ def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
     return extent
 
 
-def get_data_from_cosmos(cat_cosmos, openingangle):
-    """
-    Parameters
-    ----------
-    cat_cosmos (astropy.Table)
-    openingangle (float)
-        Opening angle of the target convergence maps (deg).
-
-    """
-    ra_cosmos_median = np.median(cat_cosmos['Ra']) # right ascension (longitude)
-    dec_cosmos_median = np.median(cat_cosmos['Dec']) # declination (latitude)
-    extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
-
-    shapedisp1 = np.std(cat_cosmos['e1iso_rot4_gr_snCal'])
-    shapedisp2 = np.std(cat_cosmos['e2iso_rot4_gr_snCal'])
+def get_data_from_cosmos(
+        cat_cosmos, imgsize, resolution, get_noisy_shear_map=False, east_right=False
+):
+    e1: np.ndarray = cat_cosmos['e1iso_rot4_gr_snCal']
+    e2: np.ndarray = cat_cosmos['e2iso_rot4_gr_snCal']
+    ra: np.ndarray = cat_cosmos['Ra']
+    dec: np.ndarray = cat_cosmos['Dec']
+    nhweight_int: np.ndarray = cat_cosmos['nhweight_int']
+    
+    shapedisp1 = np.std(e1)
+    shapedisp2 = np.std(e2)
     shapedisp = (shapedisp1 + shapedisp2) / 2
+
+    openingangle = utils.get_openingangle(imgsize, resolution)
+    ra_cosmos_median = np.median(ra) # right ascension (longitude)
+    dec_cosmos_median = np.median(dec) # declination (latitude)
+    extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
+    l2norm_nhweight_int = bin2d(
+        ra, dec,
+        v=nhweight_int**2,
+        npix=imgsize, extent=extent,
+        sum_instead_of_average=True
+    )**0.5
+    sum_nhweight_int = bin2d(
+        ra, dec,
+        v=nhweight_int,
+        npix=imgsize, extent=extent,
+        sum_instead_of_average=True
+    )
+    std_noise = np.nan_to_num(
+        shapedisp * l2norm_nhweight_int / sum_nhweight_int,
+        posinf=0.
+    )
+    mask = sum_nhweight_int > 0
+
+    std_noise = torch.tensor(std_noise, dtype=torch.float32)
+    mask = torch.tensor(mask, dtype=torch.bool)
 
     out = {
         'ra_cosmos_median': ra_cosmos_median,
         'dec_cosmos_median': dec_cosmos_median,
         'extent': extent,
-        'shapedisp': shapedisp
+        'openingangle': openingangle,
+        'shapedisp': shapedisp,
+        'std_noise': std_noise,
+        'mask': mask
     }
+
+    if get_noisy_shear_map:
+        if east_right:
+            e2 = -e2 # Use the complex conjugate of ellipticities (East left in the COSMOS catalog)
+        e1map, e2map = bin2d(
+            ra, dec, 
+            v=(e1, e2), w=nhweight_int,
+            npix=imgsize, extent=extent
+        )
+        gamma = torch.tensor(e1map + 1j * e2map, dtype=torch.complex64)
+
+        out.update({
+            'gamma': gamma
+        })
+    
     return out
 
 

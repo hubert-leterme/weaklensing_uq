@@ -226,27 +226,21 @@ def model_uq(parser, denoiser=False, deepmass=False):
     )
 
 
-def checkpoint_dir(parser):
+def model_name(parser):
 
     parser.add_argument(
-        "--checkpoint-dir", type=str,
+        "-c", "--model-name", type=str,
         default=argparse.SUPPRESS,
         help=(
-            f"Checkpoint parent directory. Default = {wlmmuq.MODEL_DIR}"
-        )
-    )
-    parser.add_argument(
-        "-c", "--checkpoint-subdir", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Subdirectory containing the save checkpoints. Default is None."
+            "Model name, used for setting the subdirectory containing "
+            "the saved checkpoints. Default is None."
         )
     )
 
 
 def checkpoint(parser):
 
-    checkpoint_dir(parser)
+    model_name(parser)
     parser.add_argument(
         "-t", "--timestamp", type=str,
         default=argparse.SUPPRESS,
@@ -296,7 +290,43 @@ def checkpoint(parser):
     )
 
 
-def dataset(parser, batch_size):
+def std_noise_mask(parser):
+
+    parser.add_argument(
+        "--bin-data-from-cosmos", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to compute the noise standard deviation, mask "
+            "and noisy shear map from the COSMOS catalog."
+        )
+    )
+    parser.add_argument(
+        "--cosmos-include-faint", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to include the 'faint' COSMOS catalog in "
+            "addition to the 'bright' one."
+        )
+    )
+    parser.add_argument(
+        "--max-z", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Maximum redshift value, above which the COSOMS catalog will be "
+            f"filtered out. Default is None"
+        )
+    )
+    parser.add_argument(
+        "--resolution", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Resolution (in arcmin per pixel) at which the COSMOS catalog will "
+            f"be binned. Default = {_commons.RESOLUTION:.2f}"
+        )
+    )
+
+
+def imgsize(parser):
 
     parser.add_argument(
         "--imgsize", type=int,
@@ -306,6 +336,11 @@ def dataset(parser, batch_size):
             f"Default = {_commons.IMGSIZE}"
         )
     )
+
+
+def dataset(parser, batch_size):
+
+    imgsize(parser)
     parser.add_argument(
         "-b", "--batch-size", type=int,
         default=argparse.SUPPRESS,
@@ -356,6 +391,14 @@ def train_val_dataset(parser, batch_size):
 def test_calib_dataset(parser, batch_size):
 
     parser.add_argument(
+        "--path-to-real-shearmap", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the COSMOS shear map (PyTorch saved object). "
+            f"Default = {wlmmuq.PATH_TO_REAL_SHEARMAP}"
+        )
+    )
+    parser.add_argument(
         "--path-to-test-dataset", type=str,
         default=argparse.SUPPRESS,
         help=(
@@ -369,6 +412,22 @@ def test_calib_dataset(parser, batch_size):
         help=(
             "Path to the calibration set (HDF5 file). "
             f"Default = {wlmmuq.PATH_TO_CALIB_DATASET}"
+        )
+    )
+    parser.add_argument(
+        "--test-on-real-data", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to test the mass mapping method on the "
+            "COSMOS shear map."
+        )
+    )
+    parser.add_argument(
+        "--run-both", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Run inference on both the simulated test set and the real COSMOS shear map. "
+            "Calibration (if requested) is still performed only once."
         )
     )
     parser.add_argument(
@@ -439,6 +498,14 @@ def cqr(parser, prompt_init_bounds=False, montecarlo=False, zero_init_bounds=Fal
             default=argparse.SUPPRESS,
             help=(
                 f"Get pre-calibration bounds {uq_method}."
+            )
+        )
+        parser.add_argument(
+            "--n-noise-reals-per-img", type=int,
+            default=argparse.SUPPRESS,
+            help=(
+                "Number of noise realizations per image. "
+                f"Default = {_commons.N_NOISE_REALS_UQ}"
             )
         )
     if not zero_init_bounds:
@@ -519,14 +586,6 @@ def gaussian_extractor(parser, wiener=False, mcalens=False, verbose=False):
             "Works with `--mode residual --which-gaussian-extractor mcalens` "
             "or `--mode pnpmcalens`. "
         ) if verbose else ""
-        parser.add_argument(
-            "--update-ng-first", action='store_true',
-            default=argparse.SUPPRESS,
-            help=(
-                "Update the non-Gaussian component before the Gaussian component. "
-                f"{additional_msg}"
-            )
-        )
         parser.add_argument(
             "-ig", "--niter-per-step-g", type=int,
             default=argparse.SUPPRESS,
@@ -611,14 +670,14 @@ def starlet_debiasing(parser):
     )
 
 
-def output(parser, output_filename):
+def output(parser, prefix=None):
 
     parser.add_argument(
-        "-o", "--output-filename", type=str,
+        "-o", "--output-prefix", type=str,
         default=argparse.SUPPRESS,
         help=(
-            "Output filename (without extension). "
-            f"Default = '{output_filename}'"
+            "Prefix for output filename (without extension). "
+            f"Default = '{prefix if prefix is not None else ""}'"
         )
     )
     parser.add_argument(

@@ -22,16 +22,25 @@ ktng_dir: path/to/kappaTNG # Contains the original kappa-maps and the redshift
 # Root directory to save trained models and inference results
 model_dir: path/to/models
 
+# Root directory to save results
+results_dir: path/to/results
+
 # Path to precomputed objects
+path_to_ps: path/to/powerspectrum.pt # Precomputed power spectrum
 path_to_std_noise: path/to/std_noise.pt # Precomputed standard deviation of the noise
 path_to_mask: path/to/mask.pt # Precomputed mask
 path_to_extent: path/to/extent.pt # Precomputed extent of the observed field
-path_to_ps: path/to/powerspectrum.pt # Precomputed power spectrum
+path_to_real_shearmap: path/to/cosmos/shearmap.pt # Real observed shear map (e.g., from HST/COSMOS)
+path_to_xclus: path/to/xray.txt # X-ray clusters (e.g., from HST/COSMOS)
 
 # Paths to datasets
 path_to_train_val_dataset: path/to/train/dataset.hdf5 # Augmented dataset from LP002 (kappaTNG)
 path_to_test_dataset: path/to/test/dataset.hdf5 # Cropped dataset from LP001 (kappaTNG)
 path_to_calib_dataset: path/to/calib/dataset.hdf5 # Augmented dataset from LP001 (kappaTNG)
+
+train_val_dataset_name: kappaTNG # Used in paths to models and results
+test_dataset_name: test_kappaTNG # Used in paths to results
+real_shearmap_name: test_cosmos # Used in paths to results
 
 # Directory containing pre-trained weights for the Learnlet denoiser
 learnlets_pretrained_weights_dir: path/to/weights
