@@ -10,9 +10,16 @@ import torch.nn.functional as F
 import deepinv as dinv
 
 from . import lenspack
-from . import KEY_REPLACEMENT_DICT
+from . import KEY_REPLACEMENT_DICT, PATH_TO_XCLUS
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
+
+# Global variables for plotting X-ray clusters
+XCLUS_ZMIN = 0.3
+XCLUS_ZMAX = 0.99
+XCLUS_M500MIN = 3
+XCLUS_MTEXT = False # overplot x-clusters M500
+XCLUS_ZTEXT = True  # overplot x-clusters redshift
 
 vectorized_zfill = np.vectorize(lambda x: str(x).zfill(3))
 #vectorized_ks93 = np.vectorize(ks93, signature='(n,m),(n,m)->(n,m),(n,m)')
@@ -675,8 +682,15 @@ def plot_means_errs(
 def skyshow(
         img, boundaries=None, c='w', cbarshrink=None, title=None,
         printcolorbar=True, printxylabels=True,
-        printxticks=True, printyticks=True, imgsize: int | tuple[int] = None,
-        extent: list[float] = None, **kwargs
+        printxticks=True, printyticks=True,
+        imgsize: int | tuple[int] | None = None,
+        extent: list[float] | None = None,
+        extent_after_crop: list[float] | None = None,
+        xclus: bool = False, path_to_xclus: str = PATH_TO_XCLUS,
+        zmin: float = XCLUS_ZMIN, zmax: float = XCLUS_ZMAX,
+        m500min: float = XCLUS_M500MIN,
+        ztext: bool = XCLUS_ZTEXT, mtext: bool = XCLUS_MTEXT,
+        **kwargs
 ):
     if imgsize is not None:
         if isinstance(imgsize, int):
@@ -687,7 +701,9 @@ def skyshow(
         end_i = beg_i + imgsize[0]
         end_j = beg_j + imgsize[1]
         img = crop_arr(img, beg_i, end_i, beg_j, end_j)
-        if extent is not None:
+        if extent_after_crop is not None:
+            extent = extent_after_crop
+        elif extent is not None:
             x_min, x_max, y_min, y_max = extent
             dx = (x_max - x_min) / imgsize_ori[1]
             dy = (y_max - y_min) / imgsize_ori[0]
@@ -699,6 +715,7 @@ def skyshow(
             ]
 
     out = plt.imshow(img, origin='lower', extent=extent, **kwargs)
+
     plt.xlim(plt.gca().get_xlim()[::-1]) # Flip x-axis (sky observations: east left)
     if printxylabels:
         plt.xlabel("Right ascension")
@@ -716,6 +733,34 @@ def skyshow(
         plt.plot(*boundaries, c=c, lw=1)
     if title is not None:
         plt.title(title)
+
+    # Xray clusters
+    # This section is a copy-paste from the `cosmostat` repository
+    # https://github.com/CosmoStat/cosmostat.git
+    if xclus:
+        xclusters = np.loadtxt(path_to_xclus)
+        highz = (xclusters[:, 6] >= zmin) & (xclusters[:, 6] <= zmax)
+        for cluster in xclusters[highz]:
+            ra_cl, dec_cl, z_cl = cluster[1], cluster[2], cluster[6]
+            m500 = cluster[7]
+            if m500 > m500min:
+                plt.scatter(ra_cl, dec_cl, c="w", s=6)
+                if ztext:
+                    plt.text(
+                        ra_cl + 0.03,
+                        dec_cl + 0.02,
+                        "{:.2f}".format(z_cl),
+                        fontsize=8,
+                        c="w",
+                    )
+                if mtext:
+                    plt.text(
+                        ra_cl + 0.03,
+                        dec_cl - 0.02,
+                        "{:.2f}".format(m500),
+                        fontsize=8,
+                        c="w",
+                    )
 
     return out
 

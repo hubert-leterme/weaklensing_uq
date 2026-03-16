@@ -31,6 +31,7 @@ path_to_std_noise: path/to/std_noise.pt # Precomputed standard deviation of the 
 path_to_mask: path/to/mask.pt # Precomputed mask
 path_to_extent: path/to/extent.pt # Precomputed extent of the observed field
 path_to_real_shearmap: path/to/cosmos/shearmap.pt # Real observed shear map (e.g., from HST/COSMOS)
+path_to_xclus: path/to/xray.txt # X-ray clusters (e.g., from HST/COSMOS)
 
 # Paths to datasets
 path_to_train_val_dataset: path/to/train/dataset.hdf5 # Augmented dataset from LP002 (kappaTNG)

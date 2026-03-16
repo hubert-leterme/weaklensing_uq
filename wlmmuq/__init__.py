@@ -59,6 +59,9 @@ if PATH_TO_PS is not None:
 PATH_TO_REAL_SHEARMAP = CONFIG_DATA.get('path_to_real_shearmap', None)
 if PATH_TO_REAL_SHEARMAP is not None:
     PATH_TO_REAL_SHEARMAP = os.path.expanduser(PATH_TO_REAL_SHEARMAP)
+PATH_TO_XCLUS = CONFIG_DATA.get('path_to_xclus', None)
+if PATH_TO_XCLUS is not None:
+    PATH_TO_XCLUS = os.path.expanduser(PATH_TO_XCLUS)
 
 PATH_TO_TRAIN_VAL_DATASET = CONFIG_DATA.get('path_to_train_val_dataset', None)
 if PATH_TO_TRAIN_VAL_DATASET is not None:
