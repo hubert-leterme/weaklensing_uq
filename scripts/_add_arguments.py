@@ -296,8 +296,8 @@ def std_noise_mask(parser):
         "--bin-data-from-cosmos", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Whether to compute the noise standard deviation "
-            "and mask from the COSMOS catalog."
+            "Whether to compute the noise standard deviation, mask "
+            "and noisy shear map from the COSMOS catalog."
         )
     )
     parser.add_argument(
