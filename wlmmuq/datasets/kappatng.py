@@ -15,7 +15,8 @@ from . import cosmos, dataaugm, base_dataset
 from .. import lenspack, utils
 from ..config import KTNG_DIR
 
-MAX_Z = 2.6
+# MAX_Z = 2.6
+MAX_Z = None # Do not filter out high redshifts
 try:
     Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
 except (TypeError, FileNotFoundError):
@@ -150,7 +151,7 @@ class KappaTNG(BaseKappaTNG):
     def __init__(
             self, *args, idx_lp: int | None = None,
             z: np.ndarray | None = Z,
-            z_sup: float = MAX_Z, c: float = C, h0: float = H0,
+            z_sup: float | None = MAX_Z, c: float = C, h0: float = H0,
             omega_m: float = OMEGA_M, omega_lambda: float = OMEGA_LAMBDA, 
             weights_redshifts: np.ndarray | None = None,
             zbins: list[float] | None = None,
@@ -326,10 +327,6 @@ class KappaTNGFromSamples(BaseKappaTNG):
         return kappa
 
 
-def get_openingangle(imgsize):
-    return imgsize * RESOLUTION / 60.
-
-
 def get_npixels_openingangle(openingangle, make_even=True):
 
     if not make_even:
@@ -339,7 +336,7 @@ def get_npixels_openingangle(openingangle, make_even=True):
     width = mult * int(openingangle / (mult * RESOLUTION) * 60.)
 
     # Adjust opening angle to match the (integer) number of pixels
-    openingangle = get_openingangle(width)
+    openingangle = utils.get_openingangle(width, RESOLUTION)
 
     return width, openingangle
 
@@ -395,51 +392,6 @@ def get_weights_redshifts(
     return out
 
 
-def get_data_from_cosmos_ktng(
-        cat_cosmos: aptable.Table, imgsize: int,
-        zbins: list[float] | None = None
-):
-    openingangle = get_openingangle(imgsize)
-    data_cosmos = cosmos.get_data_from_cosmos(
-        cat_cosmos, openingangle
-    )
-    ra_cosmos_median = data_cosmos["ra_cosmos_median"]
-    dec_cosmos_median = data_cosmos["dec_cosmos_median"]
-    extent = data_cosmos["extent"]
-    shapedisp = data_cosmos["shapedisp"]
-
-    boundaries_zbins = [0., MAX_Z]
-    if zbins is not None:
-        boundaries_zbins = sorted(zbins + boundaries_zbins)
-
-    ngal = []
-    for z_inf, z_sup in zip(boundaries_zbins[:-1], boundaries_zbins[1:]):
-        cat_cosmos_sliced = cat_cosmos[
-            (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
-        ]
-        ra_sliced = np.array(cat_cosmos_sliced["Ra"]) # Shape = (ngal_zbin,)
-        dec_sliced = np.array(cat_cosmos_sliced["Dec"]) # Shape = (ngal_zbin,)
-
-        ngal.append(lenspack.bin2d(
-            ra_sliced, dec_sliced, npix=imgsize, extent=extent,
-        ))
-
-    ngal = [
-        torch.tensor(n, dtype=torch.float32) for n in ngal
-    ]
-    ngal = torch.stack(ngal) # Shape = (nbins, nx, ny)
-
-    out = {
-        'ra_cosmos_median': ra_cosmos_median,
-        'dec_cosmos_median': dec_cosmos_median,
-        'extent': extent,
-        'openingangle': openingangle,
-        'shapedisp': shapedisp,
-        'ngal': ngal,
-    }
-    return out
-
-
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshifts, imgsize,
         zbins=None, batch_size=None,
@@ -448,7 +400,7 @@ def create_cropped_dataset(
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
     """
-    openingangle = get_openingangle(imgsize)
+    openingangle = utils.get_openingangle(imgsize, RESOLUTION)
     ktng = KappaTNG(
         idx_lp=idx_lp, weights_redshifts=weights_redshifts,
         openingangle=openingangle, zbins=zbins, **kwargs
@@ -513,7 +465,7 @@ def create_augmented_dataset(
     Create or resume an augmented dataset from kappaTNG
     by rotating and randomly cropping images.
     """
-    openingangle = get_openingangle(imgsize)
+    openingangle = utils.get_openingangle(imgsize, RESOLUTION)
     ktng = KappaTNG(
         idx_lp=idx_lp, weights_redshifts=weights_redshifts,
         openingangle=openingangle, crop_maps=False, zbins=zbins

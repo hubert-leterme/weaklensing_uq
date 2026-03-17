@@ -7,6 +7,7 @@ __level__ = 0
 
 import numpy as np
 import torch
+from typing import overload, Sequence
 
 # ===========================================================================
 # Functions ks93 and ks93inv from module `inversion.py`.
@@ -162,11 +163,41 @@ def ks93inv(kE, kB):
 # Originally, only the weighted average was possible
 # ===========================================================================
 
+@overload
 def bin2d(
         x: np.ndarray, y: np.ndarray, npix: int = 10,
-        v: np.ndarray | None = None,
+        v: None = None,
         w: np.ndarray | None = None,
-        extent: list[np.ndarray] | list[float] | np.ndarray | None = None,
+        extent: Sequence[float] | np.ndarray | None = None,
+        sum_instead_of_average: bool = False, verbose: bool = False
+) -> np.ndarray: ...
+
+
+@overload
+def bin2d(
+        x: np.ndarray, y: np.ndarray, npix: int = 10,
+        v: np.ndarray = ...,  # single array to bin
+        w: np.ndarray | None = None,
+        extent: Sequence[float] | np.ndarray | None = None,
+        sum_instead_of_average: bool = False, verbose: bool = False
+) -> np.ndarray: ...
+
+
+@overload
+def bin2d(
+        x: np.ndarray, y: np.ndarray, npix: int = 10,
+        v: tuple[np.ndarray, ...] = ...,  # one or more arrays to bin
+        w: np.ndarray | None = None,
+        extent: Sequence[float] | np.ndarray | None = None,
+        sum_instead_of_average: bool = False, verbose: bool = False
+) -> tuple[np.ndarray, ...]: ...
+
+
+def bin2d(
+        x: np.ndarray, y: np.ndarray, npix: int = 10,
+        v: tuple[np.ndarray, ...] | np.ndarray | None = None,
+        w: np.ndarray | None = None,
+        extent: Sequence[float] | np.ndarray | None = None,
         sum_instead_of_average: bool = False, verbose: bool = False
 ) -> tuple[np.ndarray, ...] | np.ndarray:
     """Bin samples of a spatially varying quantity according to position.

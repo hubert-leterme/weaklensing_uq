@@ -14,18 +14,20 @@ from .. import utils
 SCALE = 1.
 PATTERN_FILENAME_ORI = r"LP001_run(\d{3})_maps" # Valid for kappaTNG, lensing potential 001
 MSG_NOT_INITIALIZED = "The dataset has not been properly initialized."
+NEWAXIS = False
 
 # TODO: Update docstrings
 # TODO: Inherit from `deepinv.datasets.ImageDataset`
 
 class BaseHDF5Dataset:
 
+    # TODO: Inherit from `deepinv.datasets.HDF5Dataset`
     def __init__(
             self, hdf5_filepath, nimgs, pred_filepath=None, batch_size=None,
             std_noise=None, mask=None, beg_idx=0, shuffle=True, output_shape=None,
             meancentering=False, sort_by_filename_ori=True,
             pattern_filename_ori=PATTERN_FILENAME_ORI, min_idx_filename_ori=None,
-            newaxis=False, list_of_outputs=None, close_after_batch=False,
+            newaxis=NEWAXIS, list_of_outputs=None, close_after_batch=False,
             nreal_per_img=1, verbose=False, **kwargs
     ):
         """

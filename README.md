@@ -10,11 +10,15 @@ This repository aims at reproducing the experiments from the following papers:
 
 ### Configuration file
 
-Copy the configuration file `wlmmuq/config.yml` to `~/.config/wlmmuq/`, and update the values to point to the correct locations on your system for the datasets, models and other precomputed objects. This will set the global variables (e.g., `wlmmuq.COSMOS_DIR`, `wlmmuq.KTNG_DIR`...) accordingly. Leave blank if not needed; the corresponding global variables will then be set to `None`.
+Copy the configuration file `wlmmuq/config.yml` to `~/.config/wlmmuq/`, and update the values to point to the correct locations on your system for the datasets, models and other precomputed objects. This will set the global variables accordingly, in particular the paths to training / test datasets, and to saved models. Leave blank if not needed; the corresponding global variables will then be set to `None`.
 
 ### Installation
 
-Install the `wlmmuq` library, provided in this repository, with `pip install .`. All dependencies will automatically be installed. The code has been tested with Python 3.11.13 and Python 3.12.3.
+Install the `wlmmuq` library provided in this repository:
+```bash
+pip install .
+```
+All dependencies will automatically be installed.
 
 ### Virtual environments
 
@@ -108,13 +112,24 @@ The optional argument `-t1 YYYYMMDD_hhmmss` must be replaced by the timestamp of
 #### Point estimate (order-1 networks)
 
 ```bash
+# COSMOS "bright" catalog only
+# Noise standard deviation and mask have been pre-computed and stored in `wlmmuq.PATH_TO_STD_NOISE` and `wlmmuq.PATH_TO_MASK`.
+# Otherwise, use CLI argument `--bin-data-from-cosmos`
 python scripts/train.py -a UNetPreproc -m wiener -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_nepochs_20 -w 8 --seed 42 -v
+
+# COSMOS "bright" + "faint" catalogs
+# Recompute noise standard deviation and mask using the CLI arguments `--bin-data-from-cosmos` and `--cosmos-include-faint`
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
 ```
 
 #### Variance estimate (order-2 networks)
 
 ```bash
+# COSMOS "bright" catalog only
 python scripts/train.py -a UNetPreproc -m wiener -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
+
+# COSMOS "bright" + "faint" catalogs
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
 ```
 
 The order-2 network has been trained on 100 epochs, vs only 20 epochs for the order-1 network. This was motivated by the validation loss still decreasing after $20$ epochs.
@@ -127,21 +142,43 @@ The following scripts run PnPMass with a step size set to 50%, 75% and 100% of i
 
 ```bash
 # Standard version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -alph 0.5 0.75 1.0 -i 8 -w 8 -o niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 
 # Residual version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o results_pnpmass_mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -alph 0.5 0.75 1.0 -i 8 -w 8 -o mode_residual_niter_8 --save-tensors --nimgs-save 8 --seed 42 -v
 ```
 
 #### Run PnPMass with uncertainty quantification and conformal prediction
 
 ```bash
 # Standard version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o results_pnpmass_niter_8_cqr --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o niter_8_cqr --seed 42 -v
 
 # Residual version
-python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o results_pnpmass_mode_residual_niter_8_cqr --seed 42 -v
+python scripts/pnpmass.py -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o mode_residual_niter_8_cqr --seed 42 -v
 ```
+To recompute the noise standard deviation and mask from the COSMOS shape catalog, add CLI argument `--bin-data-from-cosmos`, in combination with `--cosmos-include-faint` to use both the bright and faint catalogs.
+
+#### Run PnPMass on the COSMOS shear map
+
+```bash
+# Standard version
+python scripts/pnpmass.py --bin-data-from-cosmos --test-on-real-data -c denoiser_arch_SUNetNoiseAware_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250613_143319 -uq -t0 20250903_164013 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o cosmos_niter_8_cqr --seed 42 -v
+
+# Residual version
+python scripts/pnpmass.py --bin-data-from-cosmos --test-on-real-data -c denoiser_arch_SUNetNoiseAware_nongaussian_scale_0.2_scale-min_0.0_batch-size_16_nepochs_100_learning-rate_1e-3 -a SUNetNoiseAware -t 20250716_170944 --mode residual -uq -t0 20250903_164205 -i 8 --cqr --find-optimal-hyperparam-precalib -w 8 --save-tensors -o cosmos_mode_residual_niter_8_cqr --seed 42 -v
+```
+To use both the bright and faint catalogs, add CLI argument `--cosmos-include-faint`. To run PnPMass on both the simulated test set and the real COSMOS shear map, use CLI argument `--run-both` instead of `--test-on-real-data`.
+
+### Other mass mapping methods
+
+Available Python scripts for the following methods:
+- DeepMass – `scripts/deepmass.py`;
+- MCALens – `scripts/mcalens.py`;
+- Iterative Wiener filtering – `scripts/wiener.py`;
+- Kaiser-Squires filtering – `scripts/ks.py`.
+
+These scripts follow the same logic as `scripts/pnpmass.py`. Check the related documentation for more details.
 
 ## Jupyter notebooks
 

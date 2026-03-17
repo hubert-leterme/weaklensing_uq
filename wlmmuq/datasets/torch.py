@@ -25,7 +25,7 @@ class TorchMixin:
         return torch.tensor(arr, dtype=torch.float32)
 
     def _add_newaxis_arr(self, arr: torch.Tensor) -> torch.Tensor:
-        return arr.unsqueeze(-3) # Shape = ([nimgs,] 1, nx, ny)
+        return _unsqueeze_channeldim(arr) # Shape = ([nimgs,] 1, nx, ny)
 
     def to_dataloader(self, **kwargs):
         out = data.DataLoader(
@@ -52,8 +52,53 @@ class HDF5DatasetDenoiser(TorchMixin, base_dataset.HDF5DatasetDenoiser):
         if self.scale_as_input:
             out_dict["kappa_inp"] = TensorList(out_dict["kappa_inp"])
         return out_dict
+    
+
+# TODO: Inerit from DeepInverse's ImageDataset (after upgrading to newer version) 
+class SingleShearMapDataset(data.Dataset):
+
+    def __init__(
+            self, gamma: torch.Tensor,
+            newaxis: bool = base_dataset.NEWAXIS,
+            also_get_complex_conjugates: bool = False
+    ):
+        super().__init__()
+        if newaxis:
+            gamma = _unsqueeze_channeldim(gamma)
+        self.gamma = gamma
+        self.also_get_complex_conjugates = also_get_complex_conjugates
+
+    def __len__(self):
+        if not self.also_get_complex_conjugates:
+            out = 1
+        else:
+            out = 4
+        return out
+
+    def __getitem__(self, idx):
+        # No ground truth (see https://deepinv.github.io/deepinv/api/stubs/deepinv.datasets.ImageDataset.html#deepinv.datasets.ImageDataset)
+        if idx == 0:
+            gamma = self.gamma
+        elif idx == 1:
+            gamma = torch.conj(self.gamma)
+        elif idx == 2:
+            gamma = -self.gamma
+        elif idx == 3:
+            gamma = -torch.conj(self.gamma)
+        return torch.nan, gamma
+
+    def to_dataloader(self, **kwargs):
+        # Load everything at once
+        out = data.DataLoader(
+            self, batch_size=len(self), shuffle=False, **kwargs
+        )
+        return out
 
 
 class TensorList(list[torch.Tensor]):
     def to(self, device, **kwargs):
         return TensorList(t.to(device, **kwargs) for t in self)
+    
+
+def _unsqueeze_channeldim(arr):
+    return arr.unsqueeze(-3)

@@ -28,11 +28,13 @@ def main(
         path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
         path_to_mask: str = wlmmuq.PATH_TO_MASK,
         path_to_ps=wlmmuq.PATH_TO_PS,
+        bin_data_from_cosmos=False,
         cosmos_include_faint=False,
+        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
-        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR,
+        which_gaussian_extractor=_commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS,
         niter_wiener=_commons.NITER_WIENER,
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
@@ -47,7 +49,9 @@ def main(
         nepochs=_commons.EPOCH, batch_size=_commons.BATCH_SIZE,
         learning_rate=LEARNING_RATE, lr_scheduler=False, drop_rate=DROP_RATE,
         ndecays=NDECAYS, loss=LOSS,
-        checkpoint_dir: str = wlmmuq.MODEL_DIR, checkpoint_subdir: str | None = None,
+        model_dir: str = wlmmuq.MODEL_DIR,
+        train_val_dataset_name: str | None = wlmmuq.TRAIN_VAL_DATASET_NAME,
+        model_name: str | None = None,
         num_workers=NUM_WORKERS,
         resume=False, timestamp_resume=None, epoch_resume=None,
         cprofiler=False, cprofiler_max_nbatches=None, cprofiler_wait=None,
@@ -59,9 +63,10 @@ def main(
     if verbose:
         print(f"Number of workers: {num_workers}")
 
-    if checkpoint_subdir is not None:
-        checkpoint_dir = os.path.join(checkpoint_dir, checkpoint_subdir)
-
+    checkpoint_dir, _ = _commons.get_checkpoint_dirs(
+        model_dir, train_val_dataset_name=train_val_dataset_name,
+        model_name=model_name
+    )
     callback_list = []
 
     if denoiser:
@@ -74,12 +79,14 @@ def main(
         # Get noise srtandard deviation and mask
         # TODO: add argument `zbins`
         raise NotImplementedError
-        std_noise, mask = _commons.get_stdnoise_mask(
+        std_noise, mask, _ = _commons.get_stdnoise_mask_shearmap(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
+            bin_data_from_cosmos=bin_data_from_cosmos,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
+            max_z=max_z, resolution=resolution,
             inpainting=inpainting_deepmass, verbose=verbose
-        )
+        ) # TODO: Add arguments `east_right` and `zbins`
         # Update arguments for data loading
         kwargs.update(std_noise=std_noise, mask=mask)
 
@@ -186,7 +193,6 @@ def main(
             imgsize=imgsize, physics=physics,
             niter=1, # Convergence in one iteration (white noise)
             starlet_detection_threshold=starlet_detection_threshold,
-            mcalens_update_ng_first=True, # Otherwise, MCALens will produce the same output as Wiener
             device=device, verbose=verbose
         ) # Not all arguments are needed here (`white_noise=True`)
         kwargs_trainer.update(preproc_for_residual=gaussian_extractor)
@@ -268,7 +274,7 @@ if __name__ == "__main__":
         help=(
             "Type of Gaussian extractor. Possible values are 'wiener' or 'mcalens'. "
             "Only used if `--nongaussian` is activated. "
-            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR}'"
+            f"Default = '{_commons.WHICH_GAUSSIAN_EXTRACTOR_PNPMASS}'"
         )
     )
     parser.add_argument(
@@ -300,6 +306,7 @@ if __name__ == "__main__":
             "uniformly between `scale_min` and `scale` for each input image."
         )
     )
+    _add_arguments.std_noise_mask(parser)
     parser.add_argument(
         "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,
@@ -368,7 +375,7 @@ if __name__ == "__main__":
             f"Default = {LOSS}"
         )
     )
-    _add_arguments.checkpoint_dir(parser)
+    _add_arguments.model_name(parser)
     parser.add_argument(
         "-r", "--resume", action='store_true',
         default=argparse.SUPPRESS,

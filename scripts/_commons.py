@@ -3,6 +3,7 @@ import warnings
 import time
 import random
 import typing
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import minimize
@@ -18,10 +19,12 @@ import wlmmuq.models.cqr as wlcqr
 
 from wlmmuq.models.starlet2d import StarletResetter
 
-from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_PS, PATH_TO_ZBINS
+from wlmmuq import PATH_TO_STD_NOISE, PATH_TO_MASK, PATH_TO_REAL_SHEARMAP
+from wlmmuq import PATH_TO_PS, PATH_TO_ZBINS
 from wlmmuq.optim.optim_iterators import NITER_PER_STEP_G, NITER_PER_STEP_NG
 from wlmmuq.models.preproc_models import NITER_WIENER
 from wlmmuq.models.starlet2d import STARLET_DETECTION_THRESHOLD
+from wlmmuq.datasets.kappatng import MAX_Z, RESOLUTION
 
 # The following global variables are valid for the kappaTNG dataset
 NINPIMGS = 100 # Number of input images before cropping
@@ -45,15 +48,21 @@ KEYS_MODEL = [
 KEYS_METRIC = []
 EPS_SUP_STEP_SIZE = 1e-9 # Avoid the upper limit itself (strict inequality)
 
-WHICH_GAUSSIAN_EXTRACTOR = "wiener" # "wiener" or "mcalens"
+WHICH_GAUSSIAN_EXTRACTOR_PNPMASS = "wiener" # "wiener" or "mcalens"
 MODE_PNPMASS = "regular" # "regular", "residual", or "pnpmcalens"
 NITER_PNPMASS = 8
 NITER_MCALENS = 32
+FWHM_KS = 2.4   # As in J.-L. Starck, K. E. Themelis, N. Jeffrey, A. Peel,
+                # and F. Lanusse, “Weak-lensing mass reconstruction using sparsity
+                # and a Gaussian random field,” A&A, vol. 649, p. A99, May 2021.
+
 NITER_STARLET_DEBIASING = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
-INPAINTING_WIENER = False
-INPAINTING_PNPMASS = False
+INPAINTING_KS = True
+INPAINTING_WIENER = False # TODO: set to True?
+INPAINTING_MCALENS = False # TODO: set to True?
+INPAINTING_PNPMASS = False # TODO: set to True?
 INPAINTING_DEEPMASS = True
 
 N_NOISE_REALS_UQ = 32
@@ -75,10 +84,27 @@ def set_seed(seed):
         torch.manual_seed(seed)
 
 
-def get_path_to_output(output_dir, output_filename, checkpoint_dir=None):
-    if checkpoint_dir is not None:
-        output_dir = os.path.join(checkpoint_dir, output_dir)
-    return os.path.join(output_dir, output_filename)
+def get_path_to_results(
+        output_dir: str, method_name: str,
+        test_dataset_name: str | None = None,
+        real_shearmap_name: str | None = None,
+        test_on_real_data: bool = False,
+        train_val_dataset_name: str | None = None,
+        model_name: str | None = None,
+):
+    dirs = [output_dir, method_name]
+    if not test_on_real_data:
+        assert test_dataset_name is not None
+        dirs.append(test_dataset_name)
+    else:
+        assert real_shearmap_name is not None
+        dirs.append(real_shearmap_name)
+    if train_val_dataset_name is not None:
+        dirs.append(train_val_dataset_name)
+    if model_name is not None:
+        dirs.append(model_name)
+
+    return os.path.join(*dirs)
 
 
 def get_device(verbose=False):
@@ -88,63 +114,78 @@ def get_device(verbose=False):
     return device
 
 
-def get_stdnoise_mask(
+def get_stdnoise_mask_shearmap(
         path_to_std_noise: str | None = PATH_TO_STD_NOISE,
         path_to_mask: str | None = PATH_TO_MASK,
+        path_to_real_shearmap: str | None = PATH_TO_REAL_SHEARMAP,
+        bin_data_from_cosmos: bool = False,
+        get_noisy_shear_map: bool = False,
         imgsize: int = IMGSIZE,
         cosmos_include_faint: bool = False,
+        resolution: float = wlktng.RESOLUTION,
+        east_right: bool = False,
         zbins: list[float] | None = None,
+        max_z: float | None = wlktng.MAX_Z,
         inpainting: bool = False, verbose: bool = False
 ):
-    if path_to_std_noise is not None:
-        assert path_to_mask is not None, (
-            "If `path_to_std_noise` is provided, `path_to_mask` must also be provided."
-        )
-        if zbins is not None:
-            warnings.warn(
-                "Mass mapping per redshift bin; noise and mask are computed from the COSMOS "
-                "shape catalog accordingly. Arguments `path_to_std_noise` and `path_to_mask` "
-                "will be discarded."
+    if not bin_data_from_cosmos:
+        if path_to_std_noise is None or path_to_mask is None:
+            raise ValueError(
+                "Both `path_to_std_noise` and `path_to_mask` must be provided."
             )
-            compute_std_noise_mask_from_cosmos = True
+        if verbose:
+            print("Load noise standard deviation, mask, and shear map from files")
+        std_noise = torch.load(path_to_std_noise)
+        mask = torch.load(path_to_mask)
+        if get_noisy_shear_map:
+            if path_to_real_shearmap is None:
+                raise ValueError(
+                    "Argument `path_to_real_shearmap` must be provided."
+                )
+            gamma_real = torch.load(path_to_real_shearmap)
         else:
-            if verbose:
-                print("Load noise standard deviation and mask from files")
-            std_noise: torch.Tensor = torch.load(path_to_std_noise)
-            mask: torch.Tensor = torch.load(path_to_mask)
-            compute_std_noise_mask_from_cosmos = False
+            gamma_real = None
 
-    else:
-        compute_std_noise_mask_from_cosmos = True
-
-    if compute_std_noise_mask_from_cosmos:
+    if bin_data_from_cosmos:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
         cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
-        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+        if max_z is not None:
+            cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
         if cosmos_include_faint:
             cat_cosmos = aptable.vstack(
                 [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlktng.get_data_from_cosmos_ktng(
-            cat_cosmos, imgsize, zbins=zbins
+        data_dict = wlcosmos.get_data_from_cosmos(
+            cat_cosmos, imgsize, resolution,
+            get_noisy_shear_map=get_noisy_shear_map,
+            east_right=east_right,
+            zbins=zbins, max_z=max_z
         )
-        shapedisp: float = data_dict["shapedisp"]
-        ngal: torch.Tensor = data_dict["ngal"] # Shape = (nbins, nx, ny)
-        std_noise: torch.Tensor = wl.utils.get_std_noise(
-            ngal, shapedisp
-        ) # Shape = (nbins, nx, ny)
-        mask = torch.tensor(ngal > 0, dtype=torch.bool) # Shape = (nbins, nx, ny)
+        std_noise = data_dict["std_noise"]
+        mask = data_dict["mask"]
+        if get_noisy_shear_map:
+            gamma_real = data_dict["gamma"]
+        else:
+            gamma_real = None
 
     if inpainting:
         # Set the noise standard deviation for masked data
-        assert isinstance(std_noise, torch.Tensor)
         assert isinstance(mask, torch.Tensor)
-        std_noise[~mask] = std_noise.max()
+        max_std_noise = std_noise.max()
+        std_noise[~mask] = max_std_noise
+        if get_noisy_shear_map:
+            assert gamma_real is not None
+            def _get_white_noise():
+                return torch.normal(mean=0., std=torch.ones_like(std_noise))
+            white_noise_real = _get_white_noise()
+            white_noise_imag = _get_white_noise()
+            gamma_real[~mask] = max_std_noise * \
+                (white_noise_real + 1j * white_noise_imag)[~mask]
 
-    return std_noise, mask
+    return std_noise, mask, gamma_real
 
 
 def create_dataset_from_kappatng(
@@ -152,6 +193,7 @@ def create_dataset_from_kappatng(
         openingangle: float, ninpimgs: int,
         use_zbins: bool = False, path_to_zbins: str | None = PATH_TO_ZBINS,
         idx_zbins: list[int] | None = IDX_ZBINS,
+        max_z: float | None = wlktng.MAX_Z,
         verbose: bool = False, **kwargs
 ):
     """
@@ -186,8 +228,11 @@ def create_dataset_from_kappatng(
     # Get redshift weights from the COSMOS catalog
     if verbose:
         print("Computing redshift weights from COSMOS...")
+    # TODO: Do not filter out high redshifts?
+    # TODO: Also take `cat_cosmos_faint` for the redshift distribution? No 'zphot' field
     cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, wlktng.MAX_Z)
+    if max_z is not None:
+        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
     weights_redshift = wlktng.get_weights_redshifts(
         cat_cosmos_bright['zphot']
     )
@@ -209,21 +254,42 @@ def create_dataset_from_kappatng(
 
 
 def get_checkpoint_dirs(
-        checkpoint_dir, checkpoint_subdir=None, checkpoint_subdir_uq=None
+        model_dir,
+        train_val_dataset_name=None, train_val_dataset_name_uq=None,
+        model_name=None, model_name_uq=None
 ):
-    checkpoint_dir0 = checkpoint_dir
-    if checkpoint_subdir is not None:
-        checkpoint_dir = os.path.join(checkpoint_dir0, checkpoint_subdir)
-    else:
-        raise ValueError("Argument `checkpoint_subdir` must be provided.")
-    if checkpoint_subdir_uq is not None:
-        checkpoint_dir_uq = os.path.join(checkpoint_dir0, checkpoint_subdir_uq)
-        warnings.warn(
-            f"The model used for UQ ({checkpoint_dir_uq}) is not the same as "
-            f"the one used for the point estimate ({checkpoint_dir})"
-        )
-    else:
-        checkpoint_dir_uq = checkpoint_dir
+    checkpoint_dir = model_dir
+    checkpoint_dir_uq = model_dir
+
+    def _join_subdir(
+            checkpoint_dir, checkpoint_dir_uq,
+            arg, arg_uq, msg_missing_arg, msg_mismatch
+    ):
+        if arg is not None:
+            if arg_uq is not None:
+                warnings.warn(msg_mismatch)
+            else:
+                arg_uq = arg
+            checkpoint_dir = os.path.join(checkpoint_dir, arg)
+            checkpoint_dir_uq = os.path.join(checkpoint_dir_uq, arg_uq)
+
+        else:
+            raise ValueError(msg_missing_arg)
+
+        return checkpoint_dir, checkpoint_dir_uq
+    
+    checkpoint_dir, checkpoint_dir_uq = _join_subdir(
+        checkpoint_dir, checkpoint_dir_uq,
+        train_val_dataset_name, train_val_dataset_name_uq,
+        "Argument `train_val_dataset_name` must be provided.",
+        "Mismatched datasets between order-1 and order-2 training."
+    )
+    checkpoint_dir, checkpoint_dir_uq = _join_subdir(
+        checkpoint_dir, checkpoint_dir_uq,
+        model_name, model_name_uq,
+        "Argument `model_name` must be provided.",
+        "Mismatched models between order-1 and order-2 training."
+    )
 
     return checkpoint_dir, checkpoint_dir_uq
 
@@ -409,15 +475,40 @@ def instantiate_starlet_denoiser(
 
 def get_dataloader_massmapping(
         path_to_dataset, nimgs, imgsize, batch_size, num_workers, std_noise, mask,
-        **kwargs
+        test_on_real_data=False, gamma_real=None, **kwargs
 ):
-    test_dataloader = wlbl.HDF5DatasetMassMapping(
-        hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
-        std_noise=std_noise, mask=mask, output_shape=imgsize,
-        num_workers=num_workers, **kwargs
-    )
+    if not test_on_real_data:
+        test_dataloader = wlbl.HDF5DatasetMassMapping(
+            hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
+            std_noise=std_noise, mask=mask, output_shape=imgsize,
+            num_workers=num_workers, **kwargs
+        ).to_dataloader()
+    else:
+        if gamma_real is None:
+            raise ValueError("Argument `gamma_real` must be provided.")
+        test_dataloader = wlbl.SingleShearMapDataset(
+            gamma_real, also_get_complex_conjugates=True
+        ).to_dataloader()
 
     return test_dataloader
+
+
+def get_gamma_from_cosmos(
+        imgsize: int = IMGSIZE,
+        max_z: float | None = wlktng.MAX_Z,
+        resolution: float = wlktng.RESOLUTION,
+        verbose: bool = False
+) -> torch.Tensor:
+    # TODO: remove
+    cat_cosmos, _ = wlcosmos.cosmos_catalog()
+    if max_z is not None:
+        cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
+    data_dict = wlcosmos.get_data_from_cosmos(
+        cat_cosmos, imgsize, resolution,
+        get_noisy_shear_map=True, east_right=True
+    )
+    gamma = data_dict["gamma"]
+    return gamma
 
 
 def _get_args_wienerinit(
@@ -577,7 +668,7 @@ def get_wiener(
 
 
 def get_gaussian_extractor(
-        which=WHICH_GAUSSIAN_EXTRACTOR,
+        which=WHICH_GAUSSIAN_EXTRACTOR_PNPMASS,
         path_to_ps=PATH_TO_PS,
         white_noise=False,
         imgsize=IMGSIZE, std_noise=None, physics=None,
@@ -586,7 +677,6 @@ def get_gaussian_extractor(
         eps_sup_step_size=EPS_SUP_STEP_SIZE,
         niter=NITER_WIENER,
         starlet_detection_threshold=STARLET_DETECTION_THRESHOLD,
-        mcalens_update_ng_first=False,
         device="cpu", verbose=False
 ):
     data_fidelity_g, prior_g, params_algo_g = _get_datafidelity_prior_params_gaussian(
@@ -630,7 +720,7 @@ def get_gaussian_extractor(
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity_ng,
             prior_g=prior_g, prior_ng=prior_ng,
             early_stop=False, max_iter=niter, custom_init=wl.optim.zero_init,
-            update_ng_first=mcalens_update_ng_first,
+            update_ng_first=True,
             output_mode="discard_ng", verbose=verbose
         ).to(device)
 
@@ -651,7 +741,6 @@ def get_pnpmass(
         niter=NITER_PNPMASS,
         custom_init=wl.optim.zero_init,
         mode=MODE_PNPMASS,
-        update_ng_first=False,
         path_to_ps=PATH_TO_PS,
         niter_per_step_g=NITER_PER_STEP_G,
         niter_per_step_ng=NITER_PER_STEP_NG,
@@ -701,7 +790,7 @@ def get_pnpmass(
             data_fidelity_g=data_fidelity_g, data_fidelity_ng=data_fidelity,
             prior_g=prior_g, prior_ng=prior,
             early_stop=False, max_iter=niter, custom_init=custom_init,
-            update_ng_first=update_ng_first,
+            update_ng_first=True,
             output_mode="add_components", verbose=True, **kwargs
         ).to(device)
 
@@ -729,6 +818,7 @@ def variance_estimation_through_noise_propagation(
         physics: wl.physics.MassMapping,
         output_shape: tuple | torch.Size,
         n_noise_reals: int = N_NOISE_REALS_UQ,
+        starlet: wl.models.Starlet2d | None = None,
         device="cpu", verbose=False, **kwargs
 ):
     noise_outputs = torch.zeros(
@@ -744,6 +834,8 @@ def variance_estimation_through_noise_propagation(
         noise = physics.noise_model(zeros) # Shape = (batch_size, 1, imgsize, imgsize), dtype = complex64
         # Propagate noise realisations through the pipeline
         # For MCALens, the support of active wavelet coefficients is assumed to be already initialized.
+        if starlet is not None:
+            starlet.x_prev = None # Reset `x_prev`, not `active_coefs`
         noise_outputs[i] = method(noise, physics, **kwargs)
 
     return torch.std(noise_outputs, dim=0)**2 # Shape = (batch_size, 1, imgsize, imgsize)
@@ -816,7 +908,7 @@ def convert_into_hyperparam_list(
 def apply_calibration_and_get_metrics(
         kappa_pred: torch.Tensor,
         var: torch.Tensor,
-        kappa_true: torch.Tensor,
+        kappa_true: torch.Tensor | None,
         kappa_pred_calib: torch.Tensor,
         var_calib: torch.Tensor,
         kappa_true_calib: torch.Tensor,
@@ -840,39 +932,54 @@ def apply_calibration_and_get_metrics(
     )
     if hyperparam_precalib is None and find_optimal_hyperparam_precalib:
         hyperparam_precalib = _get_optimal_hyperparam_precalib(
-            cqr,
-            kappa_pred, var,
-            kappa_pred_calib, var_calib, kappa_true_calib,
-            predinterv_metric, confidence_uq=confidence_uq,
+            cqr=cqr,
+            kappa_pred_calib=kappa_pred_calib,
+            var_calib=var_calib,
+            kappa_true_calib=kappa_true_calib,
+            predinterv_metric=predinterv_metric,
+            confidence_uq=confidence_uq,
             verbose=verbose
         )
 
     # Compute pre- and post-calibration residuals
     if verbose:
         print("Calibrate residuals with CQR")
-    res, res_cqr = _get_residuals_cqr(
-        cqr, var, kappa_pred_calib, var_calib,
-        kappa_true_calib, confidence_uq=confidence_uq,
+    cqr_dataobj = _get_residuals_cqr(
+        cqr=cqr, kappa_pred_calib=kappa_pred_calib,
+        var_calib=var_calib, kappa_true_calib=kappa_true_calib,
+        var=var,
+        confidence_uq=confidence_uq,
         hyperparam_precalib=hyperparam_precalib
     )
+    res = cqr_dataobj.res
+    res_cqr = cqr_dataobj.res_cqr
 
     bounds = _get_bounds(kappa_pred, res)
-    err = err_metric(bounds, kappa_true)
-    predinterv = predinterv_metric(bounds, kappa_true)
-
     bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-    err_cqr = err_metric(bounds_cqr, kappa_true)
-    predinterv_cqr = predinterv_metric(bounds_cqr, kappa_true)
+
+    if kappa_true is not None:
+        err = err_metric(bounds, kappa_true).cpu()
+        err_cqr = err_metric(bounds_cqr, kappa_true).cpu()
+    else:
+        err = None
+        err_cqr = None
+
+    fake_kappa_true = _get_fake_kappa_true(
+        kappa_pred
+    ) # No need to have access to the ground truth to compute the error bar size
+    predinterv = predinterv_metric(bounds, fake_kappa_true).cpu()
+    predinterv_cqr = predinterv_metric(bounds_cqr, fake_kappa_true).cpu()
 
     out_dict = {
         "state_dict_cqr": cqr.state_dict(),
-        "err": err.cpu(),
-        "predinterv": predinterv.cpu(),
-        "err_cqr": err_cqr.cpu(),
-        "predinterv_cqr": predinterv_cqr.cpu(),
-        "hyperparam_precalib": hyperparam_precalib
+        "err": err,
+        "predinterv": predinterv,
+        "err_cqr": err_cqr,
+        "predinterv_cqr": predinterv_cqr,
+        "hyperparam_precalib": hyperparam_precalib,
     }
     if save_tensors:
+        assert isinstance(res, torch.Tensor)
         out_dict.update({
             "res": res[:nimgs_save].cpu(),
             "res_cqr": res_cqr[:nimgs_save].cpu() \
@@ -900,8 +1007,6 @@ def _instantiate_cqr(
 
 def _get_optimal_hyperparam_precalib(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
-        kappa_pred: torch.Tensor,
-        var: torch.Tensor,
         kappa_pred_calib: torch.Tensor,
         var_calib: torch.Tensor,
         kappa_true_calib: torch.Tensor,
@@ -920,20 +1025,23 @@ def _get_optimal_hyperparam_precalib(
 
     def mean_predinterv(params: np.ndarray):
 
-        _, res_cqr = _get_residuals_cqr(
-            cqr, var, kappa_pred_calib, var_calib,
-            kappa_true_calib, confidence_uq=confidence_uq,
+        cqr_dataobj = _get_residuals_cqr(
+            cqr=cqr, kappa_pred_calib=kappa_pred_calib,
+            var_calib=var_calib, kappa_true_calib=kappa_true_calib,
+            confidence_uq=confidence_uq,
             hyperparam_precalib=params[0]
         )
-        bounds_cqr = _get_bounds(kappa_pred, res_cqr)
-        fake_kappa_true = torch.empty_like(
-            kappa_pred
+        bounds_calib_cqr = _get_bounds(
+            kappa_pred_calib, cqr_dataobj.res_calib_cqr
+        )
+        fake_kappa_true_calib = _get_fake_kappa_true(
+            kappa_pred_calib
         ) # No need to have access to the ground truth to compute the error bar size
-        predinterv_cqr = predinterv_metric(
-            bounds_cqr, fake_kappa_true
+        predinterv_calib_cqr = predinterv_metric(
+            bounds_calib_cqr, fake_kappa_true_calib
         ) # Shape = (nimgs,)
 
-        return predinterv_cqr.mean().item()
+        return predinterv_calib_cqr.mean().item()
 
     results_optim = minimize(
         mean_predinterv, x0=init_hyperparam,
@@ -946,6 +1054,12 @@ def _get_optimal_hyperparam_precalib(
     return float(results_optim.x[0])
 
 
+def _get_fake_kappa_true(kappa_pred):
+    return torch.empty_like(
+        kappa_pred
+    )
+
+
 def _get_bounds(kappa_pred, res):
     kappa_lo = kappa_pred - res
     kappa_hi = kappa_pred + res
@@ -953,12 +1067,20 @@ def _get_bounds(kappa_pred, res):
     return out
 
 
+@dataclass
+class _ResidualCQR:
+    res: torch.Tensor | None
+    res_cqr: torch.Tensor | None
+    res_calib: torch.Tensor
+    res_calib_cqr: torch.Tensor
+
+
 def _get_residuals_cqr(
         cqr: wlcqr.AddCQR | wlcqr.MultCQR,
-        var: torch.Tensor,
         kappa_pred_calib: torch.Tensor,
         var_calib:torch.Tensor,
         kappa_true_calib: torch.Tensor,
+        var: torch.Tensor | None = None,
         confidence_uq: int | float = CONFIDENCE_UQ,
         hyperparam_precalib: float | None = None
 ):
@@ -971,15 +1093,41 @@ def _get_residuals_cqr(
         var_calib, confidence_uq=confidence_uq
     )
     cqr.calibrate(kappa_pred_calib, res_calib, kappa_true_calib)
-    res_cqr = cqr(res)
+    if res is not None:
+        res_cqr = cqr(res)
+    else:
+        res_cqr = None
+    res_calib_cqr = cqr(res_calib)
 
-    return res, res_cqr
+    return _ResidualCQR(
+        res=res, res_cqr=res_cqr,
+        res_calib=res_calib, res_calib_cqr=res_calib_cqr
+    )
+
+
+@typing.overload
+def _get_error_bars(
+        var: torch.Tensor,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> torch.Tensor: ...
+
+
+@typing.overload
+def _get_error_bars(
+        var: None,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> None: ...
 
 
 def _get_error_bars(
-        var, confidence_uq=CONFIDENCE_UQ
-):  
-    return confidence_uq * var**0.5
+        var: torch.Tensor | None,
+        confidence_uq: int | float = CONFIDENCE_UQ
+) -> torch.Tensor | None:
+    if var is not None:
+        out = confidence_uq * var**0.5
+    else:
+        out = None
+    return out
 
 
 def get_uq_keys(
@@ -999,11 +1147,11 @@ def get_uq_keys(
 
 
 def save_results(
-        out_dict, path_to_output, now,
+        out_dict, output_dir, now, prefix=None,
         verbose=False, **kwargs
 ):
     path_to_output = _complete_path_to_torch_saved_objects(
-        path_to_output, now, **kwargs
+        output_dir, now, prefix=prefix, **kwargs
     )
     if verbose:
         print(f"Save results to {path_to_output}")
@@ -1013,10 +1161,12 @@ def save_results(
 
 
 def _complete_path_to_torch_saved_objects(
-        path, timestamp, step_size=None
+        output_dir, timestamp, prefix=None, step_size=None
 ):
+    filename = prefix if prefix is not None else ""
     if step_size is not None:
-        path = f"{path}_step-size_{step_size:.3f}"
-    path = f"{path}_{timestamp}.pt"
+        filename = f"{filename}_step-size_{step_size:.3f}"
+    filename = f"{filename}_{timestamp}.pt"
+    filename = filename.lstrip("_")
 
-    return path
+    return os.path.join(output_dir, filename)
