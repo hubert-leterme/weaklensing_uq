@@ -18,5 +18,8 @@ cd /feynman/home/dap/lcs/hl285110/Documents/Code/weaklensing
 nvidia-smi
 
 model_name="deepmass_arch_UNetPreproc_mode-preproc_wiener_brightfaint_nepochs_20"
+timestamp="20260303_182703"
 
-srun python -u scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -e 20 --lr-scheduler -c $model_name -w 8 --seed 42 -v
+srun python -u scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -uq -t1 $timestamp -e1 20 -e 100 --lr-scheduler -c $model_name -w 8 --seed 42 -v
+
+-a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -uq -t1 20260303_182703 -e1 20 -e 100 --lr-scheduler -c deepmass_arch_UNetPreproc_mode-preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
