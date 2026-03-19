@@ -15,8 +15,7 @@ from . import cosmos, dataaugm, base_dataset
 from .. import lenspack, utils
 from ..config import KTNG_DIR
 
-# MAX_Z = 2.6
-MAX_Z = None # Do not filter out high redshifts
+MAX_Z = 2.6 # Compatible with Euclid redshifts
 try:
     Z = np.loadtxt(os.path.join(KTNG_DIR, 'zs.dat'))
 except (TypeError, FileNotFoundError):
