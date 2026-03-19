@@ -314,13 +314,21 @@ def checkpoint(parser):
     )
 
 
-def max_z(parser):
+def cosmos(parser):
     parser.add_argument(
         "--max-z", type=float,
         default=argparse.SUPPRESS,
         help=(
-            "Maximum redshift value, above which the COSOMS catalog will be "
+            "Maximum redshift value, above which the COSMOS catalog will be "
             f"filtered out. Default is {_commons.MAX_Z}"
+        )
+    )
+    parser.add_argument(
+        "--cosmos-include-faint", action='store_true',
+        default=argparse.SUPPRESS,
+        help=(
+            "Whether to include the 'faint' COSMOS catalog in "
+            "addition to the 'bright' one."
         )
     )
 
@@ -335,15 +343,7 @@ def std_noise_mask(parser):
             "and noisy shear map from the COSMOS catalog."
         )
     )
-    parser.add_argument(
-        "--cosmos-include-faint", action='store_true',
-        default=argparse.SUPPRESS,
-        help=(
-            "Whether to include the 'faint' COSMOS catalog in "
-            "addition to the 'bright' one."
-        )
-    )
-    max_z(parser)
+    cosmos(parser)
     parser.add_argument(
         "--resolution", type=float,
         default=argparse.SUPPRESS,

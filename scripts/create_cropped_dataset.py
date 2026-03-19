@@ -27,7 +27,7 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     _add_arguments.create_dataset(parser, wlmmuq.PATH_TO_TEST_DATASET, IDX_LP)
-    _add_arguments.max_z(parser)
+    _add_arguments.cosmos(parser)
     _add_arguments.seed_verbose(parser)
 
     args = parser.parse_args()
