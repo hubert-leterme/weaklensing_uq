@@ -115,21 +115,21 @@ The optional argument `-t1 YYYYMMDD_hhmmss` must be replaced by the timestamp of
 # COSMOS "bright" catalog only
 # Noise standard deviation and mask have been pre-computed and stored in `wlmmuq.PATH_TO_STD_NOISE` and `wlmmuq.PATH_TO_MASK`.
 # Otherwise, use CLI argument `--bin-data-from-cosmos`
-python scripts/train.py -a UNetPreproc -m wiener -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_nepochs_20 -w 8 --seed 42 -v
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode-preproc_wiener_nepochs_20 -w 8 --seed 42 -v
 
 # COSMOS "bright" + "faint" catalogs
 # Recompute noise standard deviation and mask using the CLI arguments `--bin-data-from-cosmos` and `--cosmos-include-faint`
-python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode_preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -e 20 --lr-scheduler -c deepmass_arch_UNetPreproc_mode-preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
 ```
 
 #### Variance estimate (order-2 networks)
 
 ```bash
-# COSMOS "bright" catalog only
-python scripts/train.py -a UNetPreproc -m wiener -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
+# COSMOS "bright" catalog only 
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 --lr-scheduler -c deepmass_arch_UNetPreproc_mode-preproc_wiener_nepochs_20 -w 8 --seed 42 -v
 
 # COSMOS "bright" + "faint" catalogs
-python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 -w 8 --lr-scheduler --seed 42 -v
+python scripts/train.py -a UNetPreproc -m wiener --bin-data-from-cosmos --cosmos-include-faint -uq -t1 YYYYMMDD_hhmmss -e1 20 -e 100 --lr-scheduler -c deepmass_arch_UNetPreproc_mode-preproc_wiener_brightfaint_nepochs_20 -w 8 --seed 42 -v
 ```
 
 The order-2 network has been trained on 100 epochs, vs only 20 epochs for the order-1 network. This was motivated by the validation loss still decreasing after $20$ epochs.
