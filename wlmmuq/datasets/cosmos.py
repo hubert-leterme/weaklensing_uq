@@ -85,10 +85,10 @@ def cosmos_catalog():
 
 
 def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
-    extent = [
+    extent = (
         ra_cosmos_median - openingangle/2, ra_cosmos_median + openingangle/2,
         dec_cosmos_median - openingangle/2, dec_cosmos_median + openingangle/2
-    ]
+    )
     return extent
 
 

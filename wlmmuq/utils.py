@@ -605,8 +605,8 @@ def skyshow(
         printcolorbar=True, printxylabels=True,
         printxticks=True, printyticks=True,
         imgsize: int | tuple[int] | None = None,
-        extent: list[float] | None = None,
-        extent_after_crop: list[float] | None = None,
+        extent: tuple[float, float, float, float] | None = None,
+        extent_after_crop: tuple[float, float, float, float] | None = None,
         xclus: bool = False, path_to_xclus: str = PATH_TO_XCLUS,
         zmin: float = XCLUS_ZMIN, zmax: float = XCLUS_ZMAX,
         m500min: float = XCLUS_M500MIN,
@@ -628,12 +628,12 @@ def skyshow(
             x_min, x_max, y_min, y_max = extent
             dx = (x_max - x_min) / imgsize_ori[1]
             dy = (y_max - y_min) / imgsize_ori[0]
-            extent = [
+            extent = (
                 x_min + beg_j * dx,
                 x_min + end_j * dx,
                 y_min + beg_i * dy,
                 y_min + end_i * dy,
-            ]
+            )
 
     out = plt.imshow(img, origin='lower', extent=extent, **kwargs)
 
