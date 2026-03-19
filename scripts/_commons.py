@@ -158,18 +158,18 @@ def get_stdnoise_mask_shearmap(
             )
         else:
             cat_cosmos = cat_cosmos_bright
-        data_dict = wlcosmos.get_data_from_cosmos(
+        cosmos_data = wlcosmos.get_data_from_cosmos(
             cat_cosmos, imgsize, resolution,
             get_noisy_shear_map=get_noisy_shear_map,
             east_right=east_right,
             zbins=zbins, max_z=max_z
         )
-        std_noise = data_dict["std_noise"]
-        mask = data_dict["mask"]
-        if get_noisy_shear_map:
-            gamma_real = data_dict["gamma"]
-        else:
-            gamma_real = None
+        std_noise = cosmos_data.std_noise
+        mask = cosmos_data.mask
+        gamma_real = cosmos_data.gamma
+        assert std_noise is not None
+        assert mask is not None
+        assert gamma_real is not None
 
     if inpainting:
         # Set the noise standard deviation for masked data
