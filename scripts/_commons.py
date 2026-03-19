@@ -493,24 +493,6 @@ def get_dataloader_massmapping(
     return test_dataloader
 
 
-def get_gamma_from_cosmos(
-        imgsize: int = IMGSIZE,
-        max_z: float | None = wlktng.MAX_Z,
-        resolution: float = wlktng.RESOLUTION,
-        verbose: bool = False
-) -> torch.Tensor:
-    # TODO: remove
-    cat_cosmos, _ = wlcosmos.cosmos_catalog()
-    if max_z is not None:
-        cat_cosmos = wlcosmos.filter_by_redshifts(cat_cosmos, max_z)
-    data_dict = wlcosmos.get_data_from_cosmos(
-        cat_cosmos, imgsize, resolution,
-        get_noisy_shear_map=True, east_right=True
-    )
-    gamma = data_dict["gamma"]
-    return gamma
-
-
 def _get_args_wienerinit(
         std_noise, mask, path_to_ps=PATH_TO_PS,
         white_noise=False,
