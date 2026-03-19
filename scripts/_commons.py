@@ -149,7 +149,9 @@ def get_stdnoise_mask_shearmap(
     if bin_data_from_cosmos:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
-        cat_cosmos_bright, cat_cosmos_faint = wlcosmos.cosmos_catalog()
+        coscat = wlcosmos.cosmos_catalog()
+        cat_cosmos_bright = coscat.cat_bright
+        cat_cosmos_faint = coscat.cat_faint
         if max_z is not None:
             cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
         if cosmos_include_faint:
@@ -191,9 +193,10 @@ def get_stdnoise_mask_shearmap(
 def create_dataset_from_kappatng(
         func: typing.Callable, path_to_saved_dataset: str, idx_lp: int | str,
         openingangle: float, ninpimgs: int,
+        max_z: float | None = wlktng.MAX_Z,
+        cosmos_include_faint: bool = False,
         use_zbins: bool = False, path_to_zbins: str | None = PATH_TO_ZBINS,
         idx_zbins: list[int] | None = IDX_ZBINS,
-        max_z: float | None = wlktng.MAX_Z,
         verbose: bool = False, **kwargs
 ):
     """
@@ -230,12 +233,22 @@ def create_dataset_from_kappatng(
         print("Computing redshift weights from COSMOS...")
     # TODO: Do not filter out high redshifts?
     # TODO: Also take `cat_cosmos_faint` for the redshift distribution? No 'zphot' field
-    cat_cosmos_bright, _ = wlcosmos.cosmos_catalog()
-    if max_z is not None:
-        cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
-    weights_redshift = wlktng.get_weights_redshifts(
-        cat_cosmos_bright['zphot']
+    coscat = wlcosmos.cosmos_catalog()
+    assert wlktng.Z is not None
+    zphot = np.array(coscat.cat_bright["zphot"])
+    nhweight_int = np.array(coscat.cat_bright["nhweight_int"])
+    weights_redshift = wl.utils.get_weights_redshifts(
+        zphot, zplanes=wlktng.Z, weights=nhweight_int, max_z=max_z
     )
+    if cosmos_include_faint:
+        zplanes_faint = np.array(coscat.zdist_faint["col1"])
+        zdist_faint = np.array(coscat.zdist_faint["col2"])
+        weights_redshift_faint = wl.utils.get_weights_redshifts(
+            zphot, zplanes=zplanes_faint, weights=zdist_faint,
+            max_z=max_z
+        )
+        weights_redshift = weights_redshift + weights_redshift_faint
+        weights_redshift /= np.sum(weights_redshift)
 
     # Get nb of pixels in output images and adjust opening angle accordingly
     imgsize, openingangle = wlktng.get_npixels_openingangle(openingangle)

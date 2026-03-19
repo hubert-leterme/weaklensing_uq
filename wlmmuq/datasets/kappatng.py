@@ -341,57 +341,6 @@ def get_npixels_openingangle(openingangle, make_even=True):
     return width, openingangle
 
 
-def get_weights_redshifts(
-        redshifts: np.ndarray,
-        z: np.ndarray | None = Z
-) -> np.ndarray:
-    """
-    Arguments
-    ---------
-    redshifts: np.ndarray, shape = (ngals,)
-        List of redshifts, for each measured galaxy
-    z: np.ndarray, shape = (nplanes,), optional
-        List of redshift planes. Default values are the one provided by
-        Osato et al., MNRAS, vol. 502, no. 4, pp. 5593–5602, 2021.
-
-    Returns
-    -------
-    out: np.ndarray, shape = (nplanes,)
-
-    """
-    assert z is not None
-    idxs_sup = np.digitize(redshifts, z) # shape = (ngals,)
-    idxs_inf = idxs_sup - 1 # shape = (ngals,)
-
-    redshifts_sup = np.array([
-        z[idx] if idx < len(z) else np.nan for idx in idxs_sup
-    ])
-    redshifts_inf = np.array([
-        z[idx] if idx >= 0 else np.nan for idx in idxs_inf
-    ])
-
-    diff_redshifts = redshifts_sup - redshifts_inf # shape = (ngals,)
-    weights_sup = 1 - (redshifts_sup - redshifts) / diff_redshifts # shape = (ngals,)
-    weights_inf = 1 - (redshifts - redshifts_inf) / diff_redshifts # shape = (ngals,)
-    # Note that `weights_inf + weights_sup` are equal to one everywhere,
-    # except when `redshifts` is below `z[0]` or above `z[-1]`, in which
-    # case the value of `weights_inf` and `weights_sup` is nan.
-
-    idxs = np.concatenate([idxs_inf, idxs_sup])
-    weights_redshifts = np.concatenate([weights_inf, weights_sup])
-
-    # Galaxies with redshift below z[0] contribute entirely to the first bin
-    # Galaxies with redshift above z[-1] contribute entirely to the last bin
-    weights_redshifts = weights_redshifts[(idxs >= 0) & (idxs < len(z))]
-    idxs = idxs[(idxs >= 0) & (idxs < len(z))]
-    weights_redshifts[np.isnan(weights_redshifts)] = 1.
-
-    out = np.bincount(idxs, weights=weights_redshifts, minlength=len(z)) # shape = nz
-    out /= np.sum(out) # normalize
-
-    return out
-
-
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshifts, imgsize,
         zbins=None, batch_size=None,

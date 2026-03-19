@@ -58,6 +58,13 @@ RA, DEC = np.array(COSMOS_VERTICES).T
 
 
 @dataclass
+class CosmosCatalogs:
+    cat_bright: aptable.Table
+    cat_faint: aptable.Table
+    zdist_faint: aptable.Table
+
+
+@dataclass
 class DataFromCosmos:
     shapedisp: float
     openingangle: float
@@ -72,7 +79,7 @@ class DataFromCosmos:
 
 def cosmos_catalog():
 
-    # Load data
+    # Load catalogs
     cat_bright = aptable.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
     cat_faint = aptable.Table.read(f'{COSMOS_DIR}/cosmos_faint_cat.asc', format='ascii')
 
@@ -81,7 +88,11 @@ def cosmos_catalog():
     # estimation,” A&A, vol. 672, p. A51, Apr. 2023.
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
 
-    return cat_bright, cat_faint
+    # Load source redshift distribution for the faint catalog
+    # We use the weighted distribution ("w1")
+    zdist_faint = aptable.Table.read(f'{COSMOS_DIR}/cosmos_zdist_faint_w1.asc', format='ascii')
+
+    return CosmosCatalogs(cat_bright=cat_bright, cat_faint=cat_faint, zdist_faint=zdist_faint)
 
 
 def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):

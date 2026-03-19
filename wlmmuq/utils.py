@@ -1016,6 +1016,38 @@ def get_timestamp():
     return datetime.now().strftime(r"%Y%m%d_%H%M%S")
 
 
+def get_weights_redshifts(
+        vals: np.ndarray, zplanes: np.ndarray,
+        max_z: float | None = None,
+        weights: np.ndarray | None = None
+) -> np.ndarray:
+    """
+    Arguments
+    ---------
+    vals: np.ndarray, shape = (ngals,)
+        List of redshifts, for each measured galaxy
+    zplanes: np.ndarray, shape = (nplanes,)
+        List of redshift planes
+    weights: np.ndarray, shape = (ngals,), optional
+        An array of weights, of the same shape as vals. Each value in vals
+        only contributes its associated weight towards the bin count (instead of 1).
+    max_z: float, optional
+
+    Returns
+    -------
+    out: np.ndarray, shape = (nplanes,)
+        The corresponding source distribution on zplanes; sums to one
+    """
+    if max_z is None:
+        max_z = float(np.max(vals))
+    bins = (zplanes[:-1] + zplanes[1:]) / 2
+    bins = [0.] + bins + [max_z]
+    dbins = bins[1:] - bins[:-1]
+    hist = np.histogram(vals, bins=bins, weights=weights)
+
+    return dbins * hist
+
+
 #=================================================================================
 # Functions on torch tensors or numpy arrays
 #=================================================================================
