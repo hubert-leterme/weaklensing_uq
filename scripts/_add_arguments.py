@@ -327,7 +327,7 @@ def cosmos(parser):
         "--cosmos-include-faint", action='store_true',
         default=argparse.SUPPRESS,
         help=(
-            "Whether to include the 'faint' COSMOS catalog in "
+            "Include the 'faint' COSMOS catalog in "
             "addition to the 'bright' one."
         )
     )
