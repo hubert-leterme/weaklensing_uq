@@ -1041,9 +1041,9 @@ def get_weights_redshifts(
     if max_z is None:
         max_z = float(np.max(vals))
     bins = (zplanes[:-1] + zplanes[1:]) / 2
-    bins = [0.] + bins + [max_z]
+    bins = np.concatenate([[0.], bins, [max_z]])
     dbins = bins[1:] - bins[:-1]
-    hist = np.histogram(vals, bins=bins, weights=weights)
+    hist, _ = np.histogram(vals, bins=bins, weights=weights, density=True)
 
     return dbins * hist
 
