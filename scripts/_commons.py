@@ -241,14 +241,17 @@ def create_dataset_from_kappatng(
         zphot, zplanes=wlktng.Z, weights=nhweight_int, max_z=max_z
     )
     if cosmos_include_faint:
-        zplanes_faint = np.array(coscat.zdist_faint["col1"])
+        z_faint = np.array(coscat.zdist_faint["col1"])
         zdist_faint = np.array(coscat.zdist_faint["col2"])
         weights_redshift_faint = wl.utils.get_weights_redshifts(
-            zphot, zplanes=zplanes_faint, weights=zdist_faint,
+            z_faint, zplanes=wlktng.Z, weights=zdist_faint,
             max_z=max_z
         )
-        weights_redshift = weights_redshift + weights_redshift_faint
-        weights_redshift /= np.sum(weights_redshift)
+        ngal_bright = len(coscat.cat_bright)
+        ngal_faint = len(coscat.cat_faint)
+        weights_redshift = (
+            ngal_bright * weights_redshift + ngal_faint * weights_redshift_faint
+        ) / (ngal_bright + ngal_faint)
 
     # Get nb of pixels in output images and adjust opening angle accordingly
     imgsize, openingangle = wlktng.get_npixels_openingangle(openingangle)
