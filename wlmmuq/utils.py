@@ -1028,10 +1028,10 @@ def get_weights_redshifts(
         List of redshifts, for each measured galaxy
     zplanes: np.ndarray, shape = (nplanes,)
         List of redshift planes
+    max_z: float, optional
     weights: np.ndarray, shape = (ngals,), optional
         An array of weights, of the same shape as vals. Each value in vals
         only contributes its associated weight towards the bin count (instead of 1).
-    max_z: float, optional
 
     Returns
     -------
