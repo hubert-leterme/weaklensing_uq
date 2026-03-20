@@ -231,8 +231,6 @@ def create_dataset_from_kappatng(
     # Get redshift weights from the COSMOS catalog
     if verbose:
         print("Computing redshift weights from COSMOS...")
-    # TODO: Do not filter out high redshifts?
-    # TODO: Also take `cat_cosmos_faint` for the redshift distribution? No 'zphot' field
     coscat = wlcosmos.cosmos_catalog()
     assert wlktng.Z is not None
     zphot = np.array(coscat.cat_bright["zphot"])
