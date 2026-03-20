@@ -188,6 +188,9 @@ class KappaTNG(BaseKappaTNG):
             self.list_of_weights_redshifts = utils.get_list_per_zbin(
                 weights_redshifts, z, zbins
             )
+            self.list_of_weights_redshifts = [
+                w / np.sum(w) for w in self.list_of_weights_redshifts
+            ] # Normalize source number densities in each redshift bin
             list_of_weights_mseloss = [
                 np.sum(cdist0 * w0) for cdist0, w0 in zip(
                     self.list_of_cdist, self.list_of_weights_redshifts
