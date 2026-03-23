@@ -68,20 +68,29 @@ For the sake of convenience, the power spectrum has been precomputed on $2\,048$
 
 #### Training & validation sets
 
-```bash
-python scripts/create_augmented_dataset.py -o path/to/training/and/validation/dataset.hdf5 --idx-lp 2 --angle-step 1 --niter-per-angle 2 --seed 42 -v
-```
-
 The training and validation samples are stored together in a single HDF5 file. The separation between the two sets is performed dynamically when loading the data.
 
-#### Calibration & test sets
-
 ```bash
-python scripts/create_augmented_dataset.py -o path/to/calib/dataset.hdf5 --idx-lp 1 --angle-step 8 --seed 42 -v
-python scripts/create_cropped_dataset.py -o path/to/test/dataset.hdf5 --idx-lp 1 --seed 42 -v
+python scripts/create_augmented_dataset.py -o path/to/training/and/validation/dataset.hdf5 --idx-lp 2 [-z] --angle-batch-size 8 --angle-step 1 --niter-per-angle 2 [--cosmos-include-faint] -w 8 --seed 42 -v
 ```
+Optional CLI arguments:
+- `-z`: create a dataset with several redshift bins;
+- `--cosmos-include-faint`: use both bright and faint COSMOS catalogs; otherwise, only the bright catalog will be used. 
+
+Do not forget the change the output filename using CLI argument `-o`, to avoid overwriting an existing dataset.
+
+#### Calibration and test sets
 
 Both datasets are generated from the full set of 100 independent realizations corresponding to the specified lensing potential. To prevent any overlap between the calibration and test samples, the data should be filtered by realization index when loading the datasets (see the table above for the specific realization ranges used for each set).
+
+```bash
+# Calibration set
+python scripts/create_augmented_dataset.py -o path/to/calib/dataset.hdf5 --idx-lp 1 [-z] --angle-batch-size 5 --angle-step 8 [--cosmos-include-faint] -w 5 --seed 42 -v
+
+# Test set
+python scripts/create_cropped_dataset.py -o path/to/test/dataset.hdf5 --idx-lp 1 [-z] [--cosmos-include-faint] --seed 42 -v
+```
+
 
 ### Training denoisers for PnPMass
 
