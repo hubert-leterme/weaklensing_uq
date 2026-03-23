@@ -29,6 +29,8 @@ N_SAMPLES_PER_SIDE = 3
 RESOLUTION = SIZE_ORI / WIDTH_ORI * 60. # resolution in arcmin/pixel
 OPENINGANGLE = 1.875 # opening angle of the target convergence maps (deg)
 
+# For creating augmented / cropped datasets from raw data
+BATCH_SIZE = 10
 ANGLE_BATCH_SIZE = 1
 
 # Cosmological parameters
@@ -345,7 +347,7 @@ def get_npixels_openingangle(openingangle, make_even=True):
 
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshifts, imgsize,
-        zbins=None, batch_size=None,
+        zbins=None, batch_size=BATCH_SIZE,
         update_metadata_only=False, verbose=False, **kwargs
 ):
     """
@@ -407,7 +409,7 @@ def create_cropped_dataset(
 
 def create_augmented_dataset(
     hdf5_filepath, idx_lp, nimgs, weights_redshifts, imgsize,
-    zbins=None, batch_size=50,
+    zbins=None, batch_size=BATCH_SIZE,
     angle_batch_size=ANGLE_BATCH_SIZE, angle_step=5, niter_per_angle=1,
     num_workers=0, update_metadata_only=False,
     resume=False, verbose=False

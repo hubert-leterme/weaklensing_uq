@@ -1,6 +1,8 @@
 import argparse
 import wlmmuq as wl
 
+import wlmmuq.datasets.kappatng as wlktng
+
 from wlmmuq.datasets import NUM_WORKERS, OPENINGANGLE
 
 import _commons
@@ -64,7 +66,7 @@ def create_dataset(parser, path_to_output, idx_lp):
         default=argparse.SUPPRESS,
         help=(
             "Batch size, to avoid memory overload. "
-            "Default = 50"
+            f"Default = {wlktng.BATCH_SIZE}"
         )
     )
     parser.add_argument(
