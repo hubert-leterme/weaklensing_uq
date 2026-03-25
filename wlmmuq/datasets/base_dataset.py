@@ -172,20 +172,6 @@ class BaseHDF5Dataset:
             else:
                 out = None
         return out
-    
-    @property
-    def normfact_zbins(self):
-        assert self.weights_redshifts is not None
-        assert self.cdist is not None
-        assert self.z is not None
-        assert self.zbins is not None
-        weighted_cdistsq = self.weights_redshifts * self.cdist**2
-        list_of_weighted_cdistsq = utils.get_list_per_zbin(
-            weighted_cdistsq, self.z, zbins=self.zbins
-        )
-        out = np.array([np.sum(w) for w in list_of_weighted_cdistsq])
-        out /= np.linalg.norm(out)
-        return out
 
 
     @contextmanager

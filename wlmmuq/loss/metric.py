@@ -15,7 +15,6 @@ class MeancenterMaskMixin:
     def __init__(
             self, mask: torch.Tensor | None = None,
             meancentering: bool = True,
-            channelwise_normfact: torch.Tensor | None = None,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -25,12 +24,6 @@ class MeancenterMaskMixin:
         else:
             self.mask = None
         self.meancentering = meancentering
-        if channelwise_normfact is not None:
-            self.channelwise_normfact = nn.Parameter(
-                channelwise_normfact.view(1, -1, 1, 1), requires_grad=False
-            )
-        else:
-            self.channelwise_normfact = None
 
 
     def metric(self, x_net, x, *args, **kwargs):
@@ -53,9 +46,6 @@ class MeancenterMaskMixin:
                 x = x[..., self.mask]
             except TypeError:
                 pass
-        if self.channelwise_normfact is not None:
-            x_net = x_net / self.channelwise_normfact
-            x = x / self.channelwise_normfact
 
         return super().metric(x_net, x, *args, **kwargs)
 
