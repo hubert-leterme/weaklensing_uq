@@ -177,28 +177,19 @@ class KappaTNG(BaseKappaTNG):
                 "Argument `{}` must have {} elements, "
                 "but {} were provided."
             )
-            self.z = z
-            self.cdist = cdist
-            self.weights_redshifts = weights_redshifts
 
-            self.list_of_z = utils.get_list_per_zbin(
+            self.z = utils.get_list_per_zbin(
                 z, z, zbins
             )
-            self.list_of_cdist = utils.get_list_per_zbin(
+            self.cdist = utils.get_list_per_zbin(
                 cdist, z, zbins
             )
-            self.list_of_weights_redshifts = utils.get_list_per_zbin(
+            self.weights_redshifts = utils.get_list_per_zbin(
                 weights_redshifts, z, zbins
             )
-            self.list_of_weights_redshifts = [
-                w / np.sum(w) for w in self.list_of_weights_redshifts
+            self.weights_redshifts = [
+                w / np.sum(w) for w in self.weights_redshifts
             ] # Normalize source number densities in each redshift bin
-            list_of_weights_mseloss = [
-                np.sum(cdist0 * w0) for cdist0, w0 in zip(
-                    self.list_of_cdist, self.list_of_weights_redshifts
-                )
-            ]
-            self.weights_mseloss = np.array(list_of_weights_mseloss)
 
             try:
                 with h5py.File(fname_first_idx_run, 'r', swmr=True) as file:
@@ -207,7 +198,6 @@ class KappaTNG(BaseKappaTNG):
             except FileNotFoundError:
                 warnings.warn(f"File '{fname_first_idx_run}' not found")
                 self.idx_redshifts = None
-                self.list_of_idx_redshifts = None
 
             else:
                 nredshifts = len(idx_redshifts)
@@ -218,9 +208,8 @@ class KappaTNG(BaseKappaTNG):
                     msg.format("cdist", nredshifts, len(cdist))
                 assert len(weights_redshifts) == nredshifts, \
                     msg.format("weights_redshifts", nredshifts, len(weights_redshifts))
-                
-                self.idx_redshifts = idx_redshifts
-                self.list_of_idx_redshifts = utils.get_list_per_zbin(
+
+                self.idx_redshifts = utils.get_list_per_zbin(
                     idx_redshifts, z, zbins
                 )
 
@@ -229,13 +218,6 @@ class KappaTNG(BaseKappaTNG):
             self.cdist = None
             self.weights_redshifts = None
             self.idx_redshifts = None
-            
-            self.list_of_z = None
-            self.list_of_cdist = None
-            self.list_of_weights_redshifts = None
-            self.list_of_idx_redshifts = None
-
-            self.weights_mseloss = None
 
         if zidx is not None:
             self.zidx = f'z{str(zidx + 1).zfill(2)}'
@@ -261,17 +243,17 @@ class KappaTNG(BaseKappaTNG):
         fname = self._get_fname(idx_run)
         with h5py.File(fname, 'r', swmr=True) as file:
 
-            if self.list_of_weights_redshifts is not None:
-                assert self.list_of_idx_redshifts is not None
+            if self.weights_redshifts is not None:
+                assert self.idx_redshifts is not None
 
                 list_of_kappa = [
                     np.stack([
                         _get_kappa_oneredshift(file, i) for i in l
-                    ], axis=-1) for l in self.list_of_idx_redshifts # Shape = (nx, ny, nz)
+                    ], axis=-1) for l in self.idx_redshifts # Shape = (nx, ny, nz)
                 ]
                 list_of_kappa = [
                     np.sum(w * kappa, axis=-1) \
-                        for w, kappa in zip(self.list_of_weights_redshifts, list_of_kappa) # Shape = (nx, ny)
+                        for w, kappa in zip(self.weights_redshifts, list_of_kappa) # Shape = (nx, ny)
                 ]
                 kappa = np.stack(list_of_kappa) # Shape = (nbins, nx, ny)
 
@@ -585,9 +567,11 @@ def _update_metadata(
     if ktng.weights_redshifts is not None:
         f.attrs["weights_redshifts"] = ktng.weights_redshifts
     if ktng.idx_redshifts is not None:
-        f.attrs["idx_redshifts"] = ktng.idx_redshifts.astype(
-            h5py.string_dtype(encoding="utf-8")
-        )
+        f.attrs["idx_redshifts"] = [
+            zidx.astype(
+                h5py.string_dtype(encoding="utf-8")
+            ) for zidx in ktng.idx_redshifts
+        ]
 
     if zbins is not None:
         f.attrs["zbins"] = zbins
