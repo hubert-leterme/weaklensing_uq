@@ -560,18 +560,31 @@ def _update_metadata(
         zbins=None, angle_step=None, niter_per_angle=None
 ):
     f.attrs["idx_lp"] = ktng.idx_lp
+    grp_metadata_per_zbin = f.require_group("metadata_per_zbin")
+
+    def _update_per_zbin(name: str, dtype: type | None = None):
+        list_of_arrs = getattr(ktng, name)
+        if list_of_arrs is not None:
+            assert isinstance(list_of_arrs, list) and len(list_of_arrs) != 0
+            assert all(isinstance(arr, np.ndarray) for arr in list_of_arrs)
+            if dtype is None:
+                dtype = list_of_arrs[0].dtype
+            dset = grp_metadata_per_zbin.create_dataset(
+                name, (len(list_of_arrs),), dtype=h5py.vlen_dtype(dtype)
+            )
+            for i, arr in enumerate(list_of_arrs):
+                dset[i] = arr.astype(dtype)
+
     if ktng.z is not None:
-        f.attrs["z"] = ktng.z
-    if ktng.cdist is not None:
-        f.attrs["cdist"] = ktng.cdist
+        _update_per_zbin("z")
+    if ktng.cdist is not None:  
+        _update_per_zbin("cdist")
     if ktng.weights_redshifts is not None:
-        f.attrs["weights_redshifts"] = ktng.weights_redshifts
+        _update_per_zbin("weights_redshifts")
     if ktng.idx_redshifts is not None:
-        f.attrs["idx_redshifts"] = [
-            zidx.astype(
-                h5py.string_dtype(encoding="utf-8")
-            ) for zidx in ktng.idx_redshifts
-        ]
+        _update_per_zbin(
+            "idx_redshifts", dtype=h5py.string_dtype(encoding="utf-8")
+        )
 
     if zbins is not None:
         f.attrs["zbins"] = zbins
