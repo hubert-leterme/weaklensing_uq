@@ -18,7 +18,10 @@ class BNT(dinv.transform.Transform):
         $$
         where $n_i$ denotes the (normalized) number density in the $i$-th redshift bin.
     """
-    def __init__(self, chi: torch.Tensor):
+    def __init__(
+            self, chi: torch.Tensor,
+            which_way: int = 1, transpose: bool = False
+    ):
         super().__init__()
 
         if len(chi.shape) != 1:
@@ -35,9 +38,14 @@ class BNT(dinv.transform.Transform):
         self.bntmatr = nn.Parameter(bntmatr, requires_grad=False)
         self.bntmatr_inv = nn.Parameter(bntmatr_inv, requires_grad=False)
 
+        self.which_way = which_way
+        self.transpose = transpose
+
 
     def _get_params(self, x: torch.Tensor) -> dict:
-        return {}
+        return dict(
+            which_way=self.which_way, transpose=self.transpose
+        )
 
 
     def _transform(
