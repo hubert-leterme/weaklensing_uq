@@ -562,15 +562,15 @@ def _update_metadata(
     f.attrs["idx_lp"] = ktng.idx_lp
     grp_metadata_per_zbin = f.require_group("metadata_per_zbin")
 
-    def _update_per_zbin(name: str, dtype: type | None = None):
-        list_of_arrs = getattr(ktng, name)
+    def _update_per_zbin(attrname: str, dtype: type | None = None):
+        list_of_arrs = getattr(ktng, attrname)
         if list_of_arrs is not None:
             assert isinstance(list_of_arrs, list) and len(list_of_arrs) != 0
             assert all(isinstance(arr, np.ndarray) for arr in list_of_arrs)
             if dtype is None:
                 dtype = list_of_arrs[0].dtype
             dset = grp_metadata_per_zbin.create_dataset(
-                name, (len(list_of_arrs),), dtype=h5py.vlen_dtype(dtype)
+                attrname, (len(list_of_arrs),), dtype=h5py.vlen_dtype(dtype)
             )
             for i, arr in enumerate(list_of_arrs):
                 dset[i] = arr.astype(dtype)

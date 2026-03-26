@@ -133,25 +133,39 @@ class BaseHDF5Dataset:
 
 
     @property
-    def z(self) -> np.ndarray | None:
-        out = self._get_attr_hdf5("z")
-        if out is not None:
-            assert isinstance(out, np.ndarray)
-        return out
+    def z(self) -> list[np.ndarray] | None:
+        return self._get_metadata_per_zbin_hdf5("z")
     
     @property
-    def cdist(self) -> np.ndarray | None:
-        out = self._get_attr_hdf5("cdist")
-        if out is not None:
-            assert isinstance(out, np.ndarray)
-        return out
+    def cdist(self) -> list[np.ndarray] | None:
+        return self._get_metadata_per_zbin_hdf5("cdist")
 
     @property
-    def weights_redshifts(self) -> np.ndarray | None:
-        out = self._get_attr_hdf5("weights_redshifts")
-        if out is not None:
-            assert isinstance(out, np.ndarray)
+    def weights_redshifts(self) -> list[np.ndarray] | None:
+        return self._get_metadata_per_zbin_hdf5("weights_redshifts")
+    
+    def _get_metadata_per_zbin_hdf5(
+            self, attrname: str
+    ) -> list[np.ndarray] | None:
+
+        with self.open():
+            if self.file is not None:
+                try:
+                    grp = self.file["metadata_per_zbin"]
+                    assert isinstance(grp, h5py.Group)
+                    dset = grp[attrname]
+                except KeyError:
+                    out = None
+                else:
+                    assert isinstance(dset, h5py.Dataset)
+                    out = [
+                        dset[i] for i in range(len(dset))
+                    ]
+            else:
+                out = None
+
         return out
+
 
     @property
     def zbins(self) -> list[float] | None:
