@@ -20,7 +20,7 @@ import astropy.io.fits as apfits
 # from lenspack.utils import bin2d
 
 from . import lenspack
-from .config import KEY_REPLACEMENT_DICT, PATH_TO_XCLUS
+from .config import KEY_REPLACEMENT_DICT, PATH_TO_XCLUS, PATH_TO_ZBINS
 
 ITS_POWER_ITERATION = 100 # The default value implemented in scipy (20) is too small
 
@@ -1156,8 +1156,11 @@ def get_list_per_zbin(
 
 
 def get_zbins(
-        path_to_zbins: str, idx_zbins: list[int] | None = None
+        path_to_zbins: str | None = PATH_TO_ZBINS,
+        idx_zbins: list[int] | None = None
 ) -> list[float]:
+    if path_to_zbins is None:
+        raise ValueError("Argument `path_to_zbins` must be provided.")
     hdul = apfits.open(path_to_zbins)
     zbins = hdul[1].data["BIN_STOP"]
     assert isinstance(zbins, np.ndarray)
