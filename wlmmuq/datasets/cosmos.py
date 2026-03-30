@@ -235,7 +235,9 @@ def cosmos_boundaries(extent, width, boundaries=None):
     return cosmos_mask, ra, dec
 
 
-def filter_by_redshifts(cat_cosmos, max_z):
+def filter_by_redshifts(
+        cat_cosmos: aptable.Table, max_z: float
+) -> aptable.Table:
     cat_cosmos = cat_cosmos[
         cat_cosmos['zphot'] < max_z
     ]
