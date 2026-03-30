@@ -206,9 +206,6 @@ def get_masked_and_noisy_shear(
         std_noise: np.ndarray | torch.Tensor,
         mask: np.ndarray | torch.Tensor | None = None,
         inpainting: bool = False,
-        output_shape_wider: tuple[int, int] | None = None,
-        std_noise_wider: np.ndarray | torch.Tensor | None = None,
-        mask_wider: np.ndarray | torch.Tensor | None = None,
         device=None
 ):
     """
