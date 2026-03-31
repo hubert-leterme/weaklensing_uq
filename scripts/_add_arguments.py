@@ -39,29 +39,6 @@ def create_dataset(parser, path_to_output, idx_lp):
         )
     )
     parser.add_argument(
-        "-z", "--use-zbins", action='store_true',
-        default=argparse.SUPPRESS,
-        help=("Create tomographic kappa-maps with redshift bins.")
-    )
-    parser.add_argument(
-        "--path-to-zbins", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the FITS file containing the values delimitating the redshift bins. "
-            f"Default = {_commons.PATH_TO_ZBINS}"
-        )
-    )
-    parser.add_argument(
-        "--idx-zbins", type=int, nargs='+',
-        default=argparse.SUPPRESS,
-        help=(
-            "Select redshift bin indices. Used to group and merge redshift bins. "
-            "By default, the redshift bins provided by Euclid are grouped two by two "
-            "(except for the three first bins, which are grouped together), which "
-            f"yields six bins in total. Default = {_commons.IDX_ZBINS}"
-        )
-    )
-    parser.add_argument(
         "-b", "--batch-size", type=int,
         default=argparse.SUPPRESS,
         help=(
@@ -316,7 +293,7 @@ def checkpoint(parser):
     )
 
 
-def cosmos(parser):
+def cosmos_zbins(parser):
     parser.add_argument(
         "--max-z", type=float,
         default=argparse.SUPPRESS,
@@ -333,6 +310,29 @@ def cosmos(parser):
             "addition to the 'bright' one."
         )
     )
+    parser.add_argument(
+        "-z", "--use-zbins", action='store_true',
+        default=argparse.SUPPRESS,
+        help=("Tomographic kappa-maps with several redshift bins.")
+    )
+    parser.add_argument(
+        "--path-to-zbins", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the FITS file containing the values delimitating the redshift bins. "
+            f"Default = {_commons.PATH_TO_ZBINS}"
+        )
+    )
+    parser.add_argument(
+        "--idx-zbins", type=int, nargs='+',
+        default=argparse.SUPPRESS,
+        help=(
+            "Select redshift bin indices. Used to group and merge redshift bins. "
+            "By default, the redshift bins provided by Euclid are grouped two by two "
+            "(except for the three first bins, which are grouped together), which "
+            f"yields six bins in total. Default = {_commons.IDX_ZBINS}"
+        )
+    )
 
 
 def std_noise_mask(parser):
@@ -345,7 +345,7 @@ def std_noise_mask(parser):
             "and noisy shear map from the COSMOS catalog."
         )
     )
-    cosmos(parser)
+    cosmos_zbins(parser)
     parser.add_argument(
         "--resolution", type=float,
         default=argparse.SUPPRESS,

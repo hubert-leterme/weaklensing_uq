@@ -53,7 +53,7 @@ if __name__ == "__main__":
             "Default = 1"
         )
     )
-    _add_arguments.cosmos(parser)
+    _add_arguments.cosmos_zbins(parser)
     parser.add_argument(
         "-w", "--num-workers", type=int,
         default=argparse.SUPPRESS,
