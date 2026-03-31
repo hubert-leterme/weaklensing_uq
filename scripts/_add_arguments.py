@@ -425,7 +425,7 @@ def test_calib_dataset(parser, batch_size):
         default=argparse.SUPPRESS,
         help=(
             "Path to the COSMOS shear map (PyTorch saved object). "
-            f"Default = {wlmmuq.PATH_TO_REAL_SHEARMAP}"
+            f"Default = {wl.PATH_TO_REAL_SHEARMAP}"
         )
     )
     parser.add_argument(
