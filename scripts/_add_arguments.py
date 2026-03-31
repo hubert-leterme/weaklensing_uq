@@ -75,18 +75,6 @@ def create_dataset(parser, path_to_output, idx_lp):
     )
 
 
-def _get_model_classes(denoiser=False, deepmass=False):
-    
-    if not deepmass:
-        model_classes = wl.models.MODEL_CLASSES_DENOISER
-    elif not denoiser:
-        model_classes = wl.models.MODEL_CLASSES_DEEPMASS
-    else:
-        model_classes = wl.models.MODEL_CLASSES
-
-    return model_classes
-
-
 def model(parser, uq=False, denoiser=False, deepmass=False):
 
     model_classes = _get_model_classes(denoiser=denoiser, deepmass=deepmass)
@@ -250,6 +238,18 @@ def model_uq(parser, denoiser=False, deepmass=False):
             "Default = None"
         )
     )
+
+
+def _get_model_classes(denoiser=False, deepmass=False):
+    
+    if not deepmass:
+        model_classes = wl.models.MODEL_CLASSES_DENOISER
+    elif not denoiser:
+        model_classes = wl.models.MODEL_CLASSES_DEEPMASS
+    else:
+        model_classes = wl.models.MODEL_CLASSES
+
+    return model_classes
 
 
 def model_name(parser):
