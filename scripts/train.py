@@ -30,7 +30,11 @@ def main(
         path_to_ps=wlmmuq.PATH_TO_PS,
         bin_data_from_cosmos=False,
         cosmos_include_faint=False,
-        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        max_z: float | None = _commons.MAX_Z,
+        use_zbins: bool = False,
+        path_to_zbins: str | None = wlmmuq.PATH_TO_ZBINS,
+        idx_zbins: list[int] = _commons.IDX_ZBINS,
+        resolution: float = _commons.RESOLUTION,
         inpainting_deepmass=_commons.INPAINTING_DEEPMASS,
         arch=None, denoiser=False,
         nongaussian=False,
@@ -76,17 +80,22 @@ def main(
         physics = dinv.physics.LinearPhysics(noise_model=noise_model)
 
     else:
-        # Get noise srtandard deviation and mask
-        # TODO: add argument `zbins`
-        raise NotImplementedError
+        # Get noise standard deviation and mask
+        if use_zbins:
+            assert path_to_zbins is not None
+            zbins = wlmmuq.utils.get_zbins(path_to_zbins, idx_zbins=idx_zbins)
+        else:
+            zbins = None
+
         std_noise, mask, _ = _commons.get_stdnoise_mask_shearmap(
             path_to_std_noise=path_to_std_noise,
             path_to_mask=path_to_mask,
             bin_data_from_cosmos=bin_data_from_cosmos,
             imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
             max_z=max_z, resolution=resolution,
+            east_right=True, zbins=zbins,
             inpainting=inpainting_deepmass, verbose=verbose
-        ) # TODO: Add arguments `east_right` and `zbins`
+        )
         # Update arguments for data loading
         kwargs.update(std_noise=std_noise, mask=mask)
 
