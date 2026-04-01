@@ -34,7 +34,11 @@ def main(
         model_specs_uq: str | None = None,
         bin_data_from_cosmos: bool = False,
         cosmos_include_faint: bool = False,
-        max_z: float | None = _commons.MAX_Z, resolution: float = _commons.RESOLUTION,
+        max_z: float | None = _commons.MAX_Z,
+        use_zbins: bool = False,
+        path_to_zbins: str | None = wlmmuq.PATH_TO_ZBINS,
+        idx_zbins: list[int] = _commons.IDX_ZBINS,
+        resolution: float = _commons.RESOLUTION,
         inpainting: bool = _commons.INPAINTING_DEEPMASS,
         nimgs_test: int = _commons.NIMGS_TEST,
         cqr: bool = False,
@@ -95,8 +99,12 @@ def main(
         print(f"Number of workers: {num_workers}")
 
     # Load noise standard deviation and mask
-    # TODO: add argument `zbins`
-    raise NotImplementedError
+    if use_zbins:
+        assert path_to_zbins is not None
+        zbins = wlmmuq.utils.get_zbins(path_to_zbins, idx_zbins=idx_zbins)
+    else:
+        zbins = None
+
     std_noise, mask, gamma_real = _commons.get_stdnoise_mask_shearmap(
         path_to_std_noise=path_to_std_noise,
         path_to_mask=path_to_mask,
@@ -105,8 +113,9 @@ def main(
         get_noisy_shear_map=test_on_real_data or run_both,
         imgsize=imgsize, cosmos_include_faint=cosmos_include_faint,
         max_z=max_z, resolution=resolution,
+        east_right=True, zbins=zbins,
         inpainting=inpainting, verbose=verbose
-    ) # TODO: Add arguments `east_right` and `zbins`
+    )
 
     # Load test set(s)
     if run_both:

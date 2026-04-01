@@ -59,6 +59,8 @@ FWHM_KS = 2.4   # As in J.-L. Starck, K. E. Themelis, N. Jeffrey, A. Peel,
 NITER_STARLET_DEBIASING = 32
 CONFIDENCE_UQ = 2 # 2-sigma confidence
 
+IDX_ZBINS = [2, 4, 6, 8, 10] # Group Euclid redshift bins 2 by 2
+
 INPAINTING_KS = True
 INPAINTING_WIENER = False # TODO: set to True?
 INPAINTING_MCALENS = False # TODO: set to True?
