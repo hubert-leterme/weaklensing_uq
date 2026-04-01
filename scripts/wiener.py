@@ -128,8 +128,10 @@ def main(
         calib_dataloader = None
 
     # Instantiate physics (forward model) and RMSE metric
+    # When computing the RMSE, masked pixels (i.e., without any measured galaxy
+    # in any redshift bin) are discarded
     physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=wlmmuq.utils.get_mask_onezbin(mask)).to(device)
 
     # Instantiate the Wiener model
     wiener = _commons.get_wiener(

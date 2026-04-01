@@ -161,7 +161,9 @@ def main(
     )
 
     # Instantiate RMSE metric
-    rmse_fn = wlmmuq.metric.RMSE(mask=mask).to(device)
+    # When computing the RMSE, masked pixels (i.e., without any measured galaxy
+    # in any redshift bin) are discarded
+    rmse_fn = wlmmuq.metric.RMSE(mask=wlmmuq.utils.get_mask_onezbin(mask)).to(device)
 
     hyperparam_precalib = \
         _commons.convert_into_hyperparam_list(

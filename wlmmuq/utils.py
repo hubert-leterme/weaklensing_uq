@@ -1170,6 +1170,10 @@ def get_zbins(
     return zbins.tolist()
 
 
+def get_mask_onezbin(mask: torch.Tensor):
+    return torch.sum(mask, dim=0).bool()
+
+
 def get_tensor_components(x):
     # Shape of x: (batch_size, 2, nchannels, nx, ny)
     return x[:, 0], x[:, 1]
