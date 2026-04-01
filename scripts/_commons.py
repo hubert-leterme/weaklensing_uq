@@ -148,7 +148,7 @@ def get_stdnoise_mask_shearmap(
         else:
             gamma_real = None
 
-    if bin_data_from_cosmos:
+    else:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
         coscat = wlcosmos.cosmos_catalog()
