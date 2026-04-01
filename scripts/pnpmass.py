@@ -265,14 +265,10 @@ def main(
             kappa_true_calib = out_pnpmass_calib["kappa_true"]
             kappa_pred_calib = out_pnpmass_calib["kappa_pred"]
             var_calib = out_pnpmass_calib["var"]
-            dict_kappa_pred_debiased_calib = out_pnpmass_calib["dict_kappa_pred_debiased"]
-            dict_var_debiased_calib = out_pnpmass_calib["dict_var_debiased"]
         else:
             kappa_true_calib = None
             kappa_pred_calib = None
             var_calib = None
-            dict_kappa_pred_debiased_calib = None
-            dict_var_debiased_calib = None
 
         # For each run, prepare out_dict and apply calibration if available, then save
         for run_name, out_pnpmass_run, out_dir_run in run_outputs:
@@ -281,9 +277,6 @@ def main(
             var = out_pnpmass_run["var"]
             rmse = out_pnpmass_run["rmse"]
             l2norm = out_pnpmass_run["l2norm"]
-            dict_kappa_pred_debiased = out_pnpmass_run["dict_kappa_pred_debiased"]
-            dict_var_debiased = out_pnpmass_run["dict_var_debiased"]
-            dict_rmse_debiased = out_pnpmass_run["dict_rmse_debiased"]
 
             try:
                 rmse = rmse.cpu()
@@ -377,10 +370,6 @@ def run_pnpmass_batch(
     listof_rmse = []
     listof_l2norm = []
 
-    listof_dict_kappa_pred_debiased = []
-    listof_dict_var_debiased = []
-    listof_dict_rmse_debiased = []
-
     if callbacks is None:
         callbacks = wlmmuq.callbacks.BaseCallback()
 
@@ -426,15 +415,8 @@ def run_pnpmass_batch(
             else:
                 var = torch.zeros(kappa_pred.shape, device=device)
 
-            dict_kappa_pred_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
-            dict_var_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
-            dict_rmse_debiased: dict[int, dict[int, typing.Optional[torch.Tensor]]] = {}
-
             if gaussian_extractor is not None:
                 kappa_pred = kappa_pred + kappa_g
-                dict_kappa_pred_debiased = _apply_fn_inside_dict_debiasing(
-                    lambda x: x + kappa_g, dict_kappa_pred_debiased
-                )
                 if not test_on_real_data:
                     assert kappa_true is not None
                     kappa_true = kappa_true + kappa_g
@@ -449,10 +431,6 @@ def run_pnpmass_batch(
         listof_var.append(var) # Shape = (batch_size, 1, imgsize, imgsize)
         listof_rmse.append(rmse) # Shape = (batch_size, niter)
         listof_l2norm.append(l2norm) # Shape = (batch_size, niter)
-
-        listof_dict_kappa_pred_debiased.append(dict_kappa_pred_debiased)
-        listof_dict_var_debiased.append(dict_var_debiased)
-        listof_dict_rmse_debiased.append(dict_rmse_debiased)
 
     if not test_on_real_data:
         kappa_true = torch.cat(listof_kappa_true, dim=0) # Shape = (nimgs, 1, imgsize, imgsize)
@@ -472,9 +450,6 @@ def run_pnpmass_batch(
         "var": var,
         "rmse": rmse,
         "l2norm": l2norm,
-        "dict_kappa_pred_debiased": dict_kappa_pred_debiased,
-        "dict_var_debiased": dict_var_debiased,
-        "dict_rmse_debiased": dict_rmse_debiased,
     }
     return out
 
