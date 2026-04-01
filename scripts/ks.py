@@ -129,7 +129,7 @@ def main(
 
     # Instantiate the KS model
     std_gaussianfilter = wlmmuq.utils.get_std_gaussian(fwhm, resolution)
-    ks = wldinv.ks.KS(std_gaussianfilter=std_gaussianfilter).to(device)
+    ks = wlmmuq.models.KS(std_gaussianfilter=std_gaussianfilter).to(device)
 
     # Prepare runs: either single or both (simulated and real)
     runs = []
