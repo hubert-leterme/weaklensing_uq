@@ -100,6 +100,8 @@ def main(
         kwargs.update(std_noise=std_noise, mask=mask)
 
         dataset_class = wlds.HDF5DatasetMassMapping
+        # TODO: disable mask if inpainting is True?
+        # To do when samples are generated using `get_samples_online`
         physics = wlmmuq.physics.MassMapping(
             sigma=std_noise, mask=mask
         )

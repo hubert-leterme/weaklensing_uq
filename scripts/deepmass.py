@@ -167,7 +167,8 @@ def main(
     # Instantiate RMSE metric
     # When computing the RMSE, masked pixels (i.e., without any measured galaxy
     # in any redshift bin) are discarded
-    rmse_fn = wlmmuq.metric.RMSE(mask=wlmmuq.utils.get_mask_onezbin(mask)).to(device)
+    mask_onezbin = wlmmuq.utils.get_mask_onezbin(mask) # Shape = (nx, ny)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask_onezbin).to(device)
 
     hyperparam_precalib = \
         _commons.convert_into_hyperparam_list(
@@ -283,7 +284,7 @@ def main(
                         imgsize=imgsize, mode=mcqr, a=a,
                         hyperparam_precalib=rho,
                         find_optimal_hyperparam_precalib=find_optimal_hyperparam_precalib,
-                        mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                        mask=mask_onezbin, save_tensors=save_tensors, nimgs_save=nimgs_save,
                         device=device, verbose=verbose
                     )
                     uq_key = _commons.get_uq_keys(

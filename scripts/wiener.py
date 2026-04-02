@@ -130,8 +130,10 @@ def main(
     # Instantiate physics (forward model) and RMSE metric
     # When computing the RMSE, masked pixels (i.e., without any measured galaxy
     # in any redshift bin) are discarded
-    physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask).to(device)
-    rmse_fn = wlmmuq.metric.RMSE(mask=wlmmuq.utils.get_mask_onezbin(mask)).to(device)
+    mask_physics = None if inpainting else mask
+    mask_onezbin = wlmmuq.utils.get_mask_onezbin(mask) # Shape = (nx, ny)
+    physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask_physics).to(device)
+    rmse_fn = wlmmuq.metric.RMSE(mask=mask_onezbin).to(device)
 
     # Instantiate the Wiener model
     wiener = _commons.get_wiener(
@@ -241,7 +243,8 @@ def main(
                     kappa_pred_calib, var_calib, kappa_true_calib,
                     confidence_uq=confidence_uq,
                     imgsize=imgsize, mode=mcqr, a=a,
-                    mask=mask, save_tensors=save_tensors, nimgs_save=nimgs_save,
+                    mask=mask_onezbin, save_tensors=save_tensors,
+                    nimgs_save=nimgs_save,
                     device=device, verbose=verbose
                 )
                 uq_key = _commons.get_uq_keys(mode_cqr=mcqr, scaling_factor_chisqcqr=a)
