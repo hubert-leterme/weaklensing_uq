@@ -148,15 +148,19 @@ def main(
 
     # Load trained models
     deepmass, deepmass_uq = _commons.load_trained_models(
-        checkpoint_dir, arch, timestamp, epoch=epoch,
-        model_specs=model_specs,
-        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
-        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
-        model_specs_uq=model_specs_uq,
-        imgsize=imgsize,
-        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        checkpoint_dir, arch, timestamp,
+        epoch=epoch, imgsize=imgsize,
+        model_specs=model_specs, nbins=test_dataset.nbins, # TODO: debug
+        std_noise_preproc=std_noise,
+        mask_preproc=mask,
+        inpainting_preproc=inpainting,
+        path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size,
-        niter_wiener=niter_wiener, nbins=test_dataset.nbins, # TODO: debug
+        niter_wiener=niter_wiener,
+        load_model_uq=load_model_uq,
+        checkpoint_dir_uq=checkpoint_dir_uq, arch_uq=arch_uq,
+        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+        model_specs_uq=model_specs_uq,
         device=device, verbose=verbose, **kwargs
     )
 

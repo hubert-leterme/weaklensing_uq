@@ -43,7 +43,7 @@ def main(
         starlet_detection_threshold=_commons.STARLET_DETECTION_THRESHOLD,
         eps_sup_step_size_wiener=_commons.EPS_SUP_STEP_SIZE,
         model_specs: str | None = None,
-        order2=False, additional_outlayer=None,
+        order2=False,
         arch_order1=None,
         timestamp_order1=None, epoch_order1=None,
         model_specs_order1: str | None = None,
@@ -130,16 +130,14 @@ def main(
     if verbose:
         print("Initialize model")
     kwargs_model = {k: kwargs.pop(k) for k in _commons.KEYS_MODEL if k in kwargs}
-    _commons.update_kwargs_model(
-        kwargs_model,
-        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener, nbins=train_dataset.nbins,
-        device=device, verbose=verbose
-    )
     model = _commons.instantiate_model(
         model_class, imgsize=imgsize, order2=order2,
-        additional_outlayer=additional_outlayer,
+        std_noise_preproc=std_noise,
+        mask_preproc=mask,
+        inpainting_preproc=inpainting_deepmass,
+        path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener, nbins=train_dataset.nbins,
         device=device, verbose=verbose, **kwargs_model
     )
     model.train()
@@ -161,9 +159,16 @@ def main(
                     kwargs_model_order1.update({k: kwargs.pop(k1)})
         assert epoch_order1 is not None
         order1_model = _commons.load_trained_model(
-            checkpoint_dir, arch_order1, timestamp_order1, epoch_order1,
-            model_specs=model_specs_order1, imgsize=imgsize, order2=False,
+            checkpoint_dir, arch_order1, timestamp_order1,
+            epoch=epoch_order1, imgsize=imgsize, order2=False,
+            model_specs=model_specs_order1,
             nbins=train_dataset.nbins,
+            std_noise_preproc=std_noise,
+            mask_preproc=mask,
+            inpainting_preproc=inpainting_deepmass,
+            path_to_ps=path_to_ps,
+            eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+            niter_wiener=niter_wiener,
             device=device, verbose=verbose, **kwargs_model_order1
         )
         loss_fun = wlmmuq.loss.Order2SupLoss(

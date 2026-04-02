@@ -317,38 +317,6 @@ def get_path_to_checkpoint(save_path, timestamp, epoch):
     return path_to_checkpoint
 
 
-def update_kwargs_model(
-        kwargs_model,
-        std_noise=None, mask=None, path_to_ps=None,
-        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, nbins=None,
-        device="cpu", verbose=False
-):
-    try:
-        mode_preproc = kwargs_model["mode_preproc"]
-    except KeyError:
-        mode_preproc = None
-    if mode_preproc is not None and "args_preproc" not in kwargs_model:
-        # Load arguments for Wiener or KS initialization
-        # Only for DeepMass (denoiser = False)
-        if mode_preproc == "wiener":
-            args_preproc = _get_args_wienerinit(
-                std_noise, mask, path_to_ps=path_to_ps,
-                eps_sup_step_size=eps_sup_step_size_wiener,
-                niter=niter_wiener, device=device, verbose=verbose
-            )
-        elif mode_preproc == "ks":
-            args_preproc = {"std_noise": std_noise, "mask": mask}
-        else:
-            raise ValueError(
-                f"Invalid preprocessing mode '{mode_preproc}'. "
-                "Supported modes are 'wiener' and 'ks'."
-            )
-        kwargs_model.update(args_preproc=args_preproc)
-    if nbins is not None:
-        kwargs_model.update(in_channels=nbins, out_channels=nbins)
-
-
 def get_model_class(arch):
 
     if arch is None:
@@ -361,10 +329,43 @@ def get_model_class(arch):
 
 
 def instantiate_model(
-        model_class, imgsize=IMGSIZE,
+        model_class, imgsize=IMGSIZE, order2=False,
+        mode_preproc=None,
+        std_noise_preproc=None,
+        mask_preproc=None,
+        inpainting_preproc=False,
+        path_to_ps=PATH_TO_PS,
+        eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
+        niter_wiener=NITER_WIENER, nbins=None,
         device="cpu", verbose=False, **kwargs
 ):
-    model = model_class(map_size=imgsize, **kwargs).to(device)
+    if mode_preproc is not None and "args_preproc" not in kwargs:
+        # Load arguments for Wiener or KS initialization
+        # Only for DeepMass (denoiser = False)
+        mask_preproc = None if inpainting_preproc else mask_preproc
+        if mode_preproc == "wiener":
+            args_preproc = _get_args_wienerinit(
+                std_noise_preproc, mask_preproc, path_to_ps=path_to_ps,
+                eps_sup_step_size=eps_sup_step_size_wiener,
+                niter=niter_wiener, device=device, verbose=verbose
+            )
+        elif mode_preproc == "ks":
+            args_preproc = {
+                "std_noise": std_noise_preproc,
+                "mask": mask_preproc
+            }
+        else:
+            raise ValueError(
+                f"Invalid preprocessing mode '{mode_preproc}'. "
+                "Supported modes are 'wiener' and 'ks'."
+            )
+        kwargs.update(mode_preproc=mode_preproc, args_preproc=args_preproc)
+    if nbins is not None:
+        kwargs.update(in_channels=nbins, out_channels=nbins)
+
+    model = model_class(
+        map_size=imgsize, order2=order2, **kwargs
+    ).to(device)
     if verbose:
         model.summary()
 
@@ -374,23 +375,24 @@ def instantiate_model(
 def load_trained_model(
         checkpoint_dir, arch, timestamp,
         epoch=EPOCH, imgsize=IMGSIZE, order2=False,
-        additional_outlayer=None,
-        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        model_specs=None, nbins=None,
+        std_noise_preproc=None,
+        mask_preproc=None,
+        inpainting_preproc=False,
+        path_to_ps=PATH_TO_PS,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, model_specs=None, nbins=None,
+        niter_wiener=NITER_WIENER,
         device="cpu", verbose=False, **kwargs
 ):
     model_class, _ = get_model_class(arch)
-    update_kwargs_model(
-        kwargs,
-        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
-        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener, nbins=nbins,
-        device=device, verbose=verbose
-    )
     model = instantiate_model(
         model_class, imgsize=imgsize, order2=order2,
-        additional_outlayer=additional_outlayer,
+        std_noise_preproc=std_noise_preproc,
+        mask_preproc=mask_preproc,
+        inpainting_preproc=inpainting_preproc,
+        path_to_ps=path_to_ps,
+        eps_sup_step_size_wiener=eps_sup_step_size_wiener,
+        niter_wiener=niter_wiener, nbins=nbins,
         device=device, verbose=verbose, **kwargs
     )
     checkpoint_dir = os.path.expanduser(checkpoint_dir)
@@ -413,27 +415,35 @@ def load_trained_model(
 
 
 def load_trained_models(
-        checkpoint_dir, arch, timestamp, epoch=EPOCH,
-        model_specs=None,
-        load_model_uq=False, checkpoint_dir_uq=None,
-        arch_uq=None, timestamp_uq=None, epoch_uq=None,
-        model_specs_uq=None,
-        imgsize=IMGSIZE,
-        std_noise=None, mask=None, path_to_ps=PATH_TO_PS,
+        checkpoint_dir, arch, timestamp,
+        epoch=EPOCH, imgsize=IMGSIZE,
+        model_specs=None, nbins=None,
+        std_noise_preproc=None,
+        mask_preproc=None,
+        inpainting_preproc=False,
+        path_to_ps=PATH_TO_PS,
         eps_sup_step_size_wiener=EPS_SUP_STEP_SIZE,
-        niter_wiener=NITER_WIENER, nbins=None,
+        niter_wiener=NITER_WIENER, 
+        load_model_uq=False,
+        checkpoint_dir_uq=None, arch_uq=None,
+        timestamp_uq=None, epoch_uq=None,
+        model_specs_uq=None,
         device="cpu", verbose=False, **kwargs
 ):
     kwargs_model = {k: kwargs.pop(k) for k in KEYS_MODEL if k in kwargs}
     if verbose:
         print("Load trained order-1 model")
     model = load_trained_model(
-        checkpoint_dir, arch, timestamp, epoch=epoch,
-        imgsize=imgsize, order2=False,
-        std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+        checkpoint_dir, arch, timestamp,
+        epoch=epoch, imgsize=imgsize, order2=False,
+        model_specs=model_specs, nbins=nbins,
+        std_noise_preproc=std_noise_preproc,
+        mask_preproc=mask_preproc,
+        inpainting_preproc=inpainting_preproc,
+        path_to_ps=path_to_ps,
         eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-        niter_wiener=niter_wiener, model_specs=model_specs,
-        nbins=nbins, device=device, verbose=verbose,
+        niter_wiener=niter_wiener,
+        device=device, verbose=verbose,
         **kwargs_model
     )
     if load_model_uq:
@@ -454,10 +464,14 @@ def load_trained_models(
         model_uq = load_trained_model(
             checkpoint_dir_uq, arch_uq, timestamp_uq,
             epoch=epoch_uq, imgsize=imgsize, order2=True,
-            std_noise=std_noise, mask=mask, path_to_ps=path_to_ps,
+            model_specs=model_specs_uq, nbins=nbins,
+            std_noise_preproc=std_noise_preproc,
+            mask_preproc=mask_preproc,
+            inpainting_preproc=inpainting_preproc,
+            path_to_ps=path_to_ps,
             eps_sup_step_size_wiener=eps_sup_step_size_wiener,
-            niter_wiener=niter_wiener, model_specs=model_specs_uq,
-            nbins=nbins, device=device, verbose=verbose,
+            niter_wiener=niter_wiener, 
+            device=device, verbose=verbose,
             **kwargs_model_uq
         )
     else:

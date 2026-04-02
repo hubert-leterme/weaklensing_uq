@@ -158,12 +158,13 @@ def main(
 
     # Load trained denoisers
     denoiser, denoiser_uq = _commons.load_trained_models(
-        checkpoint_dir, arch, timestamp, epoch=epoch,
-        model_specs=model_specs,
-        load_model_uq=load_model_uq, checkpoint_dir_uq=checkpoint_dir_uq,
-        arch_uq=arch_uq, timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
+        checkpoint_dir, arch, timestamp,
+        epoch=epoch, imgsize=imgsize,
+        model_specs=model_specs, nbins=test_dataset.nbins, # TODO: debug
+        load_model_uq=load_model_uq,
+        checkpoint_dir_uq=checkpoint_dir_uq, arch_uq=arch_uq,
+        timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,
         model_specs_uq=model_specs_uq,
-        imgsize=imgsize, nbins=test_dataset.nbins, # TODO: debug
         device=device, verbose=verbose, **kwargs
     )
 
