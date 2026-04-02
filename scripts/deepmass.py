@@ -308,7 +308,6 @@ def run_deepmass_batch(
         deepmass: wlmmuq.optim.BaseOptim, deepmass_uq: wlmmuq.optim.BaseOptim | None,
         dataloader,
         rmse_fn: wlmmuq.metric.RMSE | None = None,
-        physics: wlmmuq.physics.MassMapping | None = None,
         test_on_real_data: bool = False,
         callbacks: wlmmuq.callbacks.BaseCallback | None = None,
         device="cpu", verbose=False
