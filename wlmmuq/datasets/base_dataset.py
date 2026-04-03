@@ -409,8 +409,8 @@ class BaseHDF5Dataset:
                             out = False
                     return out
                 match_dict = {s: keep_filename(s) for s in unique_filename_ori}
-                mask = np.array([match_dict[filename_ori[i]] for i in idx])
-                idx = idx[mask]
+                mask_match_dict = np.array([match_dict[filename_ori[i]] for i in idx])
+                idx = idx[mask_match_dict]
             self.idx = idx[self.beg_idx:self.beg_idx + self.nimgs]
 
             # Check if requested number of images exceeds total available

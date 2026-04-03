@@ -251,6 +251,7 @@ def get_masked_and_noisy_shear(
 
     # TODO: use physics = phys.MassMapping(...)
     # CAREFUL: the mask must be used even in case of inpainting!
+    # Otherwise, the ground truth will appear in masked regions
     def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
         noise = randn(*shape) + 1j * randn(*shape)
         if device is not None:
