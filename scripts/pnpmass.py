@@ -129,18 +129,19 @@ def main(
 
     # Load test set(s)
     if run_both:
-        test_dataloader_sim = _commons.get_dataloader_massmapping(
+        test_dataloader_sim, nbins = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
             test_on_real_data=False
         )
-        test_dataloader_real = _commons.get_dataloader_massmapping(
+        test_dataloader_real, nbins_real = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
             test_on_real_data=True, gamma_real=gamma_real
         )
+        _commons.check_nbins(nbins, nbins_real)
     else:
-        test_dataloader = _commons.get_dataloader_massmapping(
+        test_dataloader, nbins = _commons.get_dataloader_massmapping(
             path_to_test_dataset, nimgs_test, imgsize, batch_size,
             num_workers, std_noise, mask, shuffle=False,
             test_on_real_data=test_on_real_data, gamma_real=gamma_real
@@ -148,11 +149,12 @@ def main(
 
     # Load calibration set, if provided
     if cqr:
-        calib_dataloader = _commons.get_dataloader_massmapping(
+        calib_dataloader, nbins_calib = _commons.get_dataloader_massmapping(
             path_to_calib_dataset, nimgs_calib, imgsize, batch_size,
             num_workers, std_noise, mask,
             shuffle=True, min_idx_filename_ori=min_idx_filename_ori_calib
         )
+        _commons.check_nbins(nbins, nbins_calib)
     else:
         calib_dataloader = None
 
@@ -160,7 +162,7 @@ def main(
     denoiser, denoiser_uq = _commons.load_trained_models(
         checkpoint_dir, arch, timestamp,
         epoch=epoch, imgsize=imgsize,
-        model_specs=model_specs, nbins=test_dataset.nbins, # TODO: debug
+        model_specs=model_specs, nbins=nbins,
         load_model_uq=load_model_uq,
         checkpoint_dir_uq=checkpoint_dir_uq, arch_uq=arch_uq,
         timestamp_uq=timestamp_uq, epoch_uq=epoch_uq,

@@ -508,19 +508,26 @@ def get_dataloader_massmapping(
         test_on_real_data=False, gamma_real=None, **kwargs
 ):
     if not test_on_real_data:
-        test_dataloader = wlbl.HDF5DatasetMassMapping(
+        test_dataset = wlbl.HDF5DatasetMassMapping(
             hdf5_filepath=path_to_dataset, nimgs=nimgs, batch_size=batch_size,
             std_noise=std_noise, mask=mask, output_shape=imgsize,
             num_workers=num_workers, **kwargs
-        ).to_dataloader()
+        )
+        nbins = test_dataset.nbins
     else:
         if gamma_real is None:
             raise ValueError("Argument `gamma_real` must be provided.")
-        test_dataloader = wlbl.SingleShearMapDataset(
+        test_dataset = wlbl.SingleShearMapDataset(
             gamma_real, also_get_complex_conjugates=True
-        ).to_dataloader()
+        )
+        nbins = gamma_real.shape[0]
 
-    return test_dataloader
+    return test_dataset.to_dataloader(), nbins
+
+
+def check_nbins(val1, val2):
+    if val2 != val1:
+        raise ValueError("Inconsistent number of redshift bins across datasets.")
 
 
 def _get_args_wienerinit(
