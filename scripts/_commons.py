@@ -64,7 +64,7 @@ IDX_ZBINS = [2, 4, 6, 8, 10] # Group Euclid redshift bins 2 by 2
 INPAINTING_KS = True
 INPAINTING_WIENER = False # TODO: set to True?
 INPAINTING_MCALENS = False # TODO: set to True?
-INPAINTING_PNPMASS = False # TODO: set to True?
+INPAINTING_PNPMASS = True
 INPAINTING_DEEPMASS = True
 
 N_NOISE_REALS_UQ = 32
