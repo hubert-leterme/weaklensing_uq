@@ -16,7 +16,6 @@ METHOD_NAME = "wiener"
 OUTPUT_PREFIX = None
 
 def main(
-        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         path_to_test_dataset: str | None = wlmmuq.PATH_TO_TEST_DATASET,
         path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
@@ -24,8 +23,9 @@ def main(
         test_on_real_data: bool = False, run_both: bool = False,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
-        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_std_noise: str | None = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str | None = wlmmuq.PATH_TO_MASK,
+        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         path_to_ps: str = wlmmuq.PATH_TO_PS,
         niter_wiener: int = _commons.NITER_WIENER,
         bin_data_from_cosmos: bool = False,
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     _add_arguments.gaussian_extractor(parser, wiener=True)
-    _add_arguments.std_noise_mask(parser)
+    _add_arguments.std_noise_mask_gamma(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser, prompt_init_bounds=True, montecarlo=True, zero_init_bounds=True)
     _add_arguments.output(parser, OUTPUT_PREFIX)

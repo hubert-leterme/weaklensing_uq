@@ -15,7 +15,6 @@ METHOD_NAME = "pnpmass"
 OUTPUT_PREFIX = None
 
 def main(
-        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         path_to_test_dataset: str | None = wlmmuq.PATH_TO_TEST_DATASET,
         path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
         train_val_dataset_name: str | None = wlmmuq.TRAIN_VAL_DATASET_NAME,
@@ -26,8 +25,9 @@ def main(
         model_name: str | None = None, model_name_uq: str | None = None,
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
-        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_std_noise: str | None = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str | None = wlmmuq.PATH_TO_MASK,
+        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         path_to_ps: str = wlmmuq.PATH_TO_PS,
         arch: str | None = None, timestamp: str | None = None, epoch: int = _commons.EPOCH,
         model_specs: str | None = None,
@@ -540,7 +540,7 @@ if __name__ == "__main__":
         )
     )
     _add_arguments.gaussian_extractor(parser, wiener=True, mcalens=True, verbose=True)
-    _add_arguments.std_noise_mask(parser)
+    _add_arguments.std_noise_mask_gamma(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_PREFIX)

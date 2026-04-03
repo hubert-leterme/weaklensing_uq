@@ -16,7 +16,6 @@ METHOD_NAME = "ks"
 OUTPUT_PREFIX = None
 
 def main(
-        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         path_to_test_dataset: str | None = wlmmuq.PATH_TO_TEST_DATASET,
         path_to_calib_dataset: str | None = wlmmuq.PATH_TO_CALIB_DATASET,
         test_dataset_name: str | None = wlmmuq.TEST_DATASET_NAME,
@@ -25,8 +24,9 @@ def main(
         output_dir: str = wlmmuq.RESULTS_DIR,
         method_name: str = METHOD_NAME,
         fwhm: float | None = _commons.FWHM_KS,
-        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_std_noise: str | None = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str | None = wlmmuq.PATH_TO_MASK,
+        path_to_real_shearmap: str | None = wlmmuq.PATH_TO_REAL_SHEARMAP,
         bin_data_from_cosmos: bool = False,
         cosmos_include_faint: bool = False,
         max_z: float | None = _commons.MAX_Z,
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             f"Default = {_commons.FWHM_KS:.1f}"
         )
     )
-    _add_arguments.std_noise_mask(parser)
+    _add_arguments.std_noise_mask_gamma(parser)
     _add_arguments.test_calib_dataset(parser, batch_size=_commons.BATCH_SIZE)
     _add_arguments.cqr(parser)
     _add_arguments.output(parser, OUTPUT_PREFIX)

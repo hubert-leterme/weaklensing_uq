@@ -25,8 +25,8 @@ NDECAYS = 4 # Number of decays for the learning rate scheduler
 
 def main(
         path_to_train_val_dataset: str = wlmmuq.PATH_TO_TRAIN_VAL_DATASET,
-        path_to_std_noise: str = wlmmuq.PATH_TO_STD_NOISE,
-        path_to_mask: str = wlmmuq.PATH_TO_MASK,
+        path_to_std_noise: str | None = wlmmuq.PATH_TO_STD_NOISE,
+        path_to_mask: str | None = wlmmuq.PATH_TO_MASK,
         path_to_ps=wlmmuq.PATH_TO_PS,
         bin_data_from_cosmos=False,
         cosmos_include_faint=False,
@@ -319,7 +319,7 @@ if __name__ == "__main__":
             "uniformly between `scale_min` and `scale` for each input image."
         )
     )
-    _add_arguments.std_noise_mask(parser)
+    _add_arguments.std_noise_mask_gamma(parser)
     parser.add_argument(
         "-uq", "--order2", action='store_true',
         default=argparse.SUPPRESS,

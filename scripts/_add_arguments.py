@@ -293,6 +293,34 @@ def checkpoint(parser):
     )
 
 
+def path_to_std_noise_mask_gamma(parser):
+
+    parser.add_argument(
+        "--path-to-std-noise", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the COSMOS noise standard deviation (PyTorch saved object). "
+            f"Default = {wl.PATH_TO_STD_NOISE}"
+        )
+    )
+    parser.add_argument(
+        "--path-to-mask", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the COSMOS mask (PyTorch saved object). "
+            f"Default = {wl.PATH_TO_MASK}"
+        )
+    )
+    parser.add_argument(
+        "--path-to-real-shearmap", type=str,
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to the COSMOS shear map (PyTorch saved object). "
+            f"Default = {wl.PATH_TO_REAL_SHEARMAP}"
+        )
+    )
+
+
 def cosmos_zbins(parser):
     parser.add_argument(
         "--max-z", type=float,
@@ -335,8 +363,21 @@ def cosmos_zbins(parser):
     )
 
 
-def std_noise_mask(parser):
+def resolution(parser):
 
+    parser.add_argument(
+        "--resolution", type=float,
+        default=argparse.SUPPRESS,
+        help=(
+            "Resolution (in arcmin per pixel) at which the COSMOS catalog will "
+            f"be binned. Default = {_commons.RESOLUTION:.2f}"
+        )
+    )
+
+
+def std_noise_mask_gamma(parser):
+
+    path_to_std_noise_mask_gamma(parser)
     parser.add_argument(
         "--bin-data-from-cosmos", action='store_true',
         default=argparse.SUPPRESS,
@@ -346,14 +387,7 @@ def std_noise_mask(parser):
         )
     )
     cosmos_zbins(parser)
-    parser.add_argument(
-        "--resolution", type=float,
-        default=argparse.SUPPRESS,
-        help=(
-            "Resolution (in arcmin per pixel) at which the COSMOS catalog will "
-            f"be binned. Default = {_commons.RESOLUTION:.2f}"
-        )
-    )
+    resolution(parser)
 
 
 def imgsize(parser):
@@ -420,14 +454,6 @@ def train_val_dataset(parser, batch_size):
 
 def test_calib_dataset(parser, batch_size):
 
-    parser.add_argument(
-        "--path-to-real-shearmap", type=str,
-        default=argparse.SUPPRESS,
-        help=(
-            "Path to the COSMOS shear map (PyTorch saved object). "
-            f"Default = {wl.PATH_TO_REAL_SHEARMAP}"
-        )
-    )
     parser.add_argument(
         "--path-to-test-dataset", type=str,
         default=argparse.SUPPRESS,
