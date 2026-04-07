@@ -129,7 +129,7 @@ def get_stdnoise_mask_shearmap(
         zbins: list[float] | None = None,
         max_z: float | None = wlktng.MAX_Z,
         inpainting: bool = False, verbose: bool = False
-):
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     if not bin_data_from_cosmos:
         if path_to_std_noise is None or path_to_mask is None:
             raise ValueError(
@@ -171,13 +171,11 @@ def get_stdnoise_mask_shearmap(
         std_noise = cosmos_data.std_noise
         mask = cosmos_data.mask
         gamma_real = cosmos_data.gamma
-        assert std_noise is not None
-        assert mask is not None
-        assert gamma_real is not None
 
     if inpainting:
         # Set the noise standard deviation for masked data
-        assert isinstance(mask, torch.Tensor)
+        assert std_noise is not None
+        assert mask is not None
         max_std_noise = std_noise.max()
         std_noise[~mask] = max_std_noise
         if get_noisy_shear_map:

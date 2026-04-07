@@ -18,7 +18,7 @@ NITER_WIENER = 12
 class BasePreproc(nn.Module):
 
     def __init__(
-            self, std_noise: torch.Tensor, mask:torch.Tensor | None = None
+            self, std_noise: torch.Tensor, mask: torch.Tensor | None = None
     ):
         super().__init__()
         self.physics = phys.MassMapping(sigma=std_noise, mask=mask)
@@ -33,7 +33,7 @@ class WienerInit(BasePreproc):
     def __init__(
             self, step_size: float,
             powerspectrum: torch.Tensor, std_noise: torch.Tensor,
-            mask:torch.Tensor | None = None, niter: int = NITER_WIENER,
+            mask: torch.Tensor | None = None, niter: int = NITER_WIENER,
             noise_whitening: bool = False
     ):
         super().__init__(std_noise=std_noise, mask=mask)
