@@ -466,8 +466,7 @@ class HDF5DatasetKappa(BaseHDF5Dataset):
 class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
 
     def __init__(
-            self, *args, inpainting=False,
-            complexconjugate=False, return_complex=False, **kwargs
+            self, *args, complexconjugate=False, return_complex=False, **kwargs
     ):
         """
         Initialize the batch loader for HDF5 data, with input prepared for DeepMass.
@@ -485,9 +484,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             Array of noise standard deviation. Default is None.
         mask : numpy.ndarray, optional
             Array of masked data. Default is None.
-        inpainting: bool, optional
-            If True, then apply noise in masked regions of the shear. Otherwise, set masked
-            values to 0. Default is False.
         beg_idx : int, optional
             First image index to consider (e.g., for split training-test sets). Default is 0.
             CAUTION: To ensure independence between the training and test sets,
@@ -524,7 +520,6 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
         """
         super().__init__(*args, **kwargs)
 
-        self.inpainting = inpainting
         self.complexconjugate = complexconjugate
         self.return_complex = return_complex
 
@@ -539,8 +534,7 @@ class BaseHDF5DatasetGammaKappa(BaseHDF5Dataset):
             kappa_true, complexconjugate=self.complexconjugate, return_complex=True
         )
         gamma_noisy = utils.get_masked_and_noisy_shear(
-            gamma, std_noise=self.std_noise,
-            mask=self.mask, inpainting=self.inpainting,
+            gamma, std_noise=self.std_noise, mask=self.mask
         )
         if not self.return_complex:
             out_dict.update({

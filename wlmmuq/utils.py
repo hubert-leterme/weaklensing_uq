@@ -205,7 +205,6 @@ def get_masked_and_noisy_shear(
         gamma: np.ndarray | torch.Tensor,
         std_noise: np.ndarray | torch.Tensor,
         mask: np.ndarray | torch.Tensor | None = None,
-        inpainting: bool = False,
         device=None
 ):
     """
@@ -216,14 +215,12 @@ def get_masked_and_noisy_shear(
         Array of noise standard deviation.
     mask (numpy.ndarray, shape = (nx, ny), default=None)
         Array of masked data.
-    inpainting (bool, default=False)
-        If True, apply noise to the masked regions.
     device
 
     Returns
     -------
     gamma_noisy (numpy.ndarray | torch.Tensor)
-        Noisy shear maps, affected by argument `inpainting`.
+        Noisy shear maps.
     
     """
     if torch.is_tensor(gamma):
@@ -252,17 +249,12 @@ def get_masked_and_noisy_shear(
     # TODO: use physics = phys.MassMapping(...)
     # CAREFUL: the mask must be used even in case of inpainting!
     # Otherwise, the ground truth will appear in masked regions
-    def _get_noisy_shear(gamma_masked, std_noise, mask, shape):
-        noise = randn(*shape) + 1j * randn(*shape)
-        if device is not None:
-            assert torch.is_tensor(noise)
-            noise = noise.to(device)
-        noise *= std_noise
-        if not inpainting and mask is not None:
-            noise[..., ~mask] = 0.
-        return gamma_masked + noise
-
-    gamma_noisy = _get_noisy_shear(gamma_masked, std_noise, mask, shape)
+    noise = randn(*shape) + 1j * randn(*shape)
+    if device is not None:
+        assert torch.is_tensor(noise)
+        noise = noise.to(device)
+    noise *= std_noise
+    gamma_noisy = gamma_masked + noise
 
     return gamma_noisy
 
