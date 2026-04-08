@@ -50,6 +50,11 @@ def create_dataset(parser, path_to_output, idx_lp):
         "--update-metadata-only", action='store_true',
         default=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--overwrite", action='store_true',
+        default=argparse.SUPPRESS,
+        help="Overwrite existing metadata."
+    )
 
 
 def model(parser, uq=False, denoiser=False, deepmass=False):

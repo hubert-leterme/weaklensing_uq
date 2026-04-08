@@ -330,7 +330,8 @@ def get_npixels_openingangle(openingangle, make_even=True):
 def create_cropped_dataset(
         hdf5_filepath, idx_lp, ninpimgs, weights_redshifts, imgsize,
         zbins=None, batch_size=BATCH_SIZE,
-        update_metadata_only=False, verbose=False, **kwargs
+        update_metadata_only=False, overwrite=False,
+        verbose=False, **kwargs
 ):
     """
     Create a dataset of cropped convergence maps from kappaTNG, with combined redshifts.
@@ -347,7 +348,7 @@ def create_cropped_dataset(
     with h5py.File(hdf5_filepath, iomode) as f:
 
         # Metadata
-        _update_metadata(f, ktng, zbins=zbins)
+        _update_metadata(f, ktng, zbins=zbins, overwrite=overwrite)
         if update_metadata_only:
             if verbose:
                 print("Metadata updated")
@@ -393,7 +394,7 @@ def create_augmented_dataset(
     hdf5_filepath, idx_lp, nimgs, weights_redshifts, imgsize,
     zbins=None, batch_size=BATCH_SIZE,
     angle_batch_size=ANGLE_BATCH_SIZE, angle_step=5, niter_per_angle=1,
-    num_workers=0, update_metadata_only=False,
+    num_workers=0, update_metadata_only=False, overwrite=False,
     resume=False, verbose=False
 ):
     """
@@ -418,7 +419,8 @@ def create_augmented_dataset(
         # Metadata
         _update_metadata(
             f, ktng, zbins=zbins,
-            angle_step=angle_step, niter_per_angle=niter_per_angle
+            angle_step=angle_step, niter_per_angle=niter_per_angle,
+            overwrite=overwrite
         )
         if update_metadata_only:
             if verbose:
@@ -557,7 +559,8 @@ def _get_iomode(update_metadata_only, hdf5_filepath, resume=False):
 
 def _update_metadata(
         f: h5py.File, ktng: KappaTNG,
-        zbins=None, angle_step=None, niter_per_angle=None
+        zbins=None, angle_step=None, niter_per_angle=None,
+        overwrite=False
 ):
     f.attrs["idx_lp"] = ktng.idx_lp
     grp_metadata_per_zbin = f.require_group("metadata_per_zbin")
@@ -569,6 +572,8 @@ def _update_metadata(
             assert all(isinstance(arr, np.ndarray) for arr in list_of_arrs)
             if dtype is None:
                 dtype = list_of_arrs[0].dtype
+            if overwrite:
+                del grp_metadata_per_zbin[attrname]
             dset = grp_metadata_per_zbin.create_dataset(
                 attrname, (len(list_of_arrs),), dtype=h5py.vlen_dtype(dtype)
             )
