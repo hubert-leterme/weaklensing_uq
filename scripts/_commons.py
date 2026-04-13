@@ -151,11 +151,9 @@ def get_stdnoise_mask_shearmap(
     else:
         if verbose:
             print("Load COSMOS galaxy shape catalog")
-        coscat = wlcosmos.cosmos_catalog()
+        coscat = wlcosmos.cosmos_catalog(max_z=max_z)
         cat_cosmos_bright = coscat.cat_bright
         cat_cosmos_faint = coscat.cat_faint
-        if max_z is not None:
-            cat_cosmos_bright = wlcosmos.filter_by_redshifts(cat_cosmos_bright, max_z)
         if cosmos_include_faint:
             cat_cosmos = aptable.vstack(
                 [cat_cosmos_bright, cat_cosmos_faint], join_type='outer'
@@ -231,7 +229,7 @@ def create_dataset_from_kappatng(
     # Get redshift weights from the COSMOS catalog
     if verbose:
         print("Computing redshift weights from COSMOS...")
-    coscat = wlcosmos.cosmos_catalog()
+    coscat = wlcosmos.cosmos_catalog(max_z=max_z)
     assert wlktng.Z is not None
     zphot = np.array(coscat.cat_bright["zphot"])
     nhweight_int = np.array(coscat.cat_bright["nhweight_int"])

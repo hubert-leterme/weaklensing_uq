@@ -77,7 +77,7 @@ class DataFromCosmos:
     gamma: torch.Tensor | None = None
 
 
-def cosmos_catalog():
+def cosmos_catalog(max_z: float | None = None) -> CosmosCatalogs:
 
     # Load catalogs
     cat_bright = aptable.Table.read(f'{COSMOS_DIR}/cosmos_bright_cat_min.asc', format='ascii')
@@ -87,6 +87,8 @@ def cosmos_catalog():
     # For more details, see B. Remy et al., “Probabilistic mass-mapping with neural score 
     # estimation,” A&A, vol. 672, p. A51, Apr. 2023.
     cat_bright = cat_bright[cat_bright['z_problem'] == 0]
+    if max_z is not None:
+        cat_bright = cat_bright[cat_bright['zphot'] < max_z]
 
     # Load source redshift distribution for the faint catalog
     # We use the weighted distribution ("w1")
@@ -233,12 +235,3 @@ def cosmos_boundaries(extent, width, boundaries=None):
     ra, dec = np.array(boundaries).T
 
     return cosmos_mask, ra, dec
-
-
-def filter_by_redshifts(
-        cat_cosmos: aptable.Table, max_z: float
-) -> aptable.Table:
-    cat_cosmos = cat_cosmos[
-        cat_cosmos['zphot'] < max_z
-    ]
-    return cat_cosmos
