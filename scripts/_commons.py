@@ -172,18 +172,9 @@ def get_stdnoise_mask_shearmap(
 
     if inpainting:
         # Set the noise standard deviation for masked data
-        assert std_noise is not None
-        assert mask is not None
-        max_std_noise = std_noise.max()
-        std_noise[~mask] = max_std_noise
-        if get_noisy_shear_map:
-            assert gamma_real is not None
-            def _get_white_noise():
-                return torch.normal(mean=0., std=torch.ones_like(std_noise))
-            white_noise_real = _get_white_noise()
-            white_noise_imag = _get_white_noise()
-            gamma_real[~mask] = max_std_noise * \
-                (white_noise_real + 1j * white_noise_imag)[~mask]
+        std_noise, gamma_real = wl.utils.get_inpainted_params(
+            std_noise, mask, gamma_real=gamma_real
+        )
 
     return std_noise, mask, gamma_real
 

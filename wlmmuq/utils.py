@@ -946,6 +946,25 @@ def get_g_param(std_noise, noise_whitening):
     return g_param
 
 
+def get_inpainted_params(
+        std_noise: torch.Tensor, mask: torch.Tensor,
+        gamma_real: torch.Tensor | None = None
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    assert std_noise is not None
+    assert mask is not None
+    max_std_noise = std_noise.max()
+    std_noise[~mask] = max_std_noise
+    if gamma_real is not None:
+        def _get_white_noise():
+            return torch.normal(mean=0., std=torch.ones_like(std_noise))
+        white_noise_real = _get_white_noise()
+        white_noise_imag = _get_white_noise()
+        gamma_real[~mask] = max_std_noise * \
+            (white_noise_real + 1j * white_noise_imag)[~mask]
+
+    return std_noise, gamma_real
+
+
 def infer_model(
         model, dataloader, idx_list=None, idx_dict=None,
         device='cpu', verbose=False, **kwargs
