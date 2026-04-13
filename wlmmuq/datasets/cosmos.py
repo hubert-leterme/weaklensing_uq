@@ -5,6 +5,7 @@ Data available at https://archive.stsci.edu/hlsp/candels/cosmos-catalogs
 __level__ = 1
 
 from dataclasses import dataclass
+from typing import Self
 import numpy as np
 import matplotlib.path as mpath
 
@@ -63,20 +64,6 @@ class CosmosCatalogs:
     cat_faint: aptable.Table
     zdist_faint: aptable.Table
 
-
-@dataclass
-class DataFromCosmos:
-    shapedisp: float
-    openingangle: float
-    ra_cosmos_median: float
-    dec_cosmos_median: float
-    extent: tuple[float, float, float, float]
-
-    std_noise: torch.Tensor | None = None
-    mask: torch.Tensor | None = None
-    gamma: torch.Tensor | None = None
-
-
 def cosmos_catalog(max_z: float | None = None) -> CosmosCatalogs:
 
     # Load catalogs
@@ -105,13 +92,18 @@ def get_extent(ra_cosmos_median, dec_cosmos_median, openingangle):
     return extent
 
 
-def get_data_from_cosmos(
-        cat_cosmos: aptable.Table, imgsize: int, resolution: float,
-        metadata_only: bool = False, get_noisy_shear_map: bool = False,
-        east_right: bool = False,
-        zbins: list[float] | None = None, max_z: float | None = None
-) -> DataFromCosmos:
+@dataclass
+class MetadataFromCosmos:
+    shapedisp: float
+    openingangle: float
+    ra_cosmos_median: float
+    dec_cosmos_median: float
+    extent: tuple[float, float, float, float]
 
+def get_metadata_from_cosmos(
+        cat_cosmos: aptable.Table, imgsize: int, resolution: float
+) -> MetadataFromCosmos:
+    
     shapedisp1 = np.std(np.array(cat_cosmos['e1iso_rot4_gr_snCal']))
     shapedisp2 = np.std(np.array(cat_cosmos['e2iso_rot4_gr_snCal']))
     shapedisp = float((shapedisp1 + shapedisp2) / 2)
@@ -121,7 +113,7 @@ def get_data_from_cosmos(
     dec_cosmos_median = float(np.median(np.array(cat_cosmos['Dec']))) # declination (latitude)
     extent = get_extent(ra_cosmos_median, dec_cosmos_median, openingangle)
 
-    out = DataFromCosmos(
+    return MetadataFromCosmos(
         shapedisp=shapedisp,
         openingangle=openingangle,
         ra_cosmos_median=ra_cosmos_median,
@@ -129,66 +121,88 @@ def get_data_from_cosmos(
         extent=extent
     )
 
-    if not metadata_only:
 
-        if max_z is None:
-            max_z = np.inf
-        boundaries_zbins = [0., max_z]
-        if zbins is not None:
-            boundaries_zbins = sorted(zbins + boundaries_zbins)
+@dataclass
+class DataFromCosmos(MetadataFromCosmos):
+    std_noise: torch.Tensor
+    mask: torch.Tensor
+    gamma: torch.Tensor | None = None
 
-        list_of_std_noise: list[torch.Tensor] = []
-        list_of_mask: list[torch.Tensor] = []
-        list_of_gamma: list[torch.Tensor] = []
-        for z_inf, z_sup in zip(boundaries_zbins[:-1], boundaries_zbins[1:]):
-            cat_cosmos_sliced = cat_cosmos[
-                (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
-            ]
-            e1_sliced = np.array(cat_cosmos_sliced['e1iso_rot4_gr_snCal'])
-            e2_sliced = np.array(cat_cosmos_sliced['e2iso_rot4_gr_snCal'])
-            ra_sliced = np.array(cat_cosmos_sliced['Ra'])
-            dec_sliced = np.array(cat_cosmos_sliced['Dec'])
-            nhweight_int_sliced = np.array(
-                cat_cosmos_sliced['nhweight_int']
-            ) # Similar to Hoekstra et al. 1998 (see jax-lensing)
-            l2norm_nhweight_int = bin2d(
-                ra_sliced, dec_sliced,
-                v=nhweight_int_sliced**2,
-                npix=imgsize, extent=extent,
-                sum_instead_of_average=True
-            )**0.5
-            sum_nhweight_int = bin2d(
-                ra_sliced, dec_sliced,
-                v=nhweight_int_sliced,
-                npix=imgsize, extent=extent,
-                sum_instead_of_average=True
-            )
-            std_noise = np.nan_to_num(
-                shapedisp * l2norm_nhweight_int / sum_nhweight_int,
-                posinf=0.
-            )
-            mask = sum_nhweight_int > 0
+    @classmethod
+    def from_metadata(
+        cls, metadata: MetadataFromCosmos, **kwargs
+    ) -> Self:
+        return cls(**vars(metadata), **kwargs)
 
-            list_of_std_noise.append(torch.tensor(std_noise, dtype=torch.float32))
-            list_of_mask.append(torch.tensor(mask, dtype=torch.bool))
 
-            if get_noisy_shear_map:
-                if east_right:
-                    e2_sliced = -e2_sliced  # Use the complex conjugate of ellipticities
-                                            # (East left in the COSMOS catalog)
-                e1map, e2map = bin2d(
-                    ra_sliced, dec_sliced, 
-                    v=(e1_sliced, e2_sliced), w=nhweight_int_sliced,
-                    npix=imgsize, extent=extent
-                )
-                list_of_gamma.append(torch.tensor(e1map + 1j * e2map, dtype=torch.complex64))
-
-        out.std_noise = torch.stack(list_of_std_noise)
-        out.mask = torch.stack(list_of_mask)
-        if get_noisy_shear_map:
-            out.gamma = torch.stack(list_of_gamma)
+def get_data_from_cosmos(
+        cat_cosmos: aptable.Table, imgsize: int, resolution: float,
+        get_noisy_shear_map: bool = False, east_right: bool = False,
+        zbins: list[float] | None = None, max_z: float | None = None
+) -> DataFromCosmos:
     
-    return out
+    metadata = get_metadata_from_cosmos(cat_cosmos, imgsize, resolution)
+
+    if max_z is None:
+        max_z = np.inf
+    boundaries_zbins = [0., max_z]
+    if zbins is not None:
+        boundaries_zbins = sorted(zbins + boundaries_zbins)
+
+    list_of_std_noise: list[torch.Tensor] = []
+    list_of_mask: list[torch.Tensor] = []
+    list_of_gamma: list[torch.Tensor] = []
+    for z_inf, z_sup in zip(boundaries_zbins[:-1], boundaries_zbins[1:]):
+        cat_cosmos_sliced = cat_cosmos[
+            (cat_cosmos["zphot"] >= z_inf) & (cat_cosmos["zphot"] < z_sup)
+        ]
+        e1_sliced = np.array(cat_cosmos_sliced['e1iso_rot4_gr_snCal'])
+        e2_sliced = np.array(cat_cosmos_sliced['e2iso_rot4_gr_snCal'])
+        ra_sliced = np.array(cat_cosmos_sliced['Ra'])
+        dec_sliced = np.array(cat_cosmos_sliced['Dec'])
+        nhweight_int_sliced = np.array(
+            cat_cosmos_sliced['nhweight_int']
+        ) # Similar to Hoekstra et al. 1998 (see jax-lensing)
+        l2norm_nhweight_int = bin2d(
+            ra_sliced, dec_sliced,
+            v=nhweight_int_sliced**2,
+            npix=imgsize, extent=metadata.extent,
+            sum_instead_of_average=True
+        )**0.5
+        sum_nhweight_int = bin2d(
+            ra_sliced, dec_sliced,
+            v=nhweight_int_sliced,
+            npix=imgsize, extent=metadata.extent,
+            sum_instead_of_average=True
+        )
+        std_noise = np.nan_to_num(
+            metadata.shapedisp * l2norm_nhweight_int / sum_nhweight_int,
+            posinf=0.
+        )
+        mask = sum_nhweight_int > 0
+
+        list_of_std_noise.append(torch.tensor(std_noise, dtype=torch.float32))
+        list_of_mask.append(torch.tensor(mask, dtype=torch.bool))
+
+        if get_noisy_shear_map:
+            if east_right:
+                e2_sliced = -e2_sliced  # Use the complex conjugate of ellipticities
+                                        # (East left in the COSMOS catalog)
+            e1map, e2map = bin2d(
+                ra_sliced, dec_sliced, 
+                v=(e1_sliced, e2_sliced), w=nhweight_int_sliced,
+                npix=imgsize, extent=metadata.extent
+            )
+            list_of_gamma.append(torch.tensor(e1map + 1j * e2map, dtype=torch.complex64))
+
+    kwargs = dict(
+        std_noise=torch.stack(list_of_std_noise),
+        mask=torch.stack(list_of_mask)
+    )
+    if get_noisy_shear_map:
+        kwargs.update(gamma=torch.stack(list_of_gamma))
+    
+    return DataFromCosmos.from_metadata(metadata, **kwargs)
 
 
 def cosmos_boundaries(extent, width, boundaries=None):

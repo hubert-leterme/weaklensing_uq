@@ -137,16 +137,15 @@ def get_stdnoise_mask_shearmap(
             )
         if verbose:
             print("Load noise standard deviation, mask, and shear map from files")
-        std_noise = torch.load(path_to_std_noise)
-        mask = torch.load(path_to_mask)
+        std_noise: torch.Tensor = torch.load(path_to_std_noise)
+        mask: torch.Tensor = torch.load(path_to_mask)
+        gamma_real: torch.Tensor | None = None
         if get_noisy_shear_map:
             if path_to_real_shearmap is None:
                 raise ValueError(
                     "Argument `path_to_real_shearmap` must be provided."
                 )
             gamma_real = torch.load(path_to_real_shearmap)
-        else:
-            gamma_real = None
 
     else:
         if verbose:
