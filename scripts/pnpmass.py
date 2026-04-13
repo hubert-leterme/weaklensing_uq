@@ -110,6 +110,7 @@ def main(
 
     # Load noise standard deviation and mask
     if use_zbins:
+        # TODO: infer zbins from the dataset (`ds.zbins`)
         assert path_to_zbins is not None
         zbins = wlmmuq.utils.get_zbins(path_to_zbins, idx_zbins=idx_zbins)
     else:
@@ -173,7 +174,7 @@ def main(
     # Instantiate physics (forward model) and RMSE metric
     # When computing the RMSE, masked pixels (i.e., without any measured galaxy
     # in any redshift bin) are discarded
-    mask_physics = None if inpainting else mask
+    mask_physics = None if inpainting else mask # Shape = (nbins, nx, ny)
     mask_onezbin = wlmmuq.utils.get_mask_onezbin(mask) # Shape = (nx, ny)
     physics = wlmmuq.physics.MassMapping(sigma=std_noise, mask=mask_physics).to(device)
     rmse_fn = wlmmuq.metric.RMSE(mask=mask_onezbin).to(device)
