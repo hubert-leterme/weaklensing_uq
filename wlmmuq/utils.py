@@ -5,6 +5,7 @@ __level__ = 1
 import os
 from datetime import datetime
 import typing
+from typing import overload
 import math
 import numpy as np
 import tqdm
@@ -479,6 +480,19 @@ def check_mask(mask: np.ndarray | torch.Tensor):
     if not assertion:
         raise ValueError("mask must be a boolean array")
 
+
+
+@overload
+def meancenter(
+        arr: torch.Tensor, axis: int | tuple=(-3, -2, -1),
+        mask: np.ndarray | torch.Tensor | None = None
+) -> torch.Tensor: ...
+
+@overload
+def meancenter(
+        arr: np.ndarray, axis: int | tuple=(-3, -2, -1),
+        mask: np.ndarray | torch.Tensor | None = None
+) -> np.ndarray: ...
 
 def meancenter(
         arr: np.ndarray | torch.Tensor, axis: int | tuple=(-3, -2, -1),
