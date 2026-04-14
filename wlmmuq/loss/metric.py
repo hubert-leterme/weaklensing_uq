@@ -15,6 +15,7 @@ class MeancenterMaskMixin:
     def __init__(
             self, mask: torch.Tensor | None = None,
             meancentering: bool = True,
+            per_zbin: bool = False,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -24,30 +25,40 @@ class MeancenterMaskMixin:
         else:
             self.mask = None
         self.meancentering = meancentering
+        self.per_zbin = per_zbin
 
 
-    def metric(self, x_net, x, *args, **kwargs):
-
+    def metric(
+            self, x_net: torch.Tensor, x: torch.Tensor | float,
+            *args, **kwargs
+    ):
+        if isinstance(x, float):
+            x = x * torch.ones_like(x_net)
+        assert isinstance(x, torch.Tensor)
+        if x.shape != x_net.shape:
+            raise ValueError("Shape mismatch")
         if self.meancentering:
             x_net = utils.meancenter(
                 x_net, mask=self.mask,
                 axis=tuple(range(1, x_net.ndim))
             )
-            try:
-                x = utils.meancenter(
-                    x, mask=self.mask,
-                    axis=tuple(range(1, x.ndim))
-                )
-            except (RuntimeError, AttributeError):
-                x = 0.
+            x = utils.meancenter(
+                x, mask=self.mask,
+                axis=tuple(range(1, x.ndim))
+            )
         if self.mask is not None:
             x_net = x_net[..., self.mask]
-            try:
-                x = x[..., self.mask]
-            except TypeError:
-                pass
+            x = x[..., self.mask]
 
-        return super().metric(x_net, x, *args, **kwargs)
+        if self.per_zbin:
+            nimgs, nbins, *shape = x_net.shape
+            x_net = x_net.view(-1, 1, *shape)
+            x = x.view(-1, 1, *shape)
+        out = super().metric(x_net, x, *args, **kwargs)
+        if self.per_zbin:
+            out = out.view(nimgs, nbins)
+        
+        return out
 
 
 class SquareRootMixin:
